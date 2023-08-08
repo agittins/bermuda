@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bermuda BLE Triangulation",
+        "description": "Hvis du trenger hjep til konfigurasjon ta en titt her: https://github.com/agittins/bermuda",
+        "data": {
+          "username": "Brukernavn",
+          "password": "Passord"
+        }
+      }
+    },
+    "error": {
+      "auth": "Brukernavn/Passord er feil."
+    },
+    "abort": {
+      "single_instance_allowed": "Denne integrasjonen kan kun konfigureres en gang."
+    }
+  },
+  "options": {
+    "step": {
+      "user": {
+        "data": {
+          "binary_sensor": "Binær sensor aktivert",
+          "sensor": "Sensor aktivert",
+          "switch": "Bryter aktivert"
+        }
+      }
+    }
+  }
+}

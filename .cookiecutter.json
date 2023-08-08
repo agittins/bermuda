@@ -1,0 +1,10 @@
+{
+  "_template": "git+ssh://git@github.com/oncleben31/cookiecutter-homeassistant-custom-component",
+  "class_name_prefix": "Bermuda",
+  "domain_name": "bermuda",
+  "friendly_name": "Bermuda BLE Triangulation",
+  "github_user": "agittins",
+  "project_name": "bermuda",
+  "test_suite": "yes",
+  "version": "0.0.0"
+}

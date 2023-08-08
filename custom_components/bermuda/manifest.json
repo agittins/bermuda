@@ -1,0 +1,10 @@
+{
+  "domain": "bermuda",
+  "name": "Bermuda BLE Triangulation",
+  "documentation": "https://github.com/agittins/bermuda",
+  "issue_tracker": "https://github.com/agittins/bermuda/issues",
+  "dependencies": [],
+  "config_flow": true,
+  "codeowners": ["@agittins"],
+  "requirements": []
+}

@@ -1,0 +1,6 @@
+__pycache__
+pythonenv*
+.python-version
+.coverage
+venv
+.venv

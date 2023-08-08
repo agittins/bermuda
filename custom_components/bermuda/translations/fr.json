@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bermuda BLE Triangulation",
+        "description": "Si vous avez besoin d'aide pour la configuration, regardez ici: https://github.com/agittins/bermuda",
+        "data": {
+          "username": "Identifiant",
+          "password": "Mot de Passe"
+        }
+      }
+    },
+    "error": {
+      "auth": "Identifiant ou mot de passe erroné."
+    },
+    "abort": {
+      "single_instance_allowed": "Une seule instance est autorisée."
+    }
+  },
+  "options": {
+    "step": {
+      "user": {
+        "data": {
+          "binary_sensor": "Capteur binaire activé",
+          "sensor": "Capteur activé",
+          "switch": "Interrupteur activé"
+        }
+      }
+    }
+  }
+}
