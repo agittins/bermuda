@@ -19,7 +19,7 @@ jobs:
     name: Pre-commit
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@v3.5.3
 
       - name: Set up Python ${{ env.DEFAULT_PYTHON }}
         uses: actions/setup-python@v2.2.1
@@ -44,7 +44,7 @@ jobs:
     name: HACS
     steps:
       - name: Check out the repository
-        uses: "actions/checkout@v2.3.4"
+        uses: "actions/checkout@v3.5.3"
 
       - name: HACS validation
         uses: "hacs/action@20.12.0"
@@ -57,7 +57,7 @@ jobs:
     name: Hassfest
     steps:
       - name: Check out the repository
-        uses: "actions/checkout@v2.3.4"
+        uses: "actions/checkout@v3.5.3"
 
       - name: Hassfest validation
         uses: "home-assistant/actions/hassfest@master"
@@ -66,7 +66,7 @@ jobs:
     name: Run tests
     steps:
       - name: Check out code from GitHub
-        uses: "actions/checkout@v2.3.4"
+        uses: "actions/checkout@v3.5.3"
       - name: Setup Python ${{ env.DEFAULT_PYTHON }}
         uses: "actions/setup-python@v2.2.1"
         with:
