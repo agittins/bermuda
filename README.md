@@ -1,5 +1,7 @@
 # Bermuda BLE Triangulation
 
+Triangulate your lost objects using ESPHome bluetooth proxies!
+
 [![GitHub Release][releases-shield]][releases]
 [![GitHub Activity][commits-shield]][commits]
 [![License][license-shield]](LICENSE)
@@ -14,8 +16,97 @@
 [![Discord][discord-shield]][discord]
 [![Community Forum][forum-shield]][forum]
 
-**TO BE REMOVED: If you need help, as a developer, to use this custom component tempalte,
-please look at the [User Guide in the Cookiecutter documentation](https://cookiecutter-homeassistant-custom-component.readthedocs.io/en/stable/quickstart.html)**
+**STATUS: Pre-alpha! Nothing works yet, this is just an idea so far.
+
+This integration uses the advertisement data gathered by your esphome
+bluetooth-proxy deployments to track or triangulate the relative
+positions of any BLE or classic-bluetooth devices around your home
+that are observed.
+
+This can be used for prescence detection (ie which human/pet is at home
+and in what room are they?), and device location (where's my
+phone/toothbrush?)
+
+It's unlikely to give you *fast* detection, but it might be handy to
+supplement other sensors that can't distinguish between people. For
+example, the mmWave sensor might turn on the lights, but a few
+seconds later when Bermuda realises it's Alice, set her preferred
+colour temperature. Or something.
+
+If the tracking is any good (it might not be) it may even be possible
+to calculate a vector for the person based on the last several seconds,
+and *predict* which room they're heading for. I'm not smart enough to do
+that so hopefully you're better at math than I am....
+
+## Expectations
+
+It's hard to say, but I wouldn't be expecting terribly
+accurate locating, I think we'd be doing well to get down to room-level
+granularity. It might only be possible to really get an idea of "very close
+to this one esphome proxy" vs "somewhere between these three", but hopefully some
+people smarter than me can contribute some algorithmic goodness that makes
+it more useful.
+
+## What you need
+
+- HomeAssistant, with the `bluetooth` integration enabled
+- Multiple (ideally) ESPHome devices, acting as `bluetooth_proxy` devices.
+  I like the D1-Mini32 boards because they're cheap and easy to deploy.
+- Some bluetooth things you want to locate (phones, beacons/tags etc)
+
+## How it works
+
+When a BLE device sends an advertisement packet, each bluetooth proxy that hears
+it will send it to HomeAssistant, along with the `rssi` (received signal strength
+indicator) which is basically how "strong" the received signal was.
+
+Lots of things affect the rssi value, but one of them is distance. This integration
+compares the rssi value for a given advertisement across the different
+bluetooth proxies, and from that tries to make some guesses about how far
+(in relative terms) the device was from each proxy.
+
+From there we hope to get a rough idea of the transmitting device's location,
+and perhaps even manage to map the device to a specific "Area" in homeassistant.
+
+## What you'll see
+
+After enabling the integration, you should start to see results for any bluetooth
+devices in your home that are sending broadcasts. The implemented results are:
+(important to note here that NONE of these boxes are ticked yet!)
+
+[] A raw listing of values returned when you call the `bermuda_get_rssi` service
+[] An interface to choose which devices should have sensors created for them
+[] Sensors created for selected devices, showing their estimated location
+[] A mud-map showing relative locations between proxies and detected devices
+[] An interface to "pin" the proxies on a map to establish a sort of coordinate system
+[] An interface to define Areas in relation to the pinned proxies
+
+## Prior Art
+
+The `bluetooth_tracker` and `ble_tracker` integrations are only built to give a "home/not home"
+determination, and don't do "Area" based location. (nb: "Zones" are places outside the
+home, while "Areas" are rooms/areas inside the home). They feel rather "legacy" to me,
+and they don't seem to be a popular target for innovation.
+
+The "monitor" script uses standalone Pi's to gather bluetooth data and then pumps it into
+MQTT. It doesn't use the `bluetooth_proxy` capabilities which I feel are the future of
+home bluetooth networking (well, it is for my home, anyway!).
+
+ESPrescence looks cool, but I don't want to dedicate my nodes to non-esphome use, and again
+it doesn't leverage the bluetooth proxy features now in HA.
+
+## Under the bonnet
+
+The bluetooth integration doesn't really expose the advertisements that it receives,
+expecting instead integrations to do specific tasks by device type. Even so, the data
+available by the normal APIs only expose the view from one proxy - the one that received
+the strongest signal (rssi) for that advertisement. We want to see the *relative* rssi
+strengths for all the proxies, so we can then have a ham-fisted go at estimating their
+position within the home.
+
+To do this we need to directly access the bluetooth integration's data structures, where
+it stores the recent adverts received by each proxy, along with the raw data and rssi.
+
 
 **This component will set up the following platforms.**
 
@@ -25,9 +116,11 @@ please look at the [User Guide in the Cookiecutter documentation](https://cookie
 | `sensor`        | Show info from Bermuda BLE Triangulation API. |
 | `switch`        | Switch something `True` or `False`.                                       |
 
-![example][exampleimg]
 
 ## Installation
+
+I'd strongly suggest installing via the HACS user interface, but no idea if that reliably works
+yet :-) The instructions below are the generic notes from the template:
 
 1. Using the tool of choice open the directory (folder) for your HA configuration (where you find `configuration.yaml`).
 2. If you do not have a `custom_components` directory (folder) there, you need to create it.
@@ -37,27 +130,6 @@ please look at the [User Guide in the Cookiecutter documentation](https://cookie
 6. Restart Home Assistant
 7. In the HA UI go to "Configuration" -> "Integrations" click "+" and search for "Bermuda BLE Triangulation"
 
-Using your HA configuration directory (folder) as a starting point you should now also have this:
-
-```text
-custom_components/bermuda/translations/en.json
-custom_components/bermuda/translations/fr.json
-custom_components/bermuda/translations/nb.json
-custom_components/bermuda/translations/sensor.en.json
-custom_components/bermuda/translations/sensor.fr.json
-custom_components/bermuda/translations/sensor.nb.json
-custom_components/bermuda/translations/sensor.nb.json
-custom_components/bermuda/__init__.py
-custom_components/bermuda/api.py
-custom_components/bermuda/binary_sensor.py
-custom_components/bermuda/config_flow.py
-custom_components/bermuda/const.py
-custom_components/bermuda/manifest.json
-custom_components/bermuda/sensor.py
-custom_components/bermuda/switch.py
-```
-
-## Configuration is done in the UI
 
 <!---->
 
@@ -70,6 +142,7 @@ If you want to contribute to this please read the [Contribution guidelines](CONT
 This project was generated from [@oncleben31](https://github.com/oncleben31)'s [Home Assistant Custom Component Cookiecutter](https://github.com/oncleben31/cookiecutter-homeassistant-custom-component) template.
 
 Code template was mainly taken from [@Ludeeus](https://github.com/ludeeus)'s [integration_blueprint][integration_blueprint] template
+[Cookiecutter User Guide](https://cookiecutter-homeassistant-custom-component.readthedocs.io/en/stable/quickstart.html)**
 
 ---
 
