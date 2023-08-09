@@ -16,7 +16,7 @@ Triangulate your lost objects using ESPHome bluetooth proxies!
 [![Discord][discord-shield]][discord]
 [![Community Forum][forum-shield]][forum]
 
-**STATUS: Pre-alpha! Nothing works yet, this is just an idea so far.
+**STATUS: Pre-alpha! Only a basic service dumping info works right now.
 
 This integration uses the advertisement data gathered by your esphome
 bluetooth-proxy deployments to track or triangulate the relative
@@ -74,12 +74,42 @@ After enabling the integration, you should start to see results for any bluetoot
 devices in your home that are sending broadcasts. The implemented results are:
 (important to note here that NONE of these boxes are ticked yet!)
 
-[] A raw listing of values returned when you call the `bermuda_get_rssi` service
+[x] A raw listing of values returned when you call the `bermuda.dump_beacons` service
 [] An interface to choose which devices should have sensors created for them
 [] Sensors created for selected devices, showing their estimated location
 [] A mud-map showing relative locations between proxies and detected devices
 [] An interface to "pin" the proxies on a map to establish a sort of coordinate system
 [] An interface to define Areas in relation to the pinned proxies
+
+## TODO / Ideas
+
+[x] Basic `bermuda.dump_beacons` service that responds with measurements.
+[] Switch to performing updates on receipt of advertisements, instead of periodic polling
+[] Realtime approximation of inter-proxy distances using Triangle Inequality
+[] Resolve x/y co-ordinates of all scanners and proxies (!)
+[] Some sort of map, just pick two proxies as an x-axis vector and go
+[] Config setting to define absolute locations of two proxies
+[] Support some way to "pin" more than two proxies/tags, and have it not break.
+[] Create entities (use `device_tracker`? or create own?) for each detected beacon
+[] Experiment with some of
+   [these algo's](https://mdpi-res.com/d_attachment/applsci/applsci-10-02003/article_deploy/applsci-10-02003.pdf?version=1584265508)
+   for improving accuracy (too much math for me!). Particularly weighting shorter
+   distances higher and perhaps the cosine similarity fingerprinting, possibly against
+   fixed beacons as well to smooth environmental rssi fluctuations.
+
+
+## Hacking tips
+
+Wanna improve this? Awesome! Here's some tips on how it works inside and
+what direction I'm hoping to go. Bear in mind this is my first ever HA
+integration, and I'm much more greybeard sysadmin than programmer, so if
+I'm doing stupid things I really would welcome some improvements!
+
+At this stage I'm using the service `bermuda.dump_beacons` to examine the
+internal state while I gather the basic info and make initial efforts at
+calculating locations. It's defined in `__init__.py`.
+
+(right now that's about all that exists!)
 
 ## Prior Art
 
@@ -97,7 +127,7 @@ it doesn't leverage the bluetooth proxy features now in HA.
 
 ## Under the bonnet
 
-The bluetooth integration doesn't really expose the advertisements that it receives,
+The `bluetooth` integration doesn't really expose the advertisements that it receives,
 expecting instead integrations to do specific tasks by device type. Even so, the data
 available by the normal APIs only expose the view from one proxy - the one that received
 the strongest signal (rssi) for that advertisement. We want to see the *relative* rssi
@@ -112,9 +142,9 @@ it stores the recent adverts received by each proxy, along with the raw data and
 
 | Platform        | Description                                                               |
 | --------------- | ------------------------------------------------------------------------- |
-| `binary_sensor` | Show something `True` or `False`.                                         |
-| `sensor`        | Show info from Bermuda BLE Triangulation API. |
-| `switch`        | Switch something `True` or `False`.                                       |
+| `binary_sensor` | Nothing yet.                                         |
+| `sensor`        | Nor here, yet. |
+| `switch`        | Nope.                                       |
 
 
 ## Installation

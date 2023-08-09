@@ -23,7 +23,8 @@ class BermudaSensor(BermudaEntity):
     @property
     def state(self):
         """Return the state of the sensor."""
-        return self.coordinator.data.get("body")
+        # return self.coordinator.data.get("body")
+        return "Looks good, eh."
 
     @property
     def icon(self):

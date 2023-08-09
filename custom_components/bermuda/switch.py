@@ -40,4 +40,5 @@ class BermudaBinarySwitch(BermudaEntity, SwitchEntity):
     @property
     def is_on(self):
         """Return true if the switch is on."""
-        return self.coordinator.data.get("title", "") == "foo"
+        # return self.coordinator.data.get("title", "") == "foo"
+        return True

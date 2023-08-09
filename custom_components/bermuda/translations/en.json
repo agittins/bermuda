@@ -27,5 +27,11 @@
         }
       }
     }
+  },
+  "services": {
+    "dump_beacons": {
+      "name": "Dump Beacons",
+      "description": "Returns all detected advertisements and their rssi for each scanner"
+    }
   }
 }

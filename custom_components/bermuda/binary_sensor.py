@@ -30,4 +30,5 @@ class BermudaBinarySensor(BermudaEntity, BinarySensorEntity):
     @property
     def is_on(self):
         """Return true if the binary_sensor is on."""
-        return self.coordinator.data.get("title", "") == "foo"
+        # return self.coordinator.data.get("title", "") == "foo"
+        return True

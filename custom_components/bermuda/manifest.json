@@ -3,8 +3,15 @@
   "name": "Bermuda BLE Triangulation",
   "documentation": "https://github.com/agittins/bermuda",
   "issue_tracker": "https://github.com/agittins/bermuda/issues",
-  "dependencies": [],
+  "dependencies": [
+    "bluetooth_adapters"
+  ],
   "config_flow": true,
-  "codeowners": ["@agittins"],
-  "requirements": []
+  "iot_class": "local_polling",
+  "codeowners": [
+    "@agittins"
+  ],
+  "requirements": [
+  ],
+  "version": "0.0.1"
 }
