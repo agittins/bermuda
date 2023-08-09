@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+# Seems to fix broken aiohttp wheel building in 3.11:
+python3 -m pip install --upgrade setuptools wheel
+# Fix urllib3 issue https://github.com/home-assistant/core/issues/95192
+python3 -m pip install git+https://github.com/boto/botocore
+
+python3 -m pip install --requirement requirements.txt

@@ -2,6 +2,12 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Run Home Assistant using devscript on port 9123",
+      "type": "shell",
+      "command": "scripts/develop",
+      "problemMatcher": []
+    },
+    {
       "label": "Run Home Assistant on port 9123",
       "type": "shell",
       "command": "container start",
