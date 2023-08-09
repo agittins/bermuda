@@ -1,2 +1,4 @@
--r requirements_dev.txt
-pytest-homeassistant-custom-component==0.13.50
+-r requirements.txt
+pytest-homeassistant-custom-component
+#==0.13.50
+pre-commit

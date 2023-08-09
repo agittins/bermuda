@@ -4,3 +4,8 @@ pythonenv*
 .coverage
 venv
 .venv
+config/.storage/
+config/home-assistant*
+config/blueprint*
+
+config/.HA_VERSION
