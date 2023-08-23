@@ -24,8 +24,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import slugify
 from homeassistant.util.dt import monotonic_time_coarse, now
 
-from .const import CONF_PASSWORD
-from .const import CONF_USERNAME
+#from .const import CONF_PASSWORD
+#from .const import CONF_USERNAME
 from .const import DOMAIN
 from .const import PLATFORMS
 from .const import STARTUP_MESSAGE
@@ -289,7 +289,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     self._refresh_scanners()
 
                 #FIXME: Find a method or request one be added for this
-                stamps = discovered.scanner._discovered_device_timestamps # pylint: disable=protected-access
+                # pylint: disable-next=protected-access
+                stamps = discovered.scanner._discovered_device_timestamps
                 scanner_stamp = stamps[service_info.address]
                 if device.last_seen < scanner_stamp:
                     device.last_seen = scanner_stamp

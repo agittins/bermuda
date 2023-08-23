@@ -29,8 +29,10 @@ async def test_switch_services(hass):
     assert await async_setup_entry(hass, config_entry)
     await hass.async_block_till_done()
 
-    # Functions/objects can be patched directly in test code as well and can be used to test
-    # additional things, like whether a function was called or what arguments it was called with
+    # Functions/objects can be patched directly
+    # in test code as well and can be used to test
+    # additional things, like whether a function
+    # was called or what arguments it was called with
     with patch(
         "custom_components.bermuda.BermudaApiClient.async_set_title"
     ) as title_func:
