@@ -18,13 +18,14 @@ BINARY_SENSOR_DEVICE_CLASS = "connectivity"
 BINARY_SENSOR = "binary_sensor"
 SENSOR = "sensor"
 SWITCH = "switch"
-PLATFORMS = [BINARY_SENSOR, SENSOR, SWITCH]
-
+#PLATFORMS = [BINARY_SENSOR, SENSOR, SWITCH]
+PLATFORMS = [ SENSOR ]
 
 # Configuration and options
 CONF_ENABLED = "enabled"
 CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
+CONF_DEVTRACKERS = "device_trackers"
 
 # Defaults
 DEFAULT_NAME = DOMAIN

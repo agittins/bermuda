@@ -1,1 +1,3 @@
-dump_beacons:
+dump_devices:
+  name: Dump devices
+  description: Returns the internal structure of devices, useful for debugging or building templates etc.

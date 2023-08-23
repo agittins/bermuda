@@ -16,43 +16,73 @@ Triangulate your lost objects using ESPHome bluetooth proxies!
 [![Discord][discord-shield]][discord]
 [![Community Forum][forum-shield]][forum]
 
-**STATUS: Pre-alpha! Only a basic service dumping info works right now.
+**STATUS: Early days!
+- Can replace bluetooth_ble_tracker by creating entities for home/not_home
+  for selected BLE devices, which can be used for Person home/away sensing.
+  This is the "Zone" element of homeassistant localisation, where "home" is
+  one Zone, and "work" or other large geographic areas might be others.
 
-This integration uses the advertisement data gathered by your esphome
-bluetooth-proxy deployments to track or triangulate the relative
-positions of any BLE or classic-bluetooth devices around your home
-that are observed.
+- Provides a json/yaml dump of devices and their distances from each bluetooth
+  receiver. This is via the `bermuda.dump_devices` service.
 
-This can be used for prescence detection (ie which human/pet is at home
-and in what room are they?), and device location (where's my
-phone/toothbrush?)
+- (soon) Provides sensors to indicate which Room ("Area", in HA terms) a device
+  is "in". This is based on the measured RF power (rssi - received signal strength
+  indicator) which can give a (varyingly inaccurate) measure of distance to the
+  closest BLE Proxy. If you have a bluetooth receiver (ESPHome with `bluetooth_proxy`
+  or a Shelley device) in each room you want tracking for, this will do the job.
 
-It's unlikely to give you *fast* detection, but it might be handy to
-supplement other sensors that can't distinguish between people. For
-example, the mmWave sensor might turn on the lights, but a few
-seconds later when Bermuda realises it's Alice, set her preferred
-colour temperature. Or something.
+- (soon) Provide a mud-map of your entire home, in bluetooth signal strength terms.
 
-If the tracking is any good (it might not be) it may even be possible
-to calculate a vector for the person based on the last several seconds,
-and *predict* which room they're heading for. I'm not smart enough to do
-that so hopefully you're better at math than I am....
+This integration uses the advertisement data gathered by your esphome or
+Shelley bluetooth-proxy deployments to track or triangulate (more correctly,
+trilaterate) the relative positions of any BLE devices
+observed around your home.
 
-## Expectations
+Note that this is more properly called "Tri*lateration*", as we are not
+measuring the angles, but instead measuring distances. The bottom line
+is that triangulation is more likely to hit people's search terms.
 
-It's hard to say, but I wouldn't be expecting terribly
-accurate locating, I think we'd be doing well to get down to room-level
-granularity. It might only be possible to really get an idea of "very close
-to this one esphome proxy" vs "somewhere between these three", but hopefully some
-people smarter than me can contribute some algorithmic goodness that makes
-it more useful.
+This integration gives you two forms of presence tracking.
+- Simple Home/Away detection using the device_tracker integration. This is
+  not much different to the already working bluetooth_le_tracker integration
+  in that regard, but was an easy step along the way to...
+- Room-based ("Area"s in homeassistant parlance) localisation for bluetooth
+  devices. For example, "which human/pet is at home and in what room are they?"
+  and "where's my phone/toothbrush?"
+
+## FAQ
+Isn't mmWave better?
+: mmWave is definitely *faster*, but it will only tell you "someone" has entered
+a space, while Bermuda can tell you *who* is in a space.
+What about PIR / Infrared?
+: It's also likely faster than bluetooth, but again it only tells you that
+someone / something is present, but doesn't tell you who/what.
+
+So how does that help?
+: If the home knows who is in a given room, it can set the thermostat to their
+personal preferences, or perhaps their lighting settings. This might be
+particularly useful for testing automations for yourself before unleashing them
+on to your housemates, so they don't get annoyed while you iron out the bugs :-)
+: If you have BLE tags on your pets you can have automations specifically for them,
+and/or you can exclude certain automations, for example don't trigger a light from
+an IR sensor if it knows it's just your cat, say.
+
+How quickly does it react?
+: That will mainly depend on how often your beacon transmits advertisements, however
+right now the integration only re-calculates on a timed basis. This should be changed
+to a realtime recalculation based on incoming advertisements soon.
+
 
 ## What you need
 
 - HomeAssistant, with the `bluetooth` integration enabled
 - Multiple (ideally) ESPHome devices, acting as `bluetooth_proxy` devices.
   I like the D1-Mini32 boards because they're cheap and easy to deploy.
+  The Shelly bluetooth proxy devices should also work but I don't have any
+  so can't test them myself. Issue reports with debug info welcome.
 - Some bluetooth things you want to locate (phones, beacons/tags etc)
+- That's it! No mqtt, or devices dedicated to bluetooth (the esphome devices
+  can also provide other sensors etc, within reason)
 
 ## How it works
 
@@ -65,25 +95,31 @@ compares the rssi value for a given advertisement across the different
 bluetooth proxies, and from that tries to make some guesses about how far
 (in relative terms) the device was from each proxy.
 
-From there we hope to get a rough idea of the transmitting device's location,
-and perhaps even manage to map the device to a specific "Area" in homeassistant.
+The plan is to experiment with multiple algorithms to find the best ways to
+establish a device's location. In the first instace the methods are:
+- If a device is close (within a few metres) to a receiver, consider it to be in
+  the same Area as that receiver. (Working)
+- Attempt to "solve" a 2D map for all beacons and receivers based on the triangles
+  created between them to derive all the required distances. (WIP)
 
 ## What you'll see
 
 After enabling the integration, you should start to see results for any bluetooth
 devices in your home that are sending broadcasts. The implemented results are:
-(important to note here that NONE of these boxes are ticked yet!)
+(important to note here that VERY FEW of these boxes are ticked yet!)
 
-[x] A raw listing of values returned when you call the `bermuda.dump_beacons` service
+[x] A raw listing of values returned when you call the `bermuda.dump_devices` service
+    [x] `area` if a device is within a max distance of a receiver
 [] An interface to choose which devices should have sensors created for them
-[] Sensors created for selected devices, showing their estimated location
+[x] Sensors created for selected devices, showing their estimated location
+[] Algo to "solve" the 2D layout of devices
 [] A mud-map showing relative locations between proxies and detected devices
 [] An interface to "pin" the proxies on a map to establish a sort of coordinate system
 [] An interface to define Areas in relation to the pinned proxies
 
 ## TODO / Ideas
 
-[x] Basic `bermuda.dump_beacons` service that responds with measurements.
+[x] Basic `bermuda.dump_devices` service that responds with measurements.
 [] Switch to performing updates on receipt of advertisements, instead of periodic polling
 [] Realtime approximation of inter-proxy distances using Triangle Inequality
 [] Resolve x/y co-ordinates of all scanners and proxies (!)
@@ -102,10 +138,10 @@ devices in your home that are sending broadcasts. The implemented results are:
 
 Wanna improve this? Awesome! Here's some tips on how it works inside and
 what direction I'm hoping to go. Bear in mind this is my first ever HA
-integration, and I'm much more greybeard sysadmin than programmer, so if
+integration, and I'm much more greybeard sysadmin than programmer, so ~~if~~where
 I'm doing stupid things I really would welcome some improvements!
 
-At this stage I'm using the service `bermuda.dump_beacons` to examine the
+At this stage I'm using the service `bermuda.dump_devices` to examine the
 internal state while I gather the basic info and make initial efforts at
 calculating locations. It's defined in `__init__.py`.
 
@@ -115,28 +151,17 @@ calculating locations. It's defined in `__init__.py`.
 
 The `bluetooth_tracker` and `ble_tracker` integrations are only built to give a "home/not home"
 determination, and don't do "Area" based location. (nb: "Zones" are places outside the
-home, while "Areas" are rooms/areas inside the home). They feel rather "legacy" to me,
-and they don't seem to be a popular target for innovation.
+home, while "Areas" are rooms/areas inside the home). I wanted to be free to experiement with
+this in ways that might not suit core, but hopefully at least some of this could find
+a home in the core codebase one day.
 
 The "monitor" script uses standalone Pi's to gather bluetooth data and then pumps it into
 MQTT. It doesn't use the `bluetooth_proxy` capabilities which I feel are the future of
 home bluetooth networking (well, it is for my home, anyway!).
 
 ESPrescence looks cool, but I don't want to dedicate my nodes to non-esphome use, and again
-it doesn't leverage the bluetooth proxy features now in HA.
-
-## Under the bonnet
-
-The `bluetooth` integration doesn't really expose the advertisements that it receives,
-expecting instead integrations to do specific tasks by device type. Even so, the data
-available by the normal APIs only expose the view from one proxy - the one that received
-the strongest signal (rssi) for that advertisement. We want to see the *relative* rssi
-strengths for all the proxies, so we can then have a ham-fisted go at estimating their
-position within the home.
-
-To do this we need to directly access the bluetooth integration's data structures, where
-it stores the recent adverts received by each proxy, along with the raw data and rssi.
-
+it doesn't leverage the bluetooth proxy features now in HA. I am probably reinventing
+a fair amount of ESPrescense's wheel.
 
 **This component will set up the following platforms.**
 
@@ -149,8 +174,15 @@ it stores the recent adverts received by each proxy, along with the raw data and
 
 ## Installation
 
-I'd strongly suggest installing via the HACS user interface, but no idea if that reliably works
-yet :-) The instructions below are the generic notes from the template:
+Definitely use the HACS interface! Once you have HACS installed, go to `Integrations`, click the
+meatballs menu in the top right, and choose `Custom Repositories`. Paste `agittins/bermuda` into
+the `Repository` field, and choose `Integration` for the `Category`. Click `Add`.
+
+You should now be able to add the `Bermuda BLE Triangulation` integration. Once you have done that,
+you need to restart Homeassistant, then in `Settings`, `Devices & Services` choose `Add Integration`
+and search for `Bermuda BLE Triangulation`.
+
+The instructions below are the generic notes from the template:
 
 1. Using the tool of choice open the directory (folder) for your HA configuration (where you find `configuration.yaml`).
 2. If you do not have a `custom_components` directory (folder) there, you need to create it.
