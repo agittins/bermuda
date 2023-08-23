@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import timedelta
-from typing import TYPE_CHECKING, Final
+from typing import Final
 
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import BluetoothScannerDevice
@@ -122,6 +122,7 @@ class BermudaDeviceScanner(dict):
         self.adverts = scandata.advertisement.service_data.items()
 
     def to_dict(self):
+        """Convert class to serialisable dict for dump_devices"""
         out = {}
         for ( var, val) in vars(self).items():
             if var == 'adverts':
@@ -164,6 +165,7 @@ class BermudaDevice(dict):
         self.scanners: dict[str, BermudaDeviceScanner] = {}
 
     def to_dict(self):
+        """Convert class to serialisable dict for dump_devices"""
         out = {}
         for ( var, val) in vars(self).items():
             if var == 'scanners':
@@ -337,8 +339,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         """
 
         # Check if the device has been seen recently
-        now = MONOTONIC_TIME()
-        if now - device.last_seen > self.timeout_not_home:
+        rightnow = MONOTONIC_TIME()
+        if rightnow - device.last_seen > self.timeout_not_home:
             location_name = 'not_home'
         else:
             location_name = 'home'

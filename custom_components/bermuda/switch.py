@@ -10,7 +10,7 @@ from .entity import BermudaEntity
 
 async def async_setup_entry(hass, entry, async_add_devices):
     """Setup sensor platform."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    #coordinator = hass.data[DOMAIN][entry.entry_id]
     #AJG async_add_devices([BermudaBinarySwitch(coordinator, entry)])
 
 
