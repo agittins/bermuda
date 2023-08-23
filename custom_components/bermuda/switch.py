@@ -2,7 +2,7 @@
 from homeassistant.components.switch import SwitchEntity
 
 from .const import DEFAULT_NAME
-from .const import DOMAIN
+#from .const import DOMAIN
 from .const import ICON
 from .const import SWITCH
 from .entity import BermudaEntity

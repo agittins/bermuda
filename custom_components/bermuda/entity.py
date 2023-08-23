@@ -13,7 +13,7 @@ from .const import VERSION
 
 if TYPE_CHECKING:
     from . import BermudaDataUpdateCoordinator
-    from . import BermudaDevice
+    #from . import BermudaDevice
 
 class BermudaEntity(CoordinatorEntity):
     """Co-ordinator for Bermuda data.
