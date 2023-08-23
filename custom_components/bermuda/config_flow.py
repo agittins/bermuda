@@ -2,12 +2,13 @@
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
-#from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .const import CONF_PASSWORD
 from .const import CONF_USERNAME
 from .const import DOMAIN
 from .const import PLATFORMS
+
+# from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 
 class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
@@ -62,9 +63,9 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     async def _test_credentials(self, username, password):
         """Return true if credentials is valid."""
         try:
-            #session = async_create_clientsession(self.hass)
-            #client = BermudaApiClient(username, password, session)
-            #await client.async_get_data()
+            # session = async_create_clientsession(self.hass)
+            # client = BermudaApiClient(username, password, session)
+            # await client.async_get_data()
             return True
         except Exception:  # pylint: disable=broad-except
             pass

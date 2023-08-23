@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers import area_registry
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import ATTRIBUTION
 from .const import DOMAIN
@@ -13,7 +13,9 @@ from .const import VERSION
 
 if TYPE_CHECKING:
     from . import BermudaDataUpdateCoordinator
-    #from . import BermudaDevice
+
+    # from . import BermudaDevice
+
 
 class BermudaEntity(CoordinatorEntity):
     """Co-ordinator for Bermuda data.
@@ -21,17 +23,16 @@ class BermudaEntity(CoordinatorEntity):
     Gathers the device infor for receivers and transmitters, calculates
     distances etc.
     """
+
     def __init__(
-            self,
-            coordinator: BermudaDataUpdateCoordinator,
-            config_entry,
-            address: str
-        ):
+        self, coordinator: BermudaDataUpdateCoordinator, config_entry, address: str
+    ):
         super().__init__(coordinator)
         self.coordinator = coordinator
         self.config_entry = config_entry
         self._device = coordinator.devices[address]
         self.ar = area_registry.async_get(coordinator.hass)
+
     @property
     def unique_id(self):
         """Return a unique ID to use for this entity."""

@@ -1,19 +1,12 @@
 {
   "domain": "bermuda",
   "name": "Bermuda BLE Triangulation",
-  "codeowners": [
-    "@agittins"
-  ],
+  "codeowners": ["@agittins"],
   "config_flow": true,
-  "dependencies": [
-    "bluetooth_adapters",
-    "device_tracker"
-  ],
+  "dependencies": ["bluetooth_adapters", "device_tracker"],
   "documentation": "https://github.com/agittins/bermuda",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/agittins/bermuda/issues",
-  "requirements": [
-    "pandas"
-  ],
+  "requirements": ["pandas"],
   "version": "0.0.1"
 }

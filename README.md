@@ -16,7 +16,8 @@ Triangulate your lost objects using ESPHome bluetooth proxies!
 [![Discord][discord-shield]][discord]
 [![Community Forum][forum-shield]][forum]
 
-**STATUS: Early days!
+##STATUS: Early days!
+
 - Can replace bluetooth_ble_tracker by creating entities for home/not_home
   for selected BLE devices, which can be used for Person home/away sensing.
   This is the "Zone" element of homeassistant localisation, where "home" is
@@ -43,6 +44,7 @@ measuring the angles, but instead measuring distances. The bottom line
 is that triangulation is more likely to hit people's search terms.
 
 This integration gives you two forms of presence tracking.
+
 - Simple Home/Away detection using the device_tracker integration. This is
   not much different to the already working bluetooth_le_tracker integration
   in that regard, but was an easy step along the way to...
@@ -51,27 +53,33 @@ This integration gives you two forms of presence tracking.
   and "where's my phone/toothbrush?"
 
 ## FAQ
+
 Isn't mmWave better?
-: mmWave is definitely *faster*, but it will only tell you "someone" has entered
-a space, while Bermuda can tell you *who* is in a space.
+
+: mmWave is definitely _faster_, but it will only tell you "someone" has entered
+a space, while Bermuda can tell you _who_ is in a space.
+
 What about PIR / Infrared?
+
 : It's also likely faster than bluetooth, but again it only tells you that
 someone / something is present, but doesn't tell you who/what.
 
 So how does that help?
+
 : If the home knows who is in a given room, it can set the thermostat to their
 personal preferences, or perhaps their lighting settings. This might be
 particularly useful for testing automations for yourself before unleashing them
 on to your housemates, so they don't get annoyed while you iron out the bugs :-)
+
 : If you have BLE tags on your pets you can have automations specifically for them,
 and/or you can exclude certain automations, for example don't trigger a light from
 an IR sensor if it knows it's just your cat, say.
 
 How quickly does it react?
+
 : That will mainly depend on how often your beacon transmits advertisements, however
 right now the integration only re-calculates on a timed basis. This should be changed
 to a realtime recalculation based on incoming advertisements soon.
-
 
 ## What you need
 
@@ -97,6 +105,7 @@ bluetooth proxies, and from that tries to make some guesses about how far
 
 The plan is to experiment with multiple algorithms to find the best ways to
 establish a device's location. In the first instace the methods are:
+
 - If a device is close (within a few metres) to a receiver, consider it to be in
   the same Area as that receiver. (Working)
 - Attempt to "solve" a 2D map for all beacons and receivers based on the triangles
@@ -109,7 +118,7 @@ devices in your home that are sending broadcasts. The implemented results are:
 (important to note here that VERY FEW of these boxes are ticked yet!)
 
 [x] A raw listing of values returned when you call the `bermuda.dump_devices` service
-    [x] `area` if a device is within a max distance of a receiver
+[x] `area` if a device is within a max distance of a receiver
 [] An interface to choose which devices should have sensors created for them
 [x] Sensors created for selected devices, showing their estimated location
 [] Algo to "solve" the 2D layout of devices
@@ -128,11 +137,10 @@ devices in your home that are sending broadcasts. The implemented results are:
 [] Support some way to "pin" more than two proxies/tags, and have it not break.
 [] Create entities (use `device_tracker`? or create own?) for each detected beacon
 [] Experiment with some of
-   [these algo's](https://mdpi-res.com/d_attachment/applsci/applsci-10-02003/article_deploy/applsci-10-02003.pdf?version=1584265508)
-   for improving accuracy (too much math for me!). Particularly weighting shorter
-   distances higher and perhaps the cosine similarity fingerprinting, possibly against
-   fixed beacons as well to smooth environmental rssi fluctuations.
-
+[these algo's](https://mdpi-res.com/d_attachment/applsci/applsci-10-02003/article_deploy/applsci-10-02003.pdf?version=1584265508)
+for improving accuracy (too much math for me!). Particularly weighting shorter
+distances higher and perhaps the cosine similarity fingerprinting, possibly against
+fixed beacons as well to smooth environmental rssi fluctuations.
 
 ## Hacking tips
 
@@ -165,12 +173,11 @@ a fair amount of ESPrescense's wheel.
 
 **This component will set up the following platforms.**
 
-| Platform        | Description                                                               |
-| --------------- | ------------------------------------------------------------------------- |
-| `binary_sensor` | Nothing yet.                                         |
+| Platform        | Description    |
+| --------------- | -------------- |
+| `binary_sensor` | Nothing yet.   |
 | `sensor`        | Nor here, yet. |
-| `switch`        | Nope.                                       |
-
+| `switch`        | Nope.          |
 
 ## Installation
 
@@ -192,7 +199,6 @@ The instructions below are the generic notes from the template:
 6. Restart Home Assistant
 7. In the HA UI go to "Configuration" -> "Integrations" click "+" and search for "Bermuda BLE Triangulation"
 
-
 <!---->
 
 ## Contributions are welcome!
@@ -204,7 +210,7 @@ If you want to contribute to this please read the [Contribution guidelines](CONT
 This project was generated from [@oncleben31](https://github.com/oncleben31)'s [Home Assistant Custom Component Cookiecutter](https://github.com/oncleben31/cookiecutter-homeassistant-custom-component) template.
 
 Code template was mainly taken from [@Ludeeus](https://github.com/ludeeus)'s [integration_blueprint][integration_blueprint] template
-[Cookiecutter User Guide](https://cookiecutter-homeassistant-custom-component.readthedocs.io/en/stable/quickstart.html)**
+[Cookiecutter User Guide](https://cookiecutter-homeassistant-custom-component.readthedocs.io/en/stable/quickstart.html)\*\*
 
 ---
 

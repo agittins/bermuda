@@ -10,3 +10,4 @@ python3 -m pip install --upgrade setuptools wheel
 python3 -m pip install git+https://github.com/boto/botocore
 
 python3 -m pip install --requirement requirements.txt
+python3 -m pip install --requirement requirements_test.txt

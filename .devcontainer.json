@@ -1,48 +1,53 @@
 {
-    "name": "ludeeus/integration_blueprint",
-    "image": "mcr.microsoft.com/vscode/devcontainers/python:0-3.11",
-    "postCreateCommand": "scripts/setup",
-    "forwardPorts": [
-        8123,
-        5678
-    ],
-    "portsAttributes": {
-        "8123": {
-            "label": "Home Assistant"
-            
-            //"onAutoForward": "notify"
-        }
-        "5678": {
-            "label": "Debugger"
-            //"onAutoForward": "notify"
-        }
+  "name": "ludeeus/integration_blueprint",
+  "image": "mcr.microsoft.com/vscode/devcontainers/python:0-3.11",
+  "postCreateCommand": "scripts/setup",
+  "forwardPorts": [8123, 5678],
+  "mounts": [
+    {
+      "source": "/home/agittins/.ssh/id_ed25519",
+      "target": "/home/vscode/.ssh/id_ed25519",
+      "type": "bind"
     },
-    "customizations": {
-        "vscode": {
-            "extensions": [
-                "ms-python.python",
-                "github.vscode-pull-request-github",
-                "ryanluker.vscode-coverage-gutters",
-                "ms-python.vscode-pylance"
-            ],
-            "settings": {
-                "files.eol": "\n",
-                "editor.tabSize": 4,
-                "python.pythonPath": "/usr/bin/python3",
-                "python.analysis.autoSearchPaths": false,
-                //"python.linting.pylintEnabled": true,
-                //"python.linting.enabled": true,
-                //"python.formatting.provider": "black",
-                //"python.formatting.blackPath": "/usr/local/py-utils/bin/black",
-                "editor.formatOnPaste": false,
-                "editor.formatOnSave": true,
-                "editor.formatOnType": true,
-                "files.trimTrailingWhitespace": true
-            }
-        }
-    },
-    "remoteUser": "vscode",
-    "features": {
-        "ghcr.io/devcontainers/features/rust:1": {}
+    {
+      "source": "/home/agittins/.ssh/id_ed25519.pub",
+      "target": "/home/vscode/.ssh/id_ed25519.pub",
+      "type": "bind"
     }
+  ],
+  "portsAttributes": {
+    "8123": {
+      "label": "Home Assistant",
+      "onAutoForward": "silent"
+    },
+    "5678": {
+      "label": "Debugger",
+      "onAutoForward": "silent"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "github.vscode-pull-request-github",
+        "ryanluker.vscode-coverage-gutters",
+        "ms-python.vscode-pylance",
+        "github.vscode-github-actions"
+      ],
+      "settings": {
+        "files.eol": "\n",
+        "editor.tabSize": 4,
+        "python.pythonPath": "/usr/bin/python3",
+        "python.analysis.autoSearchPaths": false,
+        "editor.formatOnPaste": false,
+        "editor.formatOnSave": true,
+        "editor.formatOnType": true,
+        "files.trimTrailingWhitespace": true
+      }
+    }
+  },
+  "remoteUser": "vscode",
+  "features": {
+    "ghcr.io/devcontainers/features/rust:1": {}
+  }
 }

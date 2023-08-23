@@ -17,27 +17,27 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v1
 
-#      - name: Download Lokalise CLI
-#        run: |
-#          curl -sfL https://raw.githubusercontent.com/lokalise/lokalise-cli-2-go/master/install.sh | sh
-#
-#      - name: Download latest translations with Lokalise
-#        run: |
-#          ./bin/lokalise2 \
-#            --token "${{ secrets.lokalise_token }}"\
-#            --project-id "260939135f7593a05f2b79.75475372" \
-#            file download \
-#            --format json \
-#            --unzip-to /tmp/lokalise \
-#            --export-empty-as skip \
-#            --export-sort a_z \
-#            --original-filenames=false  \
-#            --bundle-structure %LANG_ISO%.%FORMAT%
-#
-#      - name: Move downloaded translations
-#        run: |
-#          mkdir -p "${{ env.BERMUDA_ROOT_DIR }}/translations/
-#          cp /tmp/lokalise/* "${{ env.BERMUDA_ROOT_DIR }}/translations/"
+      #      - name: Download Lokalise CLI
+      #        run: |
+      #          curl -sfL https://raw.githubusercontent.com/lokalise/lokalise-cli-2-go/master/install.sh | sh
+      #
+      #      - name: Download latest translations with Lokalise
+      #        run: |
+      #          ./bin/lokalise2 \
+      #            --token "${{ secrets.lokalise_token }}"\
+      #            --project-id "260939135f7593a05f2b79.75475372" \
+      #            file download \
+      #            --format json \
+      #            --unzip-to /tmp/lokalise \
+      #            --export-empty-as skip \
+      #            --export-sort a_z \
+      #            --original-filenames=false  \
+      #            --bundle-structure %LANG_ISO%.%FORMAT%
+      #
+      #      - name: Move downloaded translations
+      #        run: |
+      #          mkdir -p "${{ env.BERMUDA_ROOT_DIR }}/translations/
+      #          cp /tmp/lokalise/* "${{ env.BERMUDA_ROOT_DIR }}/translations/"
 
       - name: Set release version number in files
         run: |

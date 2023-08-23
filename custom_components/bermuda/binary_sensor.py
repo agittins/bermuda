@@ -4,14 +4,15 @@ from homeassistant.components.binary_sensor import BinarySensorEntity
 from .const import BINARY_SENSOR
 from .const import BINARY_SENSOR_DEVICE_CLASS
 from .const import DEFAULT_NAME
-#from .const import DOMAIN
 from .entity import BermudaEntity
+
+# from .const import DOMAIN
 
 
 async def async_setup_entry(hass, entry, async_add_devices):
     """Setup binary_sensor platform."""
-    #coordinator = hass.data[DOMAIN][entry.entry_id]
-    #AJG async_add_devices([BermudaBinarySensor(coordinator, entry)])
+    # coordinator = hass.data[DOMAIN][entry.entry_id]
+    # AJG async_add_devices([BermudaBinarySensor(coordinator, entry)])
 
 
 class BermudaBinarySensor(BermudaEntity, BinarySensorEntity):

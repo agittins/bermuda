@@ -2,16 +2,17 @@
 from homeassistant.components.switch import SwitchEntity
 
 from .const import DEFAULT_NAME
-#from .const import DOMAIN
 from .const import ICON
 from .const import SWITCH
 from .entity import BermudaEntity
 
+# from .const import DOMAIN
+
 
 async def async_setup_entry(hass, entry, async_add_devices):
     """Setup sensor platform."""
-    #coordinator = hass.data[DOMAIN][entry.entry_id]
-    #AJG async_add_devices([BermudaBinarySwitch(coordinator, entry)])
+    # coordinator = hass.data[DOMAIN][entry.entry_id]
+    # AJG async_add_devices([BermudaBinarySwitch(coordinator, entry)])
 
 
 class BermudaBinarySwitch(BermudaEntity, SwitchEntity):
@@ -19,13 +20,13 @@ class BermudaBinarySwitch(BermudaEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs):  # pylint: disable=unused-argument
         """Turn on the switch."""
-        #await self.coordinator.api.async_set_title("bar")
-        #await self.coordinator.async_request_refresh()
+        # await self.coordinator.api.async_set_title("bar")
+        # await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs):  # pylint: disable=unused-argument
         """Turn off the switch."""
-        #await self.coordinator.api.async_set_title("foo")
-        #await self.coordinator.async_request_refresh()
+        # await self.coordinator.api.async_set_title("foo")
+        # await self.coordinator.async_request_refresh()
 
     @property
     def name(self):
