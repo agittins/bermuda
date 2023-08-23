@@ -389,7 +389,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         if closest_scanner is not None:
             # We found a winner
             device.area_id = closest_scanner.area_id
-            areas = self.ar.async_get_area(device.area_id).name # which is actually a list.
+            areas = self.ar.async_get_area(device.area_id).name # potentially a list.
             if len(areas) == 1:
                 device.area_name = areas[0]
             else:
