@@ -7,55 +7,32 @@ on:
   release:
     types: [published]
 
+permissions: {}
+
 jobs:
   release_zip_file:
     name: Prepare and upload release asset
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       BERMUDA_ROOT_DIR: "${{ github.workspace }}/custom_components/bermuda"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v1
-
-      #      - name: Download Lokalise CLI
-      #        run: |
-      #          curl -sfL https://raw.githubusercontent.com/lokalise/lokalise-cli-2-go/master/install.sh | sh
-      #
-      #      - name: Download latest translations with Lokalise
-      #        run: |
-      #          ./bin/lokalise2 \
-      #            --token "${{ secrets.lokalise_token }}"\
-      #            --project-id "260939135f7593a05f2b79.75475372" \
-      #            file download \
-      #            --format json \
-      #            --unzip-to /tmp/lokalise \
-      #            --export-empty-as skip \
-      #            --export-sort a_z \
-      #            --original-filenames=false  \
-      #            --bundle-structure %LANG_ISO%.%FORMAT%
-      #
-      #      - name: Move downloaded translations
-      #        run: |
-      #          mkdir -p "${{ env.BERMUDA_ROOT_DIR }}/translations/
-      #          cp /tmp/lokalise/* "${{ env.BERMUDA_ROOT_DIR }}/translations/"
+        uses: actions/checkout@v3
 
       - name: Set release version number in files
         run: |
-          sed -i '/VERSION = /c\VERSION = "${{ github.ref_name }}"' "${{ env.BERMUDA_ROOT_DIR }}/const.py"
+          sed -i '/VERSION.=./c\VERSION = "${{ github.ref_name }}"' "${{ env.BERMUDA_ROOT_DIR }}/const.py"
           (jq '.version = "${{ github.ref_name }}"' "${{ env.BERMUDA_ROOT_DIR }}/manifest.json") > "${{ env.BERMUDA_ROOT_DIR }}/manifest.json.tmp"
           mv "${{ env.BERMUDA_ROOT_DIR }}/manifest.json.tmp" "${{ env.BERMUDA_ROOT_DIR }}/manifest.json"
 
-      - name: Add Bermuda folder to zip archive
+      - name: Zip the integration directory
         run: |
           cd "${{ env.BERMUDA_ROOT_DIR }}"
           zip bermuda.zip -r ./
 
-      - name: Upload release asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Upload the ZIP file to the release"
+        uses: softprops/action-gh-release@v0.1.15
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ env.BERMUDA_ROOT_DIR }}/bermuda.zip"
-          asset_name: bermuda.zip
-          asset_content_type: application/zip
+          files: ${{ env.BERMUDA_ROOT_DIR }}/bermuda.zip

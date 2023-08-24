@@ -6,7 +6,8 @@
   "dependencies": ["bluetooth_adapters", "device_tracker"],
   "documentation": "https://github.com/agittins/bermuda",
   "iot_class": "calculated",
+  "integration_type": "helper",
   "issue_tracker": "https://github.com/agittins/bermuda/issues",
-  "requirements": ["pandas"],
+  "requirements": [],
   "version": "0.0.1"
 }

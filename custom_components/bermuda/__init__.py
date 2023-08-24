@@ -19,6 +19,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import area_registry
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import slugify
@@ -36,6 +37,8 @@ from .entity import BermudaEntity
 SCAN_INTERVAL = timedelta(seconds=10)
 
 MONOTONIC_TIME: Final = monotonic_time_coarse
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 

@@ -1,7 +1,6 @@
 {
   "name": "Bermuda BLE Triangulation",
   "hacs": "1.6.0",
-  "iot_class": "local_polling",
   "homeassistant": "2022.10",
   "render_readme": true
 }
