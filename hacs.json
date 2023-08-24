@@ -1,6 +1,6 @@
 {
   "name": "Bermuda BLE Triangulation",
   "hacs": "1.6.0",
-  "homeassistant": "2022.10",
+  "homeassistant": "2023.8",
   "render_readme": true
 }

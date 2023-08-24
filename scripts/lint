@@ -6,4 +6,4 @@ cd "$(dirname "$0")/.."
 
 #ruff check . --fix
 
-pre-commit run --all-files
+pre-commit run --all-files --show-diff-on-failure --color=always
