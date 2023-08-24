@@ -15,7 +15,7 @@ jobs:
       BERMUDA_ROOT_DIR: "${{ github.workspace }}/custom_components/bermuda"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       #      - name: Download Lokalise CLI
       #        run: |
