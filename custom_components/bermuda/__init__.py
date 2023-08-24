@@ -283,12 +283,26 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 if discovered.scanner.source not in self.devices:
                     self._refresh_scanners()
 
-                # FIXME: Find a method or request one be added for this
-                # pylint: disable-next=protected-access
-                stamps = discovered.scanner._discovered_device_timestamps
-                scanner_stamp = stamps[service_info.address]
-                if device.last_seen < scanner_stamp:
-                    device.last_seen = scanner_stamp
+                # Only remote scanners log timestamps (so not local usb adaptors),
+                # so check if the dict is there at all first...
+                if "_discovered_device_timestamps" in vars(discovered.scanner):
+                    # FIXME: Find a method or request one be added for this
+                    # pylint: disable-next=protected-access
+                    stamps = discovered.scanner._discovered_device_timestamps
+                    scanner_stamp = stamps[service_info.address]
+                    if device.last_seen < scanner_stamp:
+                        device.last_seen = scanner_stamp
+                else:
+                    # FIXME: Work out how to handle a bluetooth adaptors reports.
+                    # Options are: (a) find a timestamp somehwere (b) if we are
+                    # doing updates as ads come in, use now()-some_safety_offset.
+                    # For now, pretend it's as young as the previous update...
+                    if device.last_seen < (
+                        MONOTONIC_TIME() - SCAN_INTERVAL.total_seconds()
+                    ):
+                        device.last_seen = (
+                            MONOTONIC_TIME() - SCAN_INTERVAL.total_seconds()
+                        )
 
                 # Just replace the scanner entries outright...
                 device.scanners[discovered.scanner.source] = BermudaDeviceScanner(
