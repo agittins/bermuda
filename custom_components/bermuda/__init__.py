@@ -421,10 +421,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         for dev_entry in self.hass.data["device_registry"].devices.data.values():
             if len(dev_entry.connections) > 0:
                 for dev_connection in dev_entry.connections:
-                    if dev_connection[0] == "mac":
-                        if address is None or address == dev_connection[1]:
+                    if dev_connection[0] in ["mac", "bluetooth"]:
+                        if (
+                            address is None
+                            or str(address).upper() == str(dev_connection[1]).upper()
+                        ):
                             found_address = dev_connection[1]
-                            self.devices[found_address] = BermudaDevice()
+                            self.devices[str(found_address).upper()] = BermudaDevice()
                             scandev = self.devices[found_address]
                             scandev.address = found_address
                             scandev.area_id = dev_entry.area_id
