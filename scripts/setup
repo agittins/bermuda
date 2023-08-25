@@ -4,6 +4,10 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+# Create a virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
 # Seems to fix broken aiohttp wheel building in 3.11:
 python3 -m pip install --upgrade setuptools wheel
 # Fix urllib3 issue https://github.com/home-assistant/core/issues/95192

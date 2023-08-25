@@ -4,6 +4,8 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+source venv/bin/activate
+
 #ruff check . --fix
 
 pre-commit run --all-files --show-diff-on-failure --color=always
