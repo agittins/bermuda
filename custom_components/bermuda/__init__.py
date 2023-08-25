@@ -130,10 +130,10 @@ class BermudaDeviceScanner(dict):
         self.stamp: float = None
         # Only remote scanners log timestamps here (local usb adaptors do not),
         # so check if the dict is there at all first...
-        if "_discovered_device_timestamps" in vars(scandata.scanner):
+        if hasattr(scandata.scanner, "_discovered_device_timestamps"):
             # Found a remote scanner which has timestamp history...
 
-            # FIXME:
+            # FIXME: Doesn't appear to be any API to get this otherwise...
             # pylint: disable-next=protected-access
             stamps = scandata.scanner._discovered_device_timestamps
 
