@@ -1,4 +1,4 @@
-"""Adds config flow for Bermuda BLE Triangulation."""
+"""Adds config flow for Bermuda BLE Trilateration."""
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback

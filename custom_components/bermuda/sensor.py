@@ -1,4 +1,4 @@
-"""Sensor platform for Bermuda BLE Triangulation."""
+"""Sensor platform for Bermuda BLE Trilateration."""
 from collections.abc import Mapping
 from typing import Any
 

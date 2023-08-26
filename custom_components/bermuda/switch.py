@@ -1,4 +1,4 @@
-"""Switch platform for Bermuda BLE Triangulation."""
+"""Switch platform for Bermuda BLE Trilateration."""
 from homeassistant.components.switch import SwitchEntity
 
 from .const import DEFAULT_NAME

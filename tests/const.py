@@ -1,4 +1,4 @@
-"""Constants for Bermuda BLE Triangulation tests."""
+"""Constants for Bermuda BLE Trilateration tests."""
 from custom_components.bermuda.const import (
     CONF_PASSWORD,
 )

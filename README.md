@@ -1,4 +1,4 @@
-# Bermuda BLE Triangulation
+# Bermuda BLE Trilateration
 
 Triangulate your lost objects using ESPHome bluetooth proxies!
 
@@ -41,7 +41,8 @@ observed around your home.
 
 Note that this is more properly called "Tri*lateration*", as we are not
 measuring the angles, but instead measuring distances. The bottom line
-is that triangulation is more likely to hit people's search terms.
+is that triangulation is more likely to hit people's search terms so we'll
+probably bandy that term about a bit :-)
 
 This integration gives you two forms of presence tracking.
 
@@ -185,9 +186,9 @@ Definitely use the HACS interface! Once you have HACS installed, go to `Integrat
 meatballs menu in the top right, and choose `Custom Repositories`. Paste `agittins/bermuda` into
 the `Repository` field, and choose `Integration` for the `Category`. Click `Add`.
 
-You should now be able to add the `Bermuda BLE Triangulation` integration. Once you have done that,
+You should now be able to add the `Bermuda BLE Trilateration` integration. Once you have done that,
 you need to restart Homeassistant, then in `Settings`, `Devices & Services` choose `Add Integration`
-and search for `Bermuda BLE Triangulation`.
+and search for `Bermuda BLE Trilateration`.
 
 The instructions below are the generic notes from the template:
 
@@ -197,7 +198,7 @@ The instructions below are the generic notes from the template:
 4. Download _all_ the files from the `custom_components/bermuda/` directory (folder) in this repository.
 5. Place the files you downloaded in the new directory (folder) you created.
 6. Restart Home Assistant
-7. In the HA UI go to "Configuration" -> "Integrations" click "+" and search for "Bermuda BLE Triangulation"
+7. In the HA UI go to "Configuration" -> "Integrations" click "+" and search for "Bermuda BLE Trilateration"
 
 <!---->
 

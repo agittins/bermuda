@@ -1,6 +1,6 @@
 {
   "domain": "bermuda",
-  "name": "Bermuda BLE Triangulation",
+  "name": "Bermuda BLE Trilateration",
   "codeowners": ["@agittins"],
   "config_flow": true,
   "dependencies": ["bluetooth_adapters", "device_tracker"],

@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Bermuda BLE Triangulation",
+        "title": "Bermuda BLE Trilateration",
         "description": "If you need help with the configuration have a look here: https://github.com/agittins/bermuda",
         "data": {
           "username": "Username",

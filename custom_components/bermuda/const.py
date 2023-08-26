@@ -1,6 +1,6 @@
-"""Constants for Bermuda BLE Triangulation."""
+"""Constants for Bermuda BLE Trilateration."""
 # Base component constants
-NAME = "Bermuda BLE Triangulation"
+NAME = "Bermuda BLE Trilateration"
 DOMAIN = "bermuda"
 DOMAIN_DATA = f"{DOMAIN}_data"
 VERSION = "0.0.0"

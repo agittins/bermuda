@@ -24,7 +24,7 @@
 ## Installation
 
 1. Click install.
-1. In the HA UI go to "Configuration" -> "Integrations" click "+" and search for "Bermuda BLE Triangulation".
+1. In the HA UI go to "Configuration" -> "Integrations" click "+" and search for "Bermuda BLE Trilateration".
 
 {% endif %}
 
