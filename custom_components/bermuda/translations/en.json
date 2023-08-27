@@ -19,11 +19,17 @@
   },
   "options": {
     "step": {
-      "user": {
+      "globalopts": {
         "data": {
           "binary_sensor": "Binary sensor enabled",
           "sensor": "Sensor enabled",
-          "switch": "Switch enabled"
+          "switch": "Switch enabled",
+          "max_area_radius": "Max radius for simple AREA detection",
+          "devtracker_nothome_timeout": "`Device_tracker` sensor `not_home` timeout in seconds."
+        },
+        "data_description": {
+          "max_area_radius": "In the simple `AREA` feature, a device will be marked as being in the AREA of it's closest receiver, if inside this radius. If you set it small, devices will go to `unknown` between receivers, but if large devices will always appear as in their closest Area.",
+          "devtracker_nothome_timeout": "How quickly to mark device_tracker entities as `not_home` after we stop seeing advertisements. 30 seconds or more is probably good."
         }
       }
     }

@@ -27,6 +27,15 @@ CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
 CONF_DEVTRACKERS = "device_trackers"
 
+CONF_DEVICES = (
+    "configured_devices"  # Identifies which bluetooth devices we wish to expose
+)
+CONF_MAX_RADIUS = (
+    "max_area_radius"  # For simple area-detection, max radius from receiver
+)
+CONF_DEVTRACK_TIMEOUT = "devtracker_nothome_timeout"
+
+
 # Defaults
 DEFAULT_NAME = DOMAIN
 
