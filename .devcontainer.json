@@ -3,18 +3,6 @@
   "image": "mcr.microsoft.com/vscode/devcontainers/python:0-3.11",
   "postCreateCommand": "scripts/setup",
   "forwardPorts": [8123, 5678],
-  "mounts": [
-    {
-      "source": "/home/agittins/.ssh/id_ed25519",
-      "target": "/home/vscode/.ssh/id_ed25519",
-      "type": "bind"
-    },
-    {
-      "source": "/home/agittins/.ssh/id_ed25519.pub",
-      "target": "/home/vscode/.ssh/id_ed25519.pub",
-      "type": "bind"
-    }
-  ],
   "portsAttributes": {
     "8123": {
       "label": "Home Assistant",
