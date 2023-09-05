@@ -19,7 +19,7 @@ jobs:
       BERMUDA_ROOT_DIR: "${{ github.workspace }}/custom_components/bermuda"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set release version number in files
         run: |
