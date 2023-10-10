@@ -124,6 +124,7 @@ class BermudaDeviceScanner(dict):
         self.adapter: str = scandata.scanner.adapter
         self.source: str = scandata.scanner.source
         self.rssi: float = scandata.advertisement.rssi
+        self.tx_power: float = scandata.advertisement.tx_power
         self.rssi_distance: float = rssi_to_metres(self.rssi)
         self.adverts: dict[str, bytes] = scandata.advertisement.service_data.items()
 
@@ -329,21 +330,22 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # We probably don't need to do all of this every time, but we
             # want to catch any changes, eg when the system learns the local
             # name etc.
-            device.name = service_info.device.name
-            device.local_name = service_info.advertisement.local_name
-            device.manufacturer = service_info.manufacturer
+            device.name = device.name or service_info.device.name
+            device.local_name = (
+                device.local_name or service_info.advertisement.local_name
+            )
+            device.manufacturer = device.manufacturer or service_info.manufacturer
             device.connectable = service_info.connectable
 
             # Try to make a nice name for prefname.
             # TODO: Add support for user-defined name, especially since the
             #   device_tracker entry can only be renamed using the editor.
-            if service_info.advertisement.local_name is not None:
-                device.prefname = service_info.advertisement.local_name
-            elif service_info.device.name is not None:
-                device.prefname = service_info.device.name
-            else:
-                # we tried. Fall back to boring...
-                device.prefname = "bermuda_" + slugify(service_info.address)
+            if device.prefname is None or device.prefname.startswith(DOMAIN + "_"):
+                device.prefname = (
+                    device.name
+                    or device.local_name
+                    or DOMAIN + "_" + slugify(device.address)
+                )
 
             # Work through the scanner entries...
             matched_scanners = bluetooth.async_scanner_devices_by_address(
