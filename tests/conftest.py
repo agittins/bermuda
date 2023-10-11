@@ -1,4 +1,4 @@
-"""Global fixtures for Bermuda BLE Triangulation integration."""
+"""Global fixtures for Bermuda BLE Trilateration integration."""
 from unittest.mock import patch
 
 import pytest

@@ -5,8 +5,15 @@ set -e
 cd "$(dirname "$0")/.."
 
 # Create a virtual environment
-python3 -m venv venv
-source venv/bin/activate
+# AJG - actually, don't. Thought it was a good idea but it breaks
+# code completion etc because it seems vscode doesn't/won't run in
+# that context. Or I'm an idiot, just as likely.
+#
+# Note that this setup script gets run on container init so everything
+# should be ready to go on loading.
+#
+#python3 -m venv venv
+#source venv/bin/activate
 
 # Seems to fix broken aiohttp wheel building in 3.11:
 python3 -m pip install --upgrade setuptools wheel

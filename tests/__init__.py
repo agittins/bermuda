@@ -1,1 +1,1 @@
-"""Tests for Bermuda BLE Triangulation integration."""
+"""Tests for Bermuda BLE Trilateration integration."""

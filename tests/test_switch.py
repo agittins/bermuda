@@ -1,4 +1,4 @@
-"""Test Bermuda BLE Triangulation switch."""
+"""Test Bermuda BLE Trilateration switch."""
 from unittest.mock import call
 from unittest.mock import patch
 

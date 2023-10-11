@@ -31,7 +31,7 @@ class BermudaEntity(CoordinatorEntity):
         self.coordinator = coordinator
         self.config_entry = config_entry
         self._device = coordinator.devices[address]
-        self.ar = area_registry.async_get(coordinator.hass)
+        self.area_reg = area_registry.async_get(coordinator.hass)
 
     @property
     def unique_id(self):
@@ -42,7 +42,7 @@ class BermudaEntity(CoordinatorEntity):
     def device_info(self):
         """Implementing this creates an entry in the device registry."""
         return {
-            "identifiers": {(DOMAIN, self.unique_id)},
+            "identifiers": {(DOMAIN, self._device.unique_id)},
             "name": self._device.prefname,
             "model": VERSION,
             "manufacturer": NAME,

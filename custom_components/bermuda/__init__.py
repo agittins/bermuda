@@ -1,5 +1,5 @@
 """
-Custom integration to integrate Bermuda BLE Triangulation with Home Assistant.
+Custom integration to integrate Bermuda BLE Trilateration with Home Assistant.
 
 For more details about this integration, please refer to
 https://github.com/agittins/bermuda
@@ -11,16 +11,24 @@ import logging
 from datetime import datetime
 from datetime import timedelta
 from typing import Final
+from typing import TYPE_CHECKING
 
 from homeassistant.components import bluetooth
+from homeassistant.components.bluetooth import BluetoothChange
 from homeassistant.components.bluetooth import BluetoothScannerDevice
+from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
+from homeassistant.components.bluetooth.active_update_coordinator import (
+    PassiveBluetoothDataUpdateCoordinator,
+)
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import callback
 from homeassistant.core import Config
 from homeassistant.core import HomeAssistant
 from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import area_registry
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import slugify
@@ -28,17 +36,26 @@ from homeassistant.util.dt import get_age
 from homeassistant.util.dt import monotonic_time_coarse
 from homeassistant.util.dt import now
 
+from .const import CONF_ATTENUATION
+from .const import CONF_DEVICES
+from .const import CONF_DEVTRACK_TIMEOUT
+from .const import CONF_MAX_RADIUS
+from .const import CONF_REF_POWER
+from .const import DEFAULT_ATTENUATION
+from .const import DEFAULT_DEVTRACK_TIMEOUT
+from .const import DEFAULT_MAX_RADIUS
+from .const import DEFAULT_REF_POWER
 from .const import DOMAIN
 from .const import PLATFORMS
 from .const import STARTUP_MESSAGE
 from .entity import BermudaEntity
 
-# from typing import Any
+# from bthome_ble import BTHomeBluetoothDeviceData
 
-# from .const import CONF_PASSWORD
-# from .const import CONF_USERNAME
+if TYPE_CHECKING:
+    from bleak.backends.device import BLEDevice
 
-SCAN_INTERVAL = timedelta(seconds=10)
+SCAN_INTERVAL = timedelta(seconds=5)
 
 MONOTONIC_TIME: Final = monotonic_time_coarse
 
@@ -63,7 +80,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # username = entry.data.get(CONF_USERNAME)
     # password = entry.data.get(CONF_PASSWORD)
 
-    coordinator = BermudaDataUpdateCoordinator(hass)
+    coordinator = BermudaDataUpdateCoordinator(hass, entry)
     await coordinator.async_refresh()
 
     if not coordinator.last_update_success:
@@ -82,7 +99,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     return True
 
 
-def rssi_to_metres(rssi):
+def rssi_to_metres(rssi, ref_power=None, attenuation=None):
     """Convert instant rssi value to a distance in metres
 
     Based on the information from
@@ -99,11 +116,54 @@ def rssi_to_metres(rssi):
         tune the attenuation in real time based on changing values coming from
         known-fixed beacons (eg thermometers, window sensors etc)
     """
-    attenuation = 3.0  # Will range depending on environmental factors
-    ref_power = -55.0  # db reference measured at 1.0m
+    if ref_power is None:
+        return False
+        # ref_power = self.ref_power
+    if attenuation is None:
+        return False
+        # attenuation= self.attenuation
 
     distance = 10 ** ((ref_power - rssi) / (10 * attenuation))
     return distance
+
+
+class BermudaPBDUCoordinator(
+    PassiveBluetoothDataUpdateCoordinator,
+):
+    """Class for receiving bluetooth adverts in realtime
+
+    Looks like this needs to be run through setup, with a specific
+    BLEDevice (address) already specified, so won't do "all adverts"
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        logger: logging.Logger,
+        ble_device: BLEDevice,
+        device: BermudaDevice,
+    ) -> None:
+        """Init"""
+        super().__init__(
+            hass=hass,
+            logger=logger,
+            address=ble_device.address,
+            mode=bluetooth.BluetoothScanningMode.ACTIVE,
+            connectable=False,
+        )
+        self.device = device
+
+    @callback
+    def _async_handle_unavailable(
+        self, service_info: BluetoothServiceInfoBleak
+    ) -> None:
+        return super()._async_handle_unavailable(service_info)
+
+    @callback
+    def _async_handle_bluetooth_event(
+        self, service_info: BluetoothServiceInfoBleak, change: BluetoothChange
+    ) -> None:
+        return super()._async_handle_bluetooth_event(service_info, change)
 
 
 class BermudaDeviceScanner(dict):
@@ -117,14 +177,24 @@ class BermudaDeviceScanner(dict):
     """
 
     def __init__(
-        self, device_address: str, scandata: BluetoothScannerDevice, area_id: str
+        self,
+        device_address: str,
+        scandata: BluetoothScannerDevice,
+        area_id: str,
+        options,
     ):
         self.name: str = scandata.scanner.name
         self.area_id: str = area_id
         self.adapter: str = scandata.scanner.adapter
         self.source: str = scandata.scanner.source
         self.rssi: float = scandata.advertisement.rssi
-        self.rssi_distance: float = rssi_to_metres(self.rssi)
+        self.tx_power: float = scandata.advertisement.tx_power
+        self.options = options
+        self.rssi_distance: float = rssi_to_metres(
+            self.rssi,
+            options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
+            options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
+        )
         self.adverts: dict[str, bytes] = scandata.advertisement.service_data.items()
 
         self.stamp: float = None
@@ -185,9 +255,10 @@ class BermudaDevice(dict):
     become entities in homeassistant, since there might be a _lot_ of them.
     """
 
-    def __init__(self):
+    def __init__(self, address, options):
         """Initial (empty) data"""
-        self.address: str = None
+        self.address: str = address
+        self.options = options
         self.unique_id: str = None  # mac address formatted.
         self.name: str = None
         self.local_name: str = None
@@ -217,6 +288,7 @@ class BermudaDevice(dict):
             self.address,
             discoveryinfo,  # the entire BluetoothScannerDevice struct
             scanner_device.area_id,
+            self.options,
         )
         # Let's see if we should update our last_seen based on this...
         if self.last_seen < newscanner.stamp:
@@ -272,17 +344,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     def __init__(
         self,
         hass: HomeAssistant,
+        entry: ConfigEntry,
     ) -> None:
         """Initialize."""
+        # self.config_entry = entry
         self.platforms = []
         self.devices: dict[str, BermudaDevice] = {}
         self.created_entities: set[BermudaEntity] = set()
 
-        self.ar = area_registry.async_get(hass)
-
-        # TODO: These settings are to be moved into the config flow
-        self.max_area_radius = 3.0  # maximum distance to consider "in the area"
-        self.timeout_not_home = 60  # seconds to wait before declaring "not_home"
+        self.area_reg = area_registry.async_get(hass)
 
         hass.services.async_register(
             DOMAIN,
@@ -291,6 +361,22 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             None,
             SupportsResponse.ONLY,
         )
+
+        self.options = {}
+        if hasattr(entry, "options"):
+            # Firstly, on some calls (specifically during reload after settings changes)
+            # we seem to get called with a non-existant config_entry.
+            # Anyway... if we DO have one, convert it to a plain dict so we can
+            # serialise it properly when it goes into the device and scanner classes.
+            for key, val in entry.options.items():
+                if key in (
+                    CONF_ATTENUATION,
+                    CONF_DEVICES,
+                    CONF_DEVTRACK_TIMEOUT,
+                    CONF_MAX_RADIUS,
+                    CONF_REF_POWER,
+                ):
+                    self.options[key] = val
 
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=SCAN_INTERVAL)
 
@@ -305,7 +391,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         device = self._get_device(address)
         if device is None:
             mac = format_mac(address)
-            self.devices[mac] = device = BermudaDevice()
+            self.devices[mac] = device = BermudaDevice(
+                address=address, options=self.options
+            )
             device.address = mac
             device.unique_id = mac
         return device
@@ -329,21 +417,22 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # We probably don't need to do all of this every time, but we
             # want to catch any changes, eg when the system learns the local
             # name etc.
-            device.name = service_info.device.name
-            device.local_name = service_info.advertisement.local_name
-            device.manufacturer = service_info.manufacturer
+            device.name = device.name or service_info.device.name
+            device.local_name = (
+                device.local_name or service_info.advertisement.local_name
+            )
+            device.manufacturer = device.manufacturer or service_info.manufacturer
             device.connectable = service_info.connectable
 
             # Try to make a nice name for prefname.
             # TODO: Add support for user-defined name, especially since the
             #   device_tracker entry can only be renamed using the editor.
-            if service_info.advertisement.local_name is not None:
-                device.prefname = service_info.advertisement.local_name
-            elif service_info.device.name is not None:
-                device.prefname = service_info.device.name
-            else:
-                # we tried. Fall back to boring...
-                device.prefname = "bermuda_" + slugify(service_info.address)
+            if device.prefname is None or device.prefname.startswith(DOMAIN + "_"):
+                device.prefname = (
+                    device.name
+                    or device.local_name
+                    or DOMAIN + "_" + slugify(device.address)
+                )
 
             # Work through the scanner entries...
             matched_scanners = bluetooth.async_scanner_devices_by_address(
@@ -371,12 +460,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # Replace the scanner entry on the current device
                 device.add_scanner(scanner_device, discovered)
 
-            # FIXME: This should be configurable...
-            if device.address.upper() in [
-                "EE:E8:37:9F:6B:54",  # infinitime, main watch
-                "C7:B8:C6:B0:27:11",  # pinetime, devwatch
-                "A4:C1:38:C8:58:91",  # bthome thermo, with reed switch
-            ]:
+            if device.address.upper() in self.options.get(CONF_DEVICES, []):
                 device.send_tracker_see = True
                 device.create_sensor = True
 
@@ -404,7 +488,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         """
 
         # Check if the device has been seen recently
-        if MONOTONIC_TIME() - self.timeout_not_home < device.last_seen:
+        if (
+            MONOTONIC_TIME()
+            - self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT)
+            < device.last_seen
+        ):
             device.zone = "home"
         else:
             device.zone = "not_home"
@@ -449,7 +537,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         for scanner in device.scanners.values():
             # whittle down to the closest beacon inside max range
-            if scanner.rssi_distance < self.max_area_radius:  # potential...
+            if scanner.rssi_distance < self.options.get(
+                CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS
+            ):  # potential...
                 if (
                     closest_scanner is None
                     or scanner.rssi_distance < closest_scanner.rssi_distance
@@ -458,7 +548,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         if closest_scanner is not None:
             # We found a winner
             device.area_id = closest_scanner.area_id
-            areas = self.ar.async_get_area(device.area_id).name  # potentially a list?!
+            areas = self.area_reg.async_get_area(
+                device.area_id
+            ).name  # potentially a list?!
             if len(areas) == 1:
                 device.area_name = areas[0]
             else:
@@ -500,6 +592,30 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         for address, device in self.devices.items():
             out[address] = device.to_dict()
         return out
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, config_entry: ConfigEntry, device_entry: DeviceEntry
+) -> bool:
+    """Remove a config entry from a device."""
+    coordinator: BermudaDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    address = None
+    for ident in device_entry.identifiers:
+        try:
+            if ident[0] == DOMAIN:
+                # the identifier should be the mac address, and
+                # may have "_range" or some other per-sensor suffix. Just grab
+                # the mac address part.
+                address = ident[1][:17]
+        except KeyError:
+            pass
+    if address is not None:
+        try:
+            coordinator.devices[format_mac(address)].create_sensor = False
+        except KeyError:
+            _LOGGER.warning("Failed to locate device entry for %s", address)
+        return True
+    return False
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

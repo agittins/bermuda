@@ -1,6 +1,12 @@
 {
   "domain": "bermuda",
-  "name": "Bermuda BLE Triangulation",
+  "name": "Bermuda BLE Trilateration",
+  "bluetooth": [
+    {
+      "connectable": false,
+      "manufacturer_id": 76
+    }
+  ],
   "codeowners": ["@agittins"],
   "config_flow": true,
   "dependencies": ["bluetooth_adapters", "device_tracker"],

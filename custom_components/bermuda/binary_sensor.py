@@ -1,4 +1,4 @@
-"""Binary sensor platform for Bermuda BLE Triangulation."""
+"""Binary sensor platform for Bermuda BLE Trilateration."""
 from homeassistant.components.binary_sensor import BinarySensorEntity
 
 from .const import BINARY_SENSOR

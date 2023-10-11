@@ -1,4 +1,4 @@
-"""Test Bermuda BLE Triangulation setup process."""
+"""Test Bermuda BLE Trilateration setup process."""
 import pytest
 from custom_components.bermuda import (
     async_reload_entry,

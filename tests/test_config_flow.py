@@ -1,4 +1,4 @@
-"""Test Bermuda BLE Triangulation config flow."""
+"""Test Bermuda BLE Trilateration config flow."""
 from unittest.mock import patch
 
 import pytest

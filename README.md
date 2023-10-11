@@ -1,6 +1,8 @@
-# Bermuda BLE Triangulation
+![Bermuda Logo](img/logo@2x.png)
 
-Triangulate your lost objects using ESPHome bluetooth proxies!
+# Bermuda BLE Trilateration
+
+(eventually) Triangulate your lost objects using ESPHome bluetooth proxies!
 
 [![GitHub Release][releases-shield]][releases]
 [![GitHub Activity][commits-shield]][commits]
@@ -16,7 +18,7 @@ Triangulate your lost objects using ESPHome bluetooth proxies!
 [![Discord][discord-shield]][discord]
 [![Community Forum][forum-shield]][forum]
 
-##STATUS: Early days!
+##STATUS: Early days! No triangulation yet, but area-based location tracking works
 
 - Can replace bluetooth_ble_tracker by creating entities for home/not_home
   for selected BLE devices, which can be used for Person home/away sensing.
@@ -32,7 +34,7 @@ Triangulate your lost objects using ESPHome bluetooth proxies!
   closest BLE Proxy. If you have a bluetooth receiver (ESPHome with `bluetooth_proxy`
   or a Shelley device) in each room you want tracking for, this will do the job.
 
-- (soon) Provide a mud-map of your entire home, in bluetooth signal strength terms.
+- (soon?) Provide a mud-map of your entire home, in bluetooth signal strength terms.
 
 This integration uses the advertisement data gathered by your esphome or
 Shelley bluetooth-proxy deployments to track or triangulate (more correctly,
@@ -41,45 +43,54 @@ observed around your home.
 
 Note that this is more properly called "Tri*lateration*", as we are not
 measuring the angles, but instead measuring distances. The bottom line
-is that triangulation is more likely to hit people's search terms.
+is that triangulation is more likely to hit people's search terms so we'll
+probably bandy that term about a bit :-)
 
 This integration gives you two forms of presence tracking.
 
-- Simple Home/Away detection using the device_tracker integration. This is
+- Simple Home/Away detection using the [device_tracker](https://www.home-assistant.io/integrations/device_tracker/) integration. This is
   not much different to the already working bluetooth_le_tracker integration
-  in that regard, but was an easy step along the way to...
+  in that regard, but doesn't use the `known_devices.yaml` file, lets you create
+  entities only for the devices you want to track, and was an easy step along the way to...
 - Room-based ("Area"s in homeassistant parlance) localisation for bluetooth
   devices. For example, "which human/pet is at home and in what room are they?"
   and "where's my phone/toothbrush?"
 
 ## FAQ
 
-Isn't mmWave better?
+### Why do my bluetooth devices have only the address and no name?
 
-: mmWave is definitely _faster_, but it will only tell you "someone" has entered
-a space, while Bermuda can tell you _who_ is in a space.
+- you need to tell your bluetooth proxies to send an inquiry in response to
+  advertisements. In esphome, this is done by adding `active: true` to the
+  `bluetooth_proxy` section (this is separate from the active property of
+  the `esp32_ble_tracker` section, which controls outbound client connections).
 
-What about PIR / Infrared?
+### Isn't mmWave better?
 
-: It's also likely faster than bluetooth, but again it only tells you that
-someone / something is present, but doesn't tell you who/what.
+- mmWave is definitely _faster_, but it will only tell you "someone" has entered
+  a space, while Bermuda can tell you _who_ is in a space.
+
+### What about PIR / Infrared?
+
+- It's also likely faster than bluetooth, but again it only tells you that
+  someone / something is present, but doesn't tell you who/what.
 
 So how does that help?
 
-: If the home knows who is in a given room, it can set the thermostat to their
-personal preferences, or perhaps their lighting settings. This might be
-particularly useful for testing automations for yourself before unleashing them
-on to your housemates, so they don't get annoyed while you iron out the bugs :-)
+- If the home knows who is in a given room, it can set the thermostat to their
+  personal preferences, or perhaps their lighting settings. This might be
+  particularly useful for testing automations for yourself before unleashing them
+  on to your housemates, so they don't get annoyed while you iron out the bugs :-)
 
-: If you have BLE tags on your pets you can have automations specifically for them,
-and/or you can exclude certain automations, for example don't trigger a light from
-an IR sensor if it knows it's just your cat, say.
+- If you have BLE tags on your pets you can have automations specifically for them,
+  and/or you can exclude certain automations, for example don't trigger a light from
+  an IR sensor if it knows it's just your cat, say.
 
-How quickly does it react?
+### How quickly does it react?
 
-: That will mainly depend on how often your beacon transmits advertisements, however
-right now the integration only re-calculates on a timed basis. This should be changed
-to a realtime recalculation based on incoming advertisements soon.
+- That will mainly depend on how often your beacon transmits advertisements, however
+  right now the integration only re-calculates on a timed basis. This should be changed
+  to a realtime recalculation based on incoming advertisements soon.
 
 ## What you need
 
@@ -119,7 +130,7 @@ devices in your home that are sending broadcasts. The implemented results are:
 
 [x] A raw listing of values returned when you call the `bermuda.dump_devices` service
 [x] `area` if a device is within a max distance of a receiver
-[] An interface to choose which devices should have sensors created for them
+[x] An interface to choose which devices should have sensors created for them
 [x] Sensors created for selected devices, showing their estimated location
 [] Algo to "solve" the 2D layout of devices
 [] A mud-map showing relative locations between proxies and detected devices
@@ -135,7 +146,7 @@ devices in your home that are sending broadcasts. The implemented results are:
 [] Some sort of map, just pick two proxies as an x-axis vector and go
 [] Config setting to define absolute locations of two proxies
 [] Support some way to "pin" more than two proxies/tags, and have it not break.
-[] Create entities (use `device_tracker`? or create own?) for each detected beacon
+[x] Create entities (use `device_tracker`? or create own?) for each detected beacon
 [] Experiment with some of
 [these algo's](https://mdpi-res.com/d_attachment/applsci/applsci-10-02003/article_deploy/applsci-10-02003.pdf?version=1584265508)
 for improving accuracy (too much math for me!). Particularly weighting shorter
@@ -173,11 +184,10 @@ a fair amount of ESPrescense's wheel.
 
 **This component will set up the following platforms.**
 
-| Platform        | Description    |
-| --------------- | -------------- |
-| `binary_sensor` | Nothing yet.   |
-| `sensor`        | Nor here, yet. |
-| `switch`        | Nope.          |
+| Platform         | Description                                                                                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sensor`         | For any bluetooth devices you select in the integration's configuration, a device will be created with two sensors, tracking the "Area" and "Distance" from that area. |
+| `device_tracker` | A device tracker entity will be created for each configured bluetooth address, which you can use to influence the "Home/Away" state of a "Person".                     |
 
 ## Installation
 
@@ -185,9 +195,11 @@ Definitely use the HACS interface! Once you have HACS installed, go to `Integrat
 meatballs menu in the top right, and choose `Custom Repositories`. Paste `agittins/bermuda` into
 the `Repository` field, and choose `Integration` for the `Category`. Click `Add`.
 
-You should now be able to add the `Bermuda BLE Triangulation` integration. Once you have done that,
+You should now be able to add the `Bermuda BLE Trilateration` integration. Once you have done that,
 you need to restart Homeassistant, then in `Settings`, `Devices & Services` choose `Add Integration`
-and search for `Bermuda BLE Triangulation`.
+and search for `Bermuda BLE Trilateration`.
+
+In the `Configuration` dialog, you can choose which bluetooth devices you would like the integration to track.
 
 The instructions below are the generic notes from the template:
 
@@ -197,7 +209,7 @@ The instructions below are the generic notes from the template:
 4. Download _all_ the files from the `custom_components/bermuda/` directory (folder) in this repository.
 5. Place the files you downloaded in the new directory (folder) you created.
 6. Restart Home Assistant
-7. In the HA UI go to "Configuration" -> "Integrations" click "+" and search for "Bermuda BLE Triangulation"
+7. In the HA UI go to "Configuration" -> "Integrations" click "+" and search for "Bermuda BLE Trilateration"
 
 <!---->
 
