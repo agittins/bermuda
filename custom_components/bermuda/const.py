@@ -21,20 +21,25 @@ SWITCH = "switch"
 # PLATFORMS = [BINARY_SENSOR, SENSOR, SWITCH]
 PLATFORMS = [SENSOR]
 
+DOCS = {}
+
 # Configuration and options
-CONF_ENABLED = "enabled"
-CONF_USERNAME = "username"
-CONF_PASSWORD = "password"
-CONF_DEVTRACKERS = "device_trackers"
 
-CONF_DEVICES = (
-    "configured_devices"  # Identifies which bluetooth devices we wish to expose
-)
-CONF_MAX_RADIUS = (
-    "max_area_radius"  # For simple area-detection, max radius from receiver
-)
-CONF_DEVTRACK_TIMEOUT = "devtracker_nothome_timeout"
+CONF_DEVICES = "configured_devices"
+DOCS[CONF_DEVICES] = "Identifies which bluetooth devices we wish to expose"
 
+CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS = "max_area_radius", 20
+DOCS[CONF_MAX_RADIUS] = "For simple area-detection, max radius from receiver"
+
+CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT = "devtracker_nothome_timeout", 30
+DOCS[
+    CONF_DEVTRACK_TIMEOUT
+] = "Timeout in seconds for setting devices as `Not Home` / `Away`."
+
+CONF_ATTENUATION, DEFAULT_ATTENUATION = "attenuation", 3
+DOCS[CONF_ATTENUATION] = "Factor for environmental signal attenuation."
+CONF_REF_POWER, DEFAULT_REF_POWER = "ref_power", -55.0
+DOCS[CONF_REF_POWER] = "Default RSSI for signal at 1 metre."
 
 # Defaults
 DEFAULT_NAME = DOMAIN

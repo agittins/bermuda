@@ -21,11 +21,11 @@
     "step": {
       "globalopts": {
         "data": {
-          "binary_sensor": "Binary sensor enabled",
-          "sensor": "Sensor enabled",
-          "switch": "Switch enabled",
-          "max_area_radius": "Max radius for simple AREA detection",
-          "devtracker_nothome_timeout": "`Device_tracker` sensor `not_home` timeout in seconds."
+          "max_area_radius": "Max radius in metres for simple AREA detection",
+          "devtracker_nothome_timeout": "Timeout in seconds to consider a device as `Not Home`.",
+          "attenuation": "Environment attenuation factor for distance calculation.",
+          "ref_power": "Default rssi at 1 metre distance.",
+          "configured_devices": "List of Bluetooth devices to specifically create tracking entities for."
         },
         "data_description": {
           "max_area_radius": "In the simple `AREA` feature, a device will be marked as being in the AREA of it's closest receiver, if inside this radius. If you set it small, devices will go to `unknown` between receivers, but if large devices will always appear as in their closest Area.",

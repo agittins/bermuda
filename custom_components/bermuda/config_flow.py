@@ -1,12 +1,19 @@
 """Adds config flow for Bermuda BLE Trilateration."""
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
 from homeassistant.core import callback
 from homeassistant.helpers.config_entry_flow import FlowResult
+from homeassistant.helpers.selector import selector
 
+from .const import CONF_ATTENUATION
+from .const import CONF_DEVICES
 from .const import CONF_DEVTRACK_TIMEOUT
 from .const import CONF_MAX_RADIUS
+from .const import CONF_REF_POWER
+from .const import DEFAULT_ATTENUATION
+from .const import DEFAULT_REF_POWER
 from .const import DOMAIN
 from .const import NAME
 
@@ -29,7 +36,7 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         self, discovery_info: BluetoothServiceInfoBleak
     ) -> FlowResult:
         """Support automatic initiation of setup through bluetooth discovery.
-        (we still how a confirmation form to the user, though)
+        (we still show a confirmation form to the user, though)
         This is triggered by discovery matchers set in manifest.json,
         and since we track any BLE advert, we're being a little cheeky by listing any.
         """
@@ -94,20 +101,55 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
             self.options.update(user_input)
             return await self._update_options()
 
-        return self.async_show_form(
-            step_id="globalopts",
-            data_schema=vol.Schema(
+        options = []
+        for service_info in bluetooth.async_discovered_service_info(self.hass, False):
+            options.append(
                 {
-                    vol.Required(
-                        CONF_MAX_RADIUS,
-                        default=self.options.get(CONF_MAX_RADIUS, 3.0),
-                    ): float,
-                    vol.Required(
-                        CONF_DEVTRACK_TIMEOUT,
-                        default=self.options.get(CONF_DEVTRACK_TIMEOUT, 30),
-                    ): int,
+                    "value": service_info.address.upper(),
+                    "label": f"[{service_info.address}] {service_info.name or service_info.advertisement.local_name or service_info.device.name}",
+                }
+            )
+
+        for address in self.options.get(CONF_DEVICES, []):
+            if not next(
+                (item for item in options if item["value"] == address.upper()), False
+            ):
+                options.append(
+                    {"value": address.upper(), "label": f"[{address}] (saved)"}
+                )
+
+        data_schema = {
+            vol.Required(
+                CONF_MAX_RADIUS,
+                default=self.options.get(CONF_MAX_RADIUS, 3.0),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_DEVTRACK_TIMEOUT,
+                default=self.options.get(CONF_DEVTRACK_TIMEOUT, 30),
+            ): vol.Coerce(int),
+            vol.Required(
+                CONF_ATTENUATION,
+                default=self.options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_REF_POWER,
+                default=self.options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
+            ): vol.Coerce(float),
+            vol.Optional(
+                CONF_DEVICES,
+                default=self.options.get(CONF_DEVICES, []),
+            ): selector(
+                {
+                    "select": {
+                        "options": options,
+                        "multiple": True,
+                    }
                 }
             ),
+        }
+
+        return self.async_show_form(
+            step_id="globalopts", data_schema=vol.Schema(data_schema)
         )
 
     async def _update_options(self):
