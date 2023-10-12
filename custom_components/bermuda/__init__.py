@@ -544,11 +544,29 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             if scanner.rssi_distance < self.options.get(
                 CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS
             ):  # It's inside max_radius...
-                if closest_scanner is None or (
-                    scanner.rssi_distance < closest_scanner.rssi_distance
-                    or scanner.stamp > closest_scanner.stamp - ADVERT_FRESHTIME
-                ):  # This scanner is closer, and the advert is still fresh in comparison..
-                    closest_scanner = scanner
+                if closest_scanner is None:
+                    # no encumbent, we win! (unless we don't have a stamp to validate our claim)
+                    # FIXME: This effectively excludes HCI/usb adaptors currently since we
+                    # haven't found a way to get ad timestamps from HA's bluez yet.
+                    if scanner.stamp > 0:
+                        closest_scanner = scanner
+                else:
+                    # is it fresh enough to win on proximity alone?
+                    is_fresh_enough = (
+                        scanner.stamp > closest_scanner.stamp - ADVERT_FRESHTIME
+                    )
+                    # is it so much fresher that it wins outright?
+                    is_fresher = (
+                        scanner.stamp > closest_scanner.stamp + ADVERT_FRESHTIME
+                    )
+                    # is it closer?
+                    is_closer = scanner.rssi_distance < closest_scanner.rssi_distance
+
+                    if is_fresher or (
+                        is_closer and is_fresh_enough
+                    ):  # This scanner is closer, and the advert is still fresh in comparison..
+                        closest_scanner = scanner
+
         if closest_scanner is not None:
             # We found a winner
             old_area = device.area_name
