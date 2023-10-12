@@ -223,7 +223,8 @@ class BermudaDeviceScanner(dict):
                 self.stamp = 0
         else:
             # Not a bluetooth_proxy device / remote scanner.
-            # FIXME: Work out how to handle a bluetooth adaptor's reports.
+            # FIXME: Work out how to handle a bluetooth adaptor's reports (as
+            # opposed to those from proxies).
             # Options are:
             # (a) find a timestamp somehwere
             # (b) if we are doing updates as ads come in, use now()-some_safety_offset.
@@ -545,7 +546,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             ):  # It's inside max_radius...
                 if closest_scanner is None or (
                     scanner.rssi_distance < closest_scanner.rssi_distance
-                    and scanner.stamp > closest_scanner.stamp - ADVERT_FRESHTIME
+                    or scanner.stamp > closest_scanner.stamp - ADVERT_FRESHTIME
                 ):  # This scanner is closer, and the advert is still fresh in comparison..
                     closest_scanner = scanner
         if closest_scanner is not None:
