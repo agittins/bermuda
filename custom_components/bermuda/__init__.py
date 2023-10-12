@@ -548,16 +548,23 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     closest_scanner = scanner
         if closest_scanner is not None:
             # We found a winner
+            old_area = device.area_name
             device.area_id = closest_scanner.area_id
-            areas = self.area_reg.async_get_area(
-                device.area_id
-            ).name  # potentially a list?!
-            if len(areas) == 1:
-                device.area_name = areas[0]
+            areas = self.area_reg.async_get_area(device.area_id)
+            if hasattr(areas, "name"):
+                device.area_name = areas.name
             else:
-                # none or a list, perhaps...
-                device.area_name = areas
+                # Wasn't a single area entry. Let's freak out.
+                _LOGGER.warning(
+                    "Could not discern area from scanner %s: %s."
+                    "Please assign an area then reload this integration",
+                    closest_scanner.name,
+                    areas,
+                )
+                device.area_name = f"No area: {closest_scanner.name}"
             device.area_distance = closest_scanner.rssi_distance
+            if old_area != device.area_name and device.create_sensor:
+                _LOGGER.debug("Device %s now in %s", device.name, device.area_name)
         else:
             # Not close to any scanners!
             device.area_id = None
