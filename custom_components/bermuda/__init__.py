@@ -36,6 +36,7 @@ from homeassistant.util.dt import get_age
 from homeassistant.util.dt import monotonic_time_coarse
 from homeassistant.util.dt import now
 
+from .const import ADVERT_FRESHTIME
 from .const import CONF_ATTENUATION
 from .const import CONF_DEVICES
 from .const import CONF_DEVTRACK_TIMEOUT
@@ -539,11 +540,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # whittle down to the closest beacon inside max range
             if scanner.rssi_distance < self.options.get(
                 CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS
-            ):  # potential...
-                if (
-                    closest_scanner is None
-                    or scanner.rssi_distance < closest_scanner.rssi_distance
-                ):
+            ):  # It's inside max_radius...
+                if closest_scanner is None or (
+                    scanner.rssi_distance < closest_scanner.rssi_distance
+                    and scanner.stamp > closest_scanner.stamp - ADVERT_FRESHTIME
+                ):  # This scanner is closer, and the advert is still fresh in comparison..
                     closest_scanner = scanner
         if closest_scanner is not None:
             # We found a winner

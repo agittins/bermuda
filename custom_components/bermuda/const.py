@@ -23,6 +23,11 @@ PLATFORMS = [SENSOR]
 
 DOCS = {}
 
+ADVERT_FRESHTIME = 2.5
+# If two scanners are battling to "win" a device, the winner can not be more than
+# this many seconds older than its opponent. Prevents a stale but very close
+# advert from overriding a newer advertisement from a less-close scanner.
+
 # Configuration and options
 
 CONF_DEVICES = "configured_devices"
