@@ -36,6 +36,7 @@ from homeassistant.util.dt import get_age
 from homeassistant.util.dt import monotonic_time_coarse
 from homeassistant.util.dt import now
 
+from .const import ADVERT_FRESHTIME
 from .const import CONF_ATTENUATION
 from .const import CONF_DEVICES
 from .const import CONF_DEVTRACK_TIMEOUT
@@ -539,24 +540,31 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # whittle down to the closest beacon inside max range
             if scanner.rssi_distance < self.options.get(
                 CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS
-            ):  # potential...
-                if (
-                    closest_scanner is None
-                    or scanner.rssi_distance < closest_scanner.rssi_distance
-                ):
+            ):  # It's inside max_radius...
+                if closest_scanner is None or (
+                    scanner.rssi_distance < closest_scanner.rssi_distance
+                    and scanner.stamp > closest_scanner.stamp - ADVERT_FRESHTIME
+                ):  # This scanner is closer, and the advert is still fresh in comparison..
                     closest_scanner = scanner
         if closest_scanner is not None:
             # We found a winner
+            old_area = device.area_name
             device.area_id = closest_scanner.area_id
-            areas = self.area_reg.async_get_area(
-                device.area_id
-            ).name  # potentially a list?!
-            if len(areas) == 1:
-                device.area_name = areas[0]
+            areas = self.area_reg.async_get_area(device.area_id)
+            if hasattr(areas, "name"):
+                device.area_name = areas.name
             else:
-                # none or a list, perhaps...
-                device.area_name = areas
+                # Wasn't a single area entry. Let's freak out.
+                _LOGGER.warning(
+                    "Could not discern area from scanner %s: %s."
+                    "Please assign an area then reload this integration",
+                    closest_scanner.name,
+                    areas,
+                )
+                device.area_name = f"No area: {closest_scanner.name}"
             device.area_distance = closest_scanner.rssi_distance
+            if old_area != device.area_name and device.create_sensor:
+                _LOGGER.debug("Device %s now in %s", device.name, device.area_name)
         else:
             # Not close to any scanners!
             device.area_id = None
