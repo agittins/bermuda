@@ -106,7 +106,10 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
             options.append(
                 {
                     "value": service_info.address.upper(),
-                    "label": f"[{service_info.address}] {service_info.name or service_info.advertisement.local_name or service_info.device.name}",
+                    "label": (
+                        f"[{service_info.address}]"
+                        f"{service_info.name or service_info.advertisement.local_name or service_info.device.name}"
+                    ),
                 }
             )
 
