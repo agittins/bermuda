@@ -258,15 +258,17 @@ class BermudaDevice(dict):
 
     def __init__(self, address, options):
         """Initial (empty) data"""
-        self.address: str = address
-        self.options = options
-        self.unique_id: str = None  # mac address formatted.
         self.name: str = None
         self.local_name: str = None
         self.prefname: str = None  # "preferred" name - ideally local_name
+        self.address: str = address
+        self.options = options
+        self.unique_id: str = None  # mac address formatted.
         self.area_id: str = None
         self.area_name: str = None
         self.area_distance: float = None  # how far this dev is from that area
+        self.area_rssi: float = None  # rssi from closest scanner
+        self.area_scanner: str = None  # name of closest scanner
         self.zone: str = None  # home or not_home
         self.manufacturer: str = None
         self.connectable: bool = False
@@ -563,6 +565,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 )
                 device.area_name = f"No area: {closest_scanner.name}"
             device.area_distance = closest_scanner.rssi_distance
+            device.area_rssi = closest_scanner.rssi
+            device.area_scanner = closest_scanner.name
             if old_area != device.area_name and device.create_sensor:
                 _LOGGER.debug("Device %s now in %s", device.name, device.area_name)
         else:
@@ -570,6 +574,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             device.area_id = None
             device.area_name = None
             device.area_distance = None
+            device.area_rssi = None
+            device.area_scanner = None
 
     def _refresh_scanners(self, scanners: list[BluetoothScannerDevice]):
         """Refresh our local list of scanners (BLE Proxies)"""

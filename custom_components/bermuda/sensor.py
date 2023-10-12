@@ -69,6 +69,8 @@ class BermudaSensor(BermudaEntity):
             "area_id": self._device.area_id,
             "area_name": self._device.area_name,
             "area_distance": self._device.area_distance,
+            "area_rssi": self._device.area_rssi,
+            "area_scanner": self._device.area_scanner,
         }
 
 
@@ -98,8 +100,10 @@ class BermudaSensorRange(BermudaSensor):
 
     @property
     def native_unit_of_measurement(self):
+        """Results are in metres"""
         return "m"
 
     @property
     def state_class(self):
+        """Measurement should result in graphed results"""
         return "measurement"
