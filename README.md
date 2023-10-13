@@ -195,23 +195,23 @@ So how does that help?
 
 ## TODO / Ideas
 
-[x] Basic `bermuda.dump_devices` service that responds with measurements.
-[x] `area` if a device is within a max distance of a receiver
-[x] An interface to choose which devices should have sensors created for them
-[x] Sensors created for selected devices, showing their estimated location
-[ ] Switch to performing updates on receipt of advertisements, instead of periodic polling
-[ ] "Solve" realtime approximation of inter-proxy distances using Triangle Inequality
-[ ] Resolve x/y co-ordinates of all scanners and proxies (!)
-[ ] Some sort of map, just pick two proxies as an x-axis vector and go
-[ ] Config setting to define absolute locations of two proxies
-[ ] Support some way to "pin" more than two proxies/tags, and have it not break.
-[ ] An interface to define Areas in relation to the pinned proxies
-[x] Create entities (use `device_tracker`? or create own?) for each detected beacon
-[ ] Experiment with some of
-[these algo's](https://mdpi-res.com/d_attachment/applsci/applsci-10-02003/article_deploy/applsci-10-02003.pdf?version=1584265508)
-for improving accuracy (too much math for me!). Particularly weighting shorter
-distances higher and perhaps the cosine similarity fingerprinting, possibly against
-fixed beacons as well to smooth environmental rssi fluctuations.
+- [x] Basic `bermuda.dump_devices` service that responds with measurements.
+- [x] `area` if a device is within a max distance of a receiver
+- [x] An interface to choose which devices should have sensors created for them
+- [x] Sensors created for selected devices, showing their estimated location
+- [ ] Switch to performing updates on receipt of advertisements, instead of periodic polling
+- [ ] "Solve" realtime approximation of inter-proxy distances using Triangle Inequality
+- [ ] Resolve x/y co-ordinates of all scanners and proxies (!)
+- [ ] Some sort of map, just pick two proxies as an x-axis vector and go
+- [ ] Config setting to define absolute locations of two proxies
+- [ ] Support some way to "pin" more than two proxies/tags, and have it not break.
+- [ ] An interface to define Areas in relation to the pinned proxies
+- [x] Create entities (use `device_tracker`? or create own?) for each detected beacon
+- [ ] Experiment with some of
+      [these algo's](https://mdpi-res.com/d_attachment/applsci/applsci-10-02003/article_deploy/applsci-10-02003.pdf?version=1584265508)
+      for improving accuracy (too much math for me!). Particularly weighting shorter
+      distances higher and perhaps the cosine similarity fingerprinting, possibly against
+      fixed beacons as well to smooth environmental rssi fluctuations.
 
 ## Hacking tips
 
