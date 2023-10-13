@@ -2,7 +2,9 @@
 
 # Bermuda BLE Trilateration
 
-(eventually) Triangulate your lost objects using ESPHome bluetooth proxies!
+- Track bluetooth devices by Area in [HomeAssistant](https://home-assistant.io/), using [ESPHome](https://esphome.io/) [bluetooth_proxy](https://esphome.io/components/bluetooth_proxy.html) devices.
+
+- (eventually) Triangulate device positions! Maybe.
 
 [![GitHub Release][releases-shield]][releases]
 [![GitHub Activity][commits-shield]][commits]
@@ -18,27 +20,48 @@
 [![Discord][discord-shield]][discord]
 [![Community Forum][forum-shield]][forum]
 
-##STATUS: Early days! No triangulation yet, but area-based location tracking works
+## What it does:
 
-- Can replace bluetooth_ble_tracker by creating entities for home/not_home
+- Area-based device location (ie, device-level room prescence) is working reasonably well.
+- Creates sensors for Area and Distance for devices you choose
+- Creates `device_tracker` entities for chosen devices, which can be linked to "Person"s for Home/Away tracking
+- Configurable settings for rssi reference level, environmental attenuation, max tracking radius
+- Provides a json/yaml dump of devices and their distances from each bluetooth
+  receiver, via the `bermuda.dump_devices` service.
+
+## What you need:
+
+- One or more devices providing bluetooth proxy information to HA. I like the D1-Mini32 boards because
+  they're cheap and easy to deploy. The Shelly bluetooth proxy devices should also work but I don't have any
+  so can't test them myself. Issue reports with debug info welcome.
+
+- USB Bluetooth on your HA host is not ideal, since it does not timestamp the advertisement packets.
+  However it can be used for simple "Home/Not Home" tracking, just not Area/Room-based tracking at this time.
+
+- Some bluetooth BLE devices you want to track. Smart watches, beacon tiles, thermometers etc
+
+## What it does not do
+
+- It does not (yet) provide location relative to multiple beacons, but that is the ultimate
+  goal. RSSI is extremely "noisy" as data goes, but the hope is to find ways to smooth that
+  out a bit and get a workable impression of where devices and scanners are in relation to each
+  other. Math / Geometry geeks are very welcome to assist, I am well out of my depth here!
+
+- As yet it doesn't know how to handle rotating MAC addresses, hopefully it can integrate with
+  the new integration that does that.
+
+## What you won't need (if this works for you)
+
+- Can replace `bluetooth_ble_tracker` by creating `device_tracker` entities for home/not_home
   for selected BLE devices, which can be used for Person home/away sensing.
   This is the "Zone" element of homeassistant localisation, where "home" is
   one Zone, and "work" or other large geographic areas might be others.
 
-- Provides a json/yaml dump of devices and their distances from each bluetooth
-  receiver. This is via the `bermuda.dump_devices` service.
-
-- (soon) Provides sensors to indicate which Room ("Area", in HA terms) a device
-  is "in". This is based on the measured RF power (rssi - received signal strength
-  indicator) which can give a (varyingly inaccurate) measure of distance to the
-  closest BLE Proxy. If you have a bluetooth receiver (ESPHome with `bluetooth_proxy`
-  or a Shelley device) in each room you want tracking for, this will do the job.
-
-- (soon?) Provide a mud-map of your entire home, in bluetooth signal strength terms.
+## How it Works
 
 This integration uses the advertisement data gathered by your esphome or
-Shelley bluetooth-proxy deployments to track or triangulate (more correctly,
-trilaterate) the relative positions of any BLE devices
+Shelley bluetooth-proxy deployments into Homeassistant to track or ultimately
+triangulate (more correctly, trilaterate) the relative positions of any BLE devices
 observed around your home.
 
 Note that this is more properly called "Tri*lateration*", as we are not
@@ -46,15 +69,55 @@ measuring the angles, but instead measuring distances. The bottom line
 is that triangulation is more likely to hit people's search terms so we'll
 probably bandy that term about a bit :-)
 
-This integration gives you two forms of presence tracking.
+The integration gathers the advertisement data from the bluetooth integration,
+and uses it to glean location/area info for all devices.
 
-- Simple Home/Away detection using the [device_tracker](https://www.home-assistant.io/integrations/device_tracker/) integration. This is
-  not much different to the already working bluetooth_le_tracker integration
-  in that regard, but doesn't use the `known_devices.yaml` file, lets you create
-  entities only for the devices you want to track, and was an easy step along the way to...
-- Room-based ("Area"s in homeassistant parlance) localisation for bluetooth
-  devices. For example, "which human/pet is at home and in what room are they?"
-  and "where's my phone/toothbrush?"
+You can view the internal state by calling the `bermuda.dump_devices` service.
+
+Currently it munges this into three entities for each tracked device:
+
+- A `device_tracker` entity, which exposes a "home/not home" state. This entity can be mapped
+  to a `person` to indicate if they are home (eg, by tracking their smart watch).
+  This integration gives you two forms of presence tracking.
+
+- An `Area` sensor. This gives the area name of the nearest bluetooth proxy. If you have a
+  proxy in each room, you can use this to know which room a given device is currently in.
+
+- A `Distance` sensor which gives the estimated distance from the nearest bluetooth proxy.
+  This may help give a more relative indication of presence.
+
+Ultimately, it is hoped to also provide a mud-map of the home, where relative positions of
+proxies and devices can be visually expressed. This assumes that we can (with some level of reliability)
+compute the layout with trilateration. That is, by measuring the distances between devices and scanners it
+is hoped to approximate a solution for the entire "network" of devices. This won't be lidar-level accurate,
+but it might mean you'd only need proxies in every second room, say.
+
+## Screenshots
+
+After installing, the integration should be visible in Settings, Devices & Services
+
+![The integration, in Settings, Devices & Services](img/screenshots/integration.png)
+
+Press the `CONFIGURE` button to see the configuration dialog. At the bottom is a field
+where you can enter/list any bluetooth devices the system can see. Choosing devices
+will add them to the configured devices list and creating sensor entities for them.
+
+![Bermuda integration configuration option flow](img/screenshots/configuration.png)
+
+Choosing the device screen shows the current sensors and other info.
+
+![Screenshot of device information view](img/screenshots/deviceinfo.png)
+
+The sensor information also includes attributes for which scanner detected the device,
+the measured rssi etc. (these will probably be removed from the Area sensor to reduce
+database history churn, but will probably stay for the Distance sensor)
+
+![Bermuda sensor information](img/screenshots/sensor-info.png)
+
+In Settings, People, you can define any Bermuda device to track home/away status
+for any person/user.
+
+![Assign a Bermuda sensor for Person tracking](img/screenshots/person-tracker.png)
 
 ## FAQ
 
@@ -65,21 +128,24 @@ This integration gives you two forms of presence tracking.
   `bluetooth_proxy` section (this is separate from the active property of
   the `esp32_ble_tracker` section, which controls outbound client connections).
 
+- Also, when you first restart homeassitant after loading the integration it may
+  take a minute or so for the system to collect the names of the devices it sees.
+
 ### Isn't mmWave better?
 
 - mmWave is definitely _faster_, but it will only tell you "someone" has entered
-  a space, while Bermuda can tell you _who_ is in a space.
+  a space, while Bermuda can tell you _who_ (or what) is in a space.
 
 ### What about PIR / Infrared?
 
-- It's also likely faster than bluetooth, but again it only tells you that
+- PIR is also likely faster than bluetooth, but again it only tells you that
   someone / something is present, but doesn't tell you who/what.
 
 So how does that help?
 
 - If the home knows who is in a given room, it can set the thermostat to their
   personal preferences, or perhaps their lighting settings. This might be
-  particularly useful for testing automations for yourself before unleashing them
+  particularly useful for testing automations on yourself before unleashing them
   on to your housemates, so they don't get annoyed while you iron out the bugs :-)
 
 - If you have BLE tags on your pets you can have automations specifically for them,
@@ -92,62 +158,56 @@ So how does that help?
   right now the integration only re-calculates on a timed basis. This should be changed
   to a realtime recalculation based on incoming advertisements soon.
 
-## What you need
+### How is the distance calculated?
 
-- HomeAssistant, with the `bluetooth` integration enabled
-- Multiple (ideally) ESPHome devices, acting as `bluetooth_proxy` devices.
-  I like the D1-Mini32 boards because they're cheap and easy to deploy.
-  The Shelly bluetooth proxy devices should also work but I don't have any
-  so can't test them myself. Issue reports with debug info welcome.
-- Some bluetooth things you want to locate (phones, beacons/tags etc)
-- That's it! No mqtt, or devices dedicated to bluetooth (the esphome devices
-  can also provide other sensors etc, within reason)
+- Currently, we use the relatively simple equation:
+  `distance = 10 ** ((ref_power - rssi) / (10 * attenuation))`
 
-## How it works
+  - `ref_power` is the rssi value you get when the device is 1 metre from the receiver.
+    Currently you can configure this as a global setting in the options.
+  - `rssi` is the "received signal strength indicator", being a measurement of RF power
+    expressed in dB. rssi will usually range from -30 or so "up" to -100 or more. Numbers
+    closer to zero are "stronger" or closer.
+  - `attenuation` is a constant for the losses in the environment (humidity, air pressure(!),
+    mammals etc). It's a "fudge factor". This is also set in the options. Experimentation with values
+    ranging from 1.something to 3ish will usually get you somewhere.
+  - `distance` is the resulting distance in metres.
 
-When a BLE device sends an advertisement packet, each bluetooth proxy that hears
-it will send it to HomeAssistant, along with the `rssi` (received signal strength
-indicator) which is basically how "strong" the received signal was.
+- The values won't be suitable for all use-cases. Apart from the environmental factors we can't calculate
+  (like walls, reflective surfaces etc), each device might transmit a different power level, and every transmitter
+  and receiver might have antennae that perform differently. Because of this it is planned to allow separate
+  calibration of scanners and devices to account for the variances.
 
-Lots of things affect the rssi value, but one of them is distance. This integration
-compares the rssi value for a given advertisement across the different
-bluetooth proxies, and from that tries to make some guesses about how far
-(in relative terms) the device was from each proxy.
+### How do I choose values for Attenuation and Ref_Power?
 
-The plan is to experiment with multiple algorithms to find the best ways to
-establish a device's location. In the first instace the methods are:
-
-- If a device is close (within a few metres) to a receiver, consider it to be in
-  the same Area as that receiver. (Working)
-- Attempt to "solve" a 2D map for all beacons and receivers based on the triangles
-  created between them to derive all the required distances. (WIP)
-
-## What you'll see
-
-After enabling the integration, you should start to see results for any bluetooth
-devices in your home that are sending broadcasts. The implemented results are:
-(important to note here that VERY FEW of these boxes are ticked yet!)
-
-[x] A raw listing of values returned when you call the `bermuda.dump_devices` service
-[x] `area` if a device is within a max distance of a receiver
-[x] An interface to choose which devices should have sensors created for them
-[x] Sensors created for selected devices, showing their estimated location
-[] Algo to "solve" the 2D layout of devices
-[] A mud-map showing relative locations between proxies and detected devices
-[] An interface to "pin" the proxies on a map to establish a sort of coordinate system
-[] An interface to define Areas in relation to the pinned proxies
+- Soon you'll be able to set this per-device to account for variations in circuits, antennas and cases, but
+  currently there are only the global defaults to fiddle with. Anyway, the idea is:
+  - Place a transmitter 1 metre (just over 39 inches) from a scanner (bluetooth proxy)
+  - In the attributes section of the transmitter's Distance sensor, watch the "Area rssi" value. Get a feel
+    for what you consider to be an average. This will be your "Reference power at 1m" value.
+  - Now move the transmitter away some distance (and measure that distance). Having a clear line-of-sight between
+    the transmitter and the scanner is a good idea.
+  - Now watch the "Distance" value. You want it to average around the right distance (but error towards a higher
+    value, since a shorter measured distance is statistically less likely). That sentence is deliberately coy, since
+    RF is a black art and I am not an ordained sorcerer. Also, some reflections might be in phase, most will not.
+  - If the distance measured is always too high, decrease your attenuation figure. If it's too short, increase it.
+    Repeat this procedure until you decide nothing works, the universe is pure chaos and it's time to give up.
 
 ## TODO / Ideas
 
 [x] Basic `bermuda.dump_devices` service that responds with measurements.
-[] Switch to performing updates on receipt of advertisements, instead of periodic polling
-[] Realtime approximation of inter-proxy distances using Triangle Inequality
-[] Resolve x/y co-ordinates of all scanners and proxies (!)
-[] Some sort of map, just pick two proxies as an x-axis vector and go
-[] Config setting to define absolute locations of two proxies
-[] Support some way to "pin" more than two proxies/tags, and have it not break.
+[x] `area` if a device is within a max distance of a receiver
+[x] An interface to choose which devices should have sensors created for them
+[x] Sensors created for selected devices, showing their estimated location
+[ ] Switch to performing updates on receipt of advertisements, instead of periodic polling
+[ ] "Solve" realtime approximation of inter-proxy distances using Triangle Inequality
+[ ] Resolve x/y co-ordinates of all scanners and proxies (!)
+[ ] Some sort of map, just pick two proxies as an x-axis vector and go
+[ ] Config setting to define absolute locations of two proxies
+[ ] Support some way to "pin" more than two proxies/tags, and have it not break.
+[ ] An interface to define Areas in relation to the pinned proxies
 [x] Create entities (use `device_tracker`? or create own?) for each detected beacon
-[] Experiment with some of
+[ ] Experiment with some of
 [these algo's](https://mdpi-res.com/d_attachment/applsci/applsci-10-02003/article_deploy/applsci-10-02003.pdf?version=1584265508)
 for improving accuracy (too much math for me!). Particularly weighting shorter
 distances higher and perhaps the cosine similarity fingerprinting, possibly against
@@ -155,16 +215,12 @@ fixed beacons as well to smooth environmental rssi fluctuations.
 
 ## Hacking tips
 
-Wanna improve this? Awesome! Here's some tips on how it works inside and
-what direction I'm hoping to go. Bear in mind this is my first ever HA
+Wanna improve this? Awesome! Bear in mind this is my first ever HA
 integration, and I'm much more greybeard sysadmin than programmer, so ~~if~~where
 I'm doing stupid things I really would welcome some improvements!
 
-At this stage I'm using the service `bermuda.dump_devices` to examine the
-internal state while I gather the basic info and make initial efforts at
-calculating locations. It's defined in `__init__.py`.
-
-(right now that's about all that exists!)
+You can start by using the service `bermuda.dump_devices` to examine the
+internal state.
 
 ## Prior Art
 
