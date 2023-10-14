@@ -28,6 +28,11 @@ ADVERT_FRESHTIME = 2.5
 # this many seconds older than its opponent. Prevents a stale but very close
 # advert from overriding a newer advertisement from a less-close scanner.
 
+
+HIST_KEEP_COUNT = (
+    10  # How many old timestamps, rssi, etc to keep for each device/scanner pairing.
+)
+
 # Configuration and options
 
 CONF_DEVICES = "configured_devices"

@@ -4,6 +4,8 @@ from typing import Any
 
 from homeassistant import config_entries
 from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.components.sensor import SensorStateClass
+from homeassistant.const import UnitOfLength
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -88,6 +90,13 @@ class BermudaSensorRange(BermudaSensor):
         return "Distance"
 
     @property
+    def native_value(self):
+        distance = self._device.area_distance
+        if distance is not None:
+            return round(distance, 3)
+        return None
+
+    @property
     def state(self):
         distance = self._device.area_distance
         if distance is not None:
@@ -101,9 +110,9 @@ class BermudaSensorRange(BermudaSensor):
     @property
     def native_unit_of_measurement(self):
         """Results are in metres"""
-        return "m"
+        return UnitOfLength.METERS
 
     @property
     def state_class(self):
         """Measurement should result in graphed results"""
-        return "measurement"
+        return SensorStateClass.MEASUREMENT

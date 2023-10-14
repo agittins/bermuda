@@ -47,6 +47,7 @@ from .const import DEFAULT_DEVTRACK_TIMEOUT
 from .const import DEFAULT_MAX_RADIUS
 from .const import DEFAULT_REF_POWER
 from .const import DOMAIN
+from .const import HIST_KEEP_COUNT
 from .const import PLATFORMS
 from .const import STARTUP_MESSAGE
 from .entity import BermudaEntity
@@ -184,26 +185,42 @@ class BermudaDeviceScanner(dict):
         area_id: str,
         options,
     ):
+        # I am declaring these just to control their order in the dump,
+        # which is a bit silly, I suspect.
         self.name: str = scandata.scanner.name
         self.area_id: str = area_id
-        self.adapter: str = scandata.scanner.adapter
-        self.source: str = scandata.scanner.source
-        self.rssi: float = scandata.advertisement.rssi
-        self.tx_power: float = scandata.advertisement.tx_power
-        self.options = options
-        self.rssi_distance: float = rssi_to_metres(
-            self.rssi,
-            options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
-            options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
-        )
-        self.adverts: dict[str, bytes] = scandata.advertisement.service_data.items()
 
-        self.stamp: float = None
+        self.stamp: float = 0
+        self.hist_stamp = []
+        self.rssi: float = None
+        self.hist_rssi = []
+        self.hist_distance = []
+        self.hist_interval = []
+        self.stale_update_count = (
+            0  # How many times we did an update but no new stamps were found.
+        )
+        self.tx_power: float = None
+
+        # Just pass the rest on to update...
+        self.update(device_address, scandata, area_id, options)
+
+    def update(
+        self,
+        device_address: str,
+        scandata: BluetoothScannerDevice,
+        area_id: str,
+        options,
+    ):
+        # We over-write pretty much everything, except our locally-preserved stats.
+        #
+        # In case the scanner has changed it's details since startup though:
+        self.name: str = scandata.scanner.name
+        self.area_id: str = area_id
+
         # Only remote scanners log timestamps here (local usb adaptors do not),
-        # so check if the dict is there at all first...
         if hasattr(scandata.scanner, "_discovered_device_timestamps"):
             # Found a remote scanner which has timestamp history...
-
+            scanner_sends_stamps = True
             # FIXME: Doesn't appear to be any API to get this otherwise...
             # pylint: disable-next=protected-access
             stamps = scandata.scanner._discovered_device_timestamps
@@ -211,28 +228,83 @@ class BermudaDeviceScanner(dict):
             # In this dict all MAC address keys are upper-cased
             uppermac = device_address.upper()
             if uppermac in stamps:
-                self.stamp = stamps[uppermac]
+                if stamps[uppermac] > self.stamp:
+                    have_new_stamp = True
+                    new_stamp = stamps[uppermac]
+                else:
+                    # We have no updated advert in this run.
+                    have_new_stamp = False
+                    self.stale_update_count += 1
             else:
                 # This shouldn't happen, as we shouldn't have got a record
                 # of this scanner if it hadn't seen this device.
                 _LOGGER.error(
                     "Scanner %s has no stamp for %s - very odd.",
-                    self.source,
+                    scandata.scanner.source,
                     device_address,
                 )
-                self.stamp = 0
+                have_new_stamp = False
         else:
-            # Not a bluetooth_proxy device / remote scanner.
-            # FIXME: Work out how to handle a bluetooth adaptor's reports (as
-            # opposed to those from proxies).
-            # Options are:
-            # (a) find a timestamp somehwere
-            # (b) if we are doing updates as ads come in, use now()-some_safety_offset.
-            #
-            # For now we'll need to ignore it, since the advert might be very stale
-            # and would give false positives. It's a FIXME for when we receive adverts
-            # directly instead of periodically trawling the bluetooth manager's history.
-            self.stamp = 0
+            # Not a bluetooth_proxy device / remote scanner, but probably a USB Bluetooth adaptor.
+            # We don't get advertisement timestamps from bluez, so currently there's no way to
+            # reliably include it in our calculations.
+
+            scanner_sends_stamps = False
+            # But if the rssi has changed from last time, consider it "new"
+            if self.rssi != scandata.advertisement.rssi:
+                # Since rssi has changed, we'll consider this "new", but
+                # since it could be pretty much any age, make it a multiple
+                # of freshtime. This means it can still be useful for home/away
+                # detection in device_tracker, but won't factor in to area localisation.
+                have_new_stamp = True
+                new_stamp = MONOTONIC_TIME - (ADVERT_FRESHTIME * 4)
+            else:
+                have_new_stamp = False
+
+        if len(self.hist_stamp) == 0 or have_new_stamp:
+            # We load anything the first time 'round, but from then on
+            # we are more cautious.
+            self.rssi: float = scandata.advertisement.rssi
+            self.hist_rssi.insert(0, self.rssi)
+            self.rssi_distance: float = rssi_to_metres(
+                self.rssi,
+                options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
+                options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
+            )
+            self.hist_distance.insert(0, self.rssi_distance)
+            self.hist_interval.insert(0, new_stamp - self.stamp)
+            # Stamp will be faked from above if required.
+            if have_new_stamp:
+                self.stamp = new_stamp
+                self.hist_stamp.insert(0, self.stamp)
+
+        # Safe to update these values regardless of stamps...
+
+        self.adapter: str = scandata.scanner.adapter
+        self.source: str = scandata.scanner.source
+        if (
+            self.tx_power is not None
+            and scandata.advertisement.tx_power != self.tx_power
+        ):
+            # Not really an erorr, we just don't account for this happening. I want to know if it does.
+            _LOGGER.warning(
+                "Device changed TX-POWER! That was unexpected: %s %sdB",
+                device_address,
+                scandata.advertisement.tx_power,
+            )
+        self.tx_power: float = scandata.advertisement.tx_power
+        self.adverts: dict[str, bytes] = scandata.advertisement.service_data.items()
+        self.scanner_sends_stamps = scanner_sends_stamps
+        self.options = options
+
+        # Trim our history lists
+        for histlist in (
+            self.hist_distance,
+            self.hist_interval,
+            self.hist_rssi,
+            self.hist_stamp,
+        ):
+            del histlist[HIST_KEEP_COUNT:]
 
     def to_dict(self):
         """Convert class to serialisable dict for dump_devices"""
@@ -286,17 +358,25 @@ class BermudaDevice(dict):
         self, scanner_device: BermudaDevice, discoveryinfo: BluetoothScannerDevice
     ):
         """Add/Replace a scanner entry on this device, indicating a received advertisement"""
-        self.scanners[
-            format_mac(scanner_device.address)
-        ] = newscanner = BermudaDeviceScanner(
-            self.address,
-            discoveryinfo,  # the entire BluetoothScannerDevice struct
-            scanner_device.area_id,
-            self.options,
-        )
+        if format_mac(scanner_device.address) in self.scanners:
+            # Device already exists, update it
+            self.scanners[format_mac(scanner_device.address)].update(
+                self.address,
+                discoveryinfo,  # the entire BluetoothScannerDevice struct
+                scanner_device.area_id,
+                self.options,
+            )
+        else:
+            self.scanners[format_mac(scanner_device.address)] = BermudaDeviceScanner(
+                self.address,
+                discoveryinfo,  # the entire BluetoothScannerDevice struct
+                scanner_device.area_id,
+                self.options,
+            )
+        device_scanner = self.scanners[format_mac(scanner_device.address)]
         # Let's see if we should update our last_seen based on this...
-        if self.last_seen < newscanner.stamp:
-            self.last_seen = newscanner.stamp
+        if self.last_seen < device_scanner.stamp:
+            self.last_seen = device_scanner.stamp
 
     def to_dict(self):
         """Convert class to serialisable dict for dump_devices"""
