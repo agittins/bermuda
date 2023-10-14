@@ -257,7 +257,7 @@ class BermudaDeviceScanner(dict):
                 # of freshtime. This means it can still be useful for home/away
                 # detection in device_tracker, but won't factor in to area localisation.
                 have_new_stamp = True
-                new_stamp = MONOTONIC_TIME - (ADVERT_FRESHTIME * 4)
+                new_stamp = MONOTONIC_TIME() - (ADVERT_FRESHTIME * 4)
             else:
                 have_new_stamp = False
 
