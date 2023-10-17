@@ -125,8 +125,20 @@ for any person/user.
 
 - you need to tell your bluetooth proxies to send an inquiry in response to
   advertisements. In esphome, this is done by adding `active: true` to the
-  `bluetooth_proxy` section (this is separate from the active property of
-  the `esp32_ble_tracker` section, which controls outbound client connections).
+  `esp32_ble_tracker` section (this is separate from the active property of
+  the `bluetooth_proxy` section, which controls outbound client connections).
+
+  The default is `True`, and the templates at Ready-Made Projects also default to
+  `True`.
+
+  To be explicit in setting the option, the YAML should contain a section like
+  this (there migth be extra paramaters, that's OK):
+
+  ```
+  esp32_ble_tracker:
+    scan_parameters:
+      active: True
+  ```
 
 - Also, when you first restart homeassitant after loading the integration it may
   take a minute or so for the system to collect the names of the devices it sees.
@@ -177,6 +189,43 @@ So how does that help?
   (like walls, reflective surfaces etc), each device might transmit a different power level, and every transmitter
   and receiver might have antennae that perform differently. Because of this it is planned to allow separate
   calibration of scanners and devices to account for the variances.
+
+### How do the settings work?
+
+- `Max Radius` is used by the `device_tracker` and Area sensors to limit how far away a device can be while still
+  considered to be in that location. For `device_tracker` purposes (this is the Home/Away sensor you can attach to a
+  `Person`), it probably makes sense for this to be quite large - since you want to be "home" even if you're out
+  in the yard or elsewhere that doesn't have good coverage. Bear in mind that "distance" is really a function of
+  signal strength, so sitting in your car, inside the garage is going to show a much more distant signal than standing
+  next to the car, say.
+  For the `Area` sensor, a large `max_radius` may also make sense _if_ you have proxies in most of the rooms you want
+  to track for. The Area will switch to the closest room, so you can consider it to mean "I am _near_ my office".
+  However if you have proxies only in a few rooms, you might want a more definitive sense of "I am _not_ in my office",
+  in which case you may wish to lower the max_radius to 4 metres or similar, so that being in the adjacent room doesn't
+  show you as still being in your office. Note that results will probably be more reliable by putting a proxy in the
+  adjacent room instead, but that depends on how many proxies you have.
+
+- `Timeout` applies _only_ to the `device_tracker` integration. If no proxy has received a broadcast from the device
+  in `timeout` seconds, that device will be marked as "not home" / Away. If you experience false triggers for being away
+  (or more likely, false triggers for arriving home) then try increasing this value. Something like 300 (5 minutes) is
+  probably fairly sensible for things where you want to automate arriving home. For things like automating an alert if
+  a pet leaves the property a shorter value might be wiser, although I'd recommend using the Area and Distance sensors
+  instead in that case, and choosing your own effective timeouts in the automation.
+
+- `Default RSSI at 1 metre` is how strong a signal the receiver sees when the transmitter is 1 metre away. Some beacons
+  will actually advertise this figure in their data, and some of them might even be true. But ignore that. See the
+  calibration section below for how to measure and set this for your own particular setup. Note that this number is
+  dependent on the transmitter's software, the power it transmits at, the style (and orientation) of its antenna,
+  the enclosure it's in, and depend on the receiver's enclosure, antenna and circuit's sensitivity. And everything in-
+  between. Future versions of Bermuda will let you set the value per-device and offset it per-receiver, but for now,
+  measure the device you care most about against the proxy you have the most of. And bear in mind that "distance" is
+  really a relative term when trying to measure it using the amplitude of radio waves.
+
+- `Environment attenuation factor` is for "fudging" the rate at which the signal strength drops off with distance. In
+  a vacuum with no other objects, the signal drops off predictably, but so would we. This factor helps to account for
+  things like humidity, air density (altitude, pollution etc) and in some part the way that the surroundings might
+  interfere with the signal. Basically we fiddle with this so that after we calibrate our 1 metre setting, we get a
+  sensible result at other distances like at 4 metres etc. See the calibration section for how to do that.
 
 ### How do I choose values for Attenuation and Ref_Power?
 
