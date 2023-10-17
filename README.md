@@ -283,6 +283,12 @@ which let you limit or reformat the resulting data to make it easier to work wit
 the `addresses` paramater is helpful to only return data relevant for one or more MAC addresses.
 See the information on paramaters in the `Services` page in home assistant, under `Developer Tools`.
 
+Important: If you decide to use the results of this call for your own templates etc, bear in mind that
+the format might change in any release, and won't necessarily be considered a "breaking change", since
+this structure is used internally, rather than being a published API. That said, efforts will be made
+to indicate in the release notes if fields in the structure are renamed or moved, but not for adding new
+items.
+
 ## Prior Art
 
 The `bluetooth_tracker` and `ble_tracker` integrations are only built to give a "home/not home"
