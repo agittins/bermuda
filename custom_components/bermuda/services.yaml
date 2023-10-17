@@ -1,3 +1,7 @@
 dump_devices:
   name: Dump devices
-  description: Returns the internal structure of devices, useful for debugging or building templates etc.
+  fields:
+    addresses:
+      required: false
+      example: "EE:E8:37:9F:6B:54 C7:B8:C6:B0:27:11 AA:AA:AA:AA:AA:AA"
+      default: ""

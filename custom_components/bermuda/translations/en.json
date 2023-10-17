@@ -35,9 +35,15 @@
     }
   },
   "services": {
-    "dump_beacons": {
+    "dump_devices": {
       "name": "Dump Devices",
-      "description": "Returns all detected advertisements, scanners and their rssi for each scanner"
+      "description": "Returns the internal data structure, optionally limited to the given address(es). Includes the rssi and other info from each scanner",
+      "fields": {
+        "addresses": {
+          "name": "Addresses",
+          "description": "An optional space-separated list of MAC addresses to return info on. If blank get all addresses."
+        }
+      }
     }
   }
 }

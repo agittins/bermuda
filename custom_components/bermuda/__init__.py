@@ -13,6 +13,7 @@ from datetime import timedelta
 from typing import Final
 from typing import TYPE_CHECKING
 
+import voluptuous as vol
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import BluetoothChange
 from homeassistant.components.bluetooth import BluetoothScannerDevice
@@ -442,7 +443,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             DOMAIN,
             "dump_devices",
             self.service_dump_devices,
-            None,
+            vol.Schema({vol.Optional("addresses"): cv.string}),
             SupportsResponse.ONLY,
         )
 
@@ -702,8 +703,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     async def service_dump_devices(self, call):  # pylint: disable=unused-argument;
         """Return a dump of beacon advertisements by receiver"""
         out = {}
+        addresses_input = call.data.get("addresses", "")
+        if addresses_input != "":
+            addresses = addresses_input.upper().split()
+        else:
+            addresses = []
         for address, device in self.devices.items():
-            out[address] = device.to_dict()
+            if len(addresses) == 0 or address.upper() in addresses:
+                out[address] = device.to_dict()
         return out
 
 

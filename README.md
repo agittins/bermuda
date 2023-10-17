@@ -271,6 +271,18 @@ I'm doing stupid things I really would welcome some improvements!
 You can start by using the service `bermuda.dump_devices` to examine the
 internal state.
 
+### Using `bermuda.dump_devices` service
+
+Just calling the service `bermuda.dump_devices` will give you a full dump of the internal
+data structures that bermuda uses to track and calculate its state. This can be helpful
+for working out what's going on and troubleshooting, or to use if you have a very custom
+need that you can solve with template sensors etc.
+
+If called with no paramaters, the service will return all data. Paramaters are available
+which let you limit or reformat the resulting data to make it easier to work with. In particular
+the `addresses` paramater is helpful to only return data relevant for one or more MAC addresses.
+See the information on paramaters in the `Services` page in home assistant, under `Developer Tools`.
+
 ## Prior Art
 
 The `bluetooth_tracker` and `ble_tracker` integrations are only built to give a "home/not home"
