@@ -18,6 +18,7 @@ from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import BluetoothChange
 from homeassistant.components.bluetooth import BluetoothScannerDevice
 from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
+from homeassistant.components.bluetooth import MONOTONIC_TIME
 from homeassistant.components.bluetooth.active_update_coordinator import (
     PassiveBluetoothDataUpdateCoordinator,
 )
@@ -34,7 +35,6 @@ from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import slugify
 from homeassistant.util.dt import get_age
-from homeassistant.util.dt import monotonic_time_coarse
 from homeassistant.util.dt import now
 
 from .const import ADVERT_FRESHTIME
@@ -59,8 +59,6 @@ if TYPE_CHECKING:
     from bleak.backends.device import BLEDevice
 
 SCAN_INTERVAL = timedelta(seconds=5)
-
-MONOTONIC_TIME: Final = monotonic_time_coarse
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
