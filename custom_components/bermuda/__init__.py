@@ -34,7 +34,7 @@ from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import slugify
 from homeassistant.util.dt import get_age
-from homeassistant.util.dt import monotonic_time_coarse
+from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.util.dt import now
 
 from .const import ADVERT_FRESHTIME
