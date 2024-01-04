@@ -497,6 +497,47 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # Get/Create a device entry
             device = self._get_or_create_device(service_info.address)
 
+            # Check if it's broadcasting an Apple Inc manufacturing data (ID: 0x004C)
+            for (
+                company_code,
+                man_data,
+            ) in (
+                service_info.advertisement.manufacturer_data.items()
+            ):  # .get(0x004C, None)
+                if company_code == 0x00E0:  # 224 Google
+                    _LOGGER.debug(
+                        "Found Google Device: %s %s", device.address, man_data.hex()
+                    )
+                #
+                elif company_code == 0x004C:  # 76 Apple Inc
+                    _LOGGER.debug(
+                        "Found Apple Manufacturer data: %s %s",
+                        device.address,
+                        man_data.hex(),
+                    )
+                    device.prefname = man_data.hex()
+                    if man_data[:2] == b"\x02\x15":  # 0x0215:  # iBeacon packet
+                        uuid = man_data[2:18].hex().upper()
+                        major = int.from_bytes(man_data[18:20], byteorder="big")
+                        minor = int.from_bytes(man_data[20:22], byteorder="big")
+                        power = int.from_bytes([man_data[22]], signed=True)
+                        _LOGGER.debug(
+                            "Device %s is iBeacon with UUID %s %s %s %sdB",
+                            device.address,
+                            uuid,
+                            major,
+                            minor,
+                            power,
+                        )
+                        # ce12cbeb2dbe448bb057c1fe9804b45f00640001c5
+                else:
+                    _LOGGER.debug(
+                        "Found unknown manufacturer %d data: %s %s",
+                        company_code,
+                        device.address,
+                        man_data.hex(),
+                    )
+
             # We probably don't need to do all of this every time, but we
             # want to catch any changes, eg when the system learns the local
             # name etc.
