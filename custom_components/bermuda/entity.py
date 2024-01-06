@@ -9,7 +9,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import ATTRIBUTION
 from .const import DOMAIN
 from .const import NAME
-from .const import VERSION
 
 if TYPE_CHECKING:
     from . import BermudaDataUpdateCoordinator
@@ -44,7 +43,8 @@ class BermudaEntity(CoordinatorEntity):
         return {
             "identifiers": {(DOMAIN, self._device.unique_id)},
             "name": self._device.prefname,
-            "model": VERSION,
+            # TODO: Could use this to indicate tracker type (IRK, iBeacon etc).
+            # "model": "some string",
             "manufacturer": NAME,
         }
 
