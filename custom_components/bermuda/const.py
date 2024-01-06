@@ -3,6 +3,11 @@
 NAME = "Bermuda BLE Trilateration"
 DOMAIN = "bermuda"
 DOMAIN_DATA = f"{DOMAIN}_data"
+# Version gets updated by github workflow during release.
+# The version in the repository should always be 0.0.0 to reflect
+# that the component has been checked out from git, not pulled from
+# an officially built release. HACS will use the git tag (or the zip file,
+# either way it works).
 VERSION = "0.0.0"
 
 ATTRIBUTION = "Data provided by http://jsonplaceholder.typicode.com/"

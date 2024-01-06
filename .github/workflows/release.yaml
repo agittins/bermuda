@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
     env:
       BERMUDA_ROOT_DIR: "${{ github.workspace }}/custom_components/bermuda"
     steps:
@@ -22,15 +23,24 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set release version number in files
+        shell: bash
         run: |
-          sed -i '/VERSION.=./c\VERSION = "${{ github.ref_name }}"' "${{ env.BERMUDA_ROOT_DIR }}/const.py"
-          (jq '.version = "${{ github.ref_name }}"' "${{ env.BERMUDA_ROOT_DIR }}/manifest.json") > "${{ env.BERMUDA_ROOT_DIR }}/manifest.json.tmp"
+          version="${{ github.event.release.tag_name }}"
+          version="${version,,}"
+          version="${version#v}"
+          sed -i '/VERSION.=./c\VERSION = "${version}"' "${{ env.BERMUDA_ROOT_DIR }}/const.py"
+          (jq '.version = "${version}"' "${{ env.BERMUDA_ROOT_DIR }}/manifest.json") > "${{ env.BERMUDA_ROOT_DIR }}/manifest.json.tmp"
           mv "${{ env.BERMUDA_ROOT_DIR }}/manifest.json.tmp" "${{ env.BERMUDA_ROOT_DIR }}/manifest.json"
 
       - name: Zip the integration directory
         run: |
           cd "${{ env.BERMUDA_ROOT_DIR }}"
           zip bermuda.zip -r ./
+
+      - name: 🔏 Sign release package
+        uses: sigstore/gh-action-sigstore-python@v2.1.1
+        with:
+          inputs: "${{ env.BERMUDA_ROOT_DIR }}/bermuda.zip"
 
       - name: "Upload the ZIP file to the release"
         uses: softprops/action-gh-release@v0.1.15
