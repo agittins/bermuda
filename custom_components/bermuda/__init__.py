@@ -10,7 +10,6 @@ import asyncio
 import logging
 from datetime import datetime
 from datetime import timedelta
-from typing import Final
 from typing import TYPE_CHECKING
 
 import voluptuous as vol
