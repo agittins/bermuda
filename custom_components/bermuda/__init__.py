@@ -22,6 +22,8 @@ from homeassistant.components.bluetooth.active_update_coordinator import (
     PassiveBluetoothDataUpdateCoordinator,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_HOME
+from homeassistant.const import STATE_NOT_HOME
 from homeassistant.core import callback
 from homeassistant.core import Config
 from homeassistant.core import HomeAssistant
@@ -284,7 +286,8 @@ class BermudaDeviceScanner(dict):
             self.tx_power is not None
             and scandata.advertisement.tx_power != self.tx_power
         ):
-            # Not really an erorr, we just don't account for this happening. I want to know if it does.
+            # Not really an erorr, we just don't account for this happening -
+            # I want to know if it does.
             _LOGGER.warning(
                 "Device changed TX-POWER! That was unexpected: %s %sdB",
                 device_address,
@@ -340,12 +343,11 @@ class BermudaDevice(dict):
         self.area_distance: float = None  # how far this dev is from that area
         self.area_rssi: float = None  # rssi from closest scanner
         self.area_scanner: str = None  # name of closest scanner
-        self.zone: str = None  # home or not_home
+        self.zone: str = None  # STATE_HOME or STATE_NOT_HOME
         self.manufacturer: str = None
         self.connectable: bool = False
         self.is_scanner: bool = False
         self.entry_id: str = None  # used for scanner devices
-        self.send_tracker_see: bool = False  # Create/update device_tracker entity
         self.create_sensor: bool = False  # Create/update a sensor for this device
         self.last_seen: float = (
             0  # stamp from most recent scanner spotting. MONOTONIC_TIME
@@ -548,8 +550,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             device.connectable = service_info.connectable
 
             # Try to make a nice name for prefname.
-            # TODO: Add support for user-defined name, especially since the
-            #   device_tracker entry can only be renamed using the editor.
+            # TODO: Add support for user-defined name.
             if device.prefname is None or device.prefname.startswith(DOMAIN + "_"):
                 device.prefname = (
                     device.name
@@ -584,59 +585,23 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 device.add_scanner(scanner_device, discovered)
 
             if device.address.upper() in self.options.get(CONF_DEVICES, []):
-                device.send_tracker_see = True
+                # This is a device we track. Set it up:
+
                 device.create_sensor = True
 
-            if device.send_tracker_see:
-                # Send a "see" notification to device_tracker
-                await self._send_device_tracker_see(device)
+                # Update whether the device has been seen recently, for device_tracker:
+                if (
+                    MONOTONIC_TIME()
+                    - self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT)
+                    < device.last_seen
+                ):
+                    device.zone = STATE_HOME
+                else:
+                    device.zone = STATE_NOT_HOME
 
         self._refresh_areas_by_min_distance()
 
         # end of async update
-
-    async def _send_device_tracker_see(self, device: BermudaDevice):
-        """Send "see" event to the legacy device_tracker integration.
-
-        If the device is not yet in known_devices.yaml it will get added.
-        Note that device_tracker can *only* support [home|not_home],
-        because device_tracker only deals with "Zones" not "Areas".
-
-        Simply calling the "see" service is the simplest way to
-        get this done, but if we need more control (eg, specifying
-        the source (gps|router|etc)) we might need to hook and implement
-        it specifically. This is probably all we need right now though:
-
-        TODO: Allow user to configure what name to use for the device_tracker.
-        """
-
-        # Check if the device has been seen recently
-        if (
-            MONOTONIC_TIME()
-            - self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT)
-            < device.last_seen
-        ):
-            device.zone = "home"
-        else:
-            device.zone = "not_home"
-
-        # If mac is set, device_tracker will override our dev_id
-        # with slugified (hostname OR mac). We don't want that
-        # since we want dev_id (the key in known_devices.yaml) to
-        # be stable, predictable and identifyably ours.
-        #
-        # So, we will not set mac, but use bermuda_[mac] as dev_id
-        # and prefname or user-supplied name for host_name.
-        await self.hass.services.async_call(
-            domain="device_tracker",
-            service="see",
-            service_data={
-                "dev_id": "bermuda_" + slugify(device.address),
-                # 'mac': device.address,
-                "host_name": device.prefname,
-                "location_name": device.zone,
-            },
-        )
 
     def dt_mono_to_datetime(self, stamp) -> datetime:
         """Given a monotonic timestamp, convert to datetime object"""
