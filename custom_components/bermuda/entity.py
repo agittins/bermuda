@@ -44,7 +44,7 @@ class BermudaEntity(CoordinatorEntity):
             "identifiers": {(DOMAIN, self._device.unique_id)},
             "name": self._device.prefname,
             # TODO: Could use this to indicate tracker type (IRK, iBeacon etc).
-            # "model": "some string",
+            "model": None,
             "manufacturer": NAME,
         }
 
