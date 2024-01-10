@@ -21,9 +21,10 @@ If you are unsure about the version check the const.py file.
 
 ## Configuration
 
-```yaml
-Add your logs here.
-```
+<!-- Ideally paste a screenshot of the config dialog from Config -> Integrations -> Bermuda -> CONFIGURE
+You can blur out the last 3 or 4 pairs of numbers in each MAC address for privacy reasons, but it's sometimes helpful
+to leave the name and the first few digits (as it often gives a clue to the manufacturer).
+-->
 
 ## Describe the bug
 
