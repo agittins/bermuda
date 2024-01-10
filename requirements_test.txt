@@ -4,3 +4,4 @@ pytest-homeassistant-custom-component
 #==0.13.50
 pre-commit
 reorder-python-imports
+serial
