@@ -5,3 +5,4 @@ pytest-homeassistant-custom-component
 pre-commit
 reorder-python-imports
 serial
+serial-tools
