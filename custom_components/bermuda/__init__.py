@@ -288,7 +288,9 @@ class BermudaDeviceScanner(dict):
         ):
             # Not really an erorr, we just don't account for this happening -
             # I want to know if it does.
-            _LOGGER.warning(
+            # AJG 2024-01-11: This does happen. Looks like maybe apple devices?
+            # Changing from warning to debug to quiet users' logs.
+            _LOGGER.debug(
                 "Device changed TX-POWER! That was unexpected: %s %sdB",
                 device_address,
                 scandata.advertisement.tx_power,
