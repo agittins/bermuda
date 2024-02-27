@@ -750,7 +750,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         for scanner in scanners:
             addresses.add(scanner.scanner.source.upper())
 
-        if do_full_scan or len(addresses) > 0:
+        # If we are doing a full scan, add all the known
+        # scanner addresses to the list, since that will cover
+        # the scanners that have been restored from config.data
+        if do_full_scan:
+            for address in self.scanner_list:
+                addresses.add(address)
+
+        if len(addresses) > 0:
             # FIXME: Really? This can't possibly be a sensible nesting of loops.
             # should probably look at the API. Anyway, we are checking any devices
             # that have a "mac" or "bluetooth" connection,
@@ -758,7 +765,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 for dev_connection in dev_entry.connections:
                     if dev_connection[0] in ["mac", "bluetooth"]:
                         found_address = dev_connection[1].upper()
-                        if do_full_scan or found_address in addresses:
+                        if found_address in addresses:
                             scandev = self._get_device(found_address)
                             if scandev is None:
                                 # It's a new scanner, we will need to update our saved config.
