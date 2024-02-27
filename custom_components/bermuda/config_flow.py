@@ -13,6 +13,8 @@ from .const import CONF_DEVTRACK_TIMEOUT
 from .const import CONF_MAX_RADIUS
 from .const import CONF_REF_POWER
 from .const import DEFAULT_ATTENUATION
+from .const import DEFAULT_DEVTRACK_TIMEOUT
+from .const import DEFAULT_MAX_RADIUS
 from .const import DEFAULT_REF_POWER
 from .const import DOMAIN
 from .const import NAME
@@ -126,11 +128,13 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
         data_schema = {
             vol.Required(
                 CONF_MAX_RADIUS,
-                default=self.options.get(CONF_MAX_RADIUS, 3.0),
+                default=self.options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS),
             ): vol.Coerce(float),
             vol.Required(
                 CONF_DEVTRACK_TIMEOUT,
-                default=self.options.get(CONF_DEVTRACK_TIMEOUT, 30),
+                default=self.options.get(
+                    CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT
+                ),
             ): vol.Coerce(int),
             vol.Required(
                 CONF_ATTENUATION,
