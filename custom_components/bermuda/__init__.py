@@ -653,7 +653,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             device = self._get_device(format_mac(address))
             if device is not None:
                 if not device.create_sensor_done:
-                    _LOGGER.warning("Firing device_new for %s", device.name)
+                    _LOGGER.debug("Firing device_new for %s", device.name)
                     # self.hass.async_run_job(
                     async_dispatcher_send(
                         self.hass, SIGNAL_DEVICE_NEW, device.address, self.scanner_list
@@ -762,7 +762,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                             scandev = self._get_device(found_address)
                             if scandev is None:
                                 # It's a new scanner, we will need to update our saved config.
-                                _LOGGER.warning("New Scanner: %s", found_address)
+                                _LOGGER.debug("New Scanner: %s", found_address)
                                 update_scannerlist = True
                                 scandev = self._get_or_create_device(found_address)
                             scandev_orig = scandev
@@ -792,7 +792,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 if device.is_scanner:
                     scanners[device.address] = device.to_dict()
                     self.scanner_list.append(device.address)
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Replacing config data scanners was %s now %s",
                 self.config_entry.data.get(CONFDATA_SCANNERS, {}),
                 scanners,
