@@ -34,6 +34,16 @@
       }
     }
   },
+  "entity": {
+    "sensor": {
+      "distance": {
+        "name": "Distance"
+      },
+      "area": {
+        "name": "Area"
+      }
+    }
+  },
   "services": {
     "dump_devices": {
       "name": "Dump Devices",

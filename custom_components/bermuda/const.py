@@ -27,6 +27,9 @@ DEVICE_TRACKER = "device_tracker"
 # PLATFORMS = [BINARY_SENSOR, SENSOR, SWITCH]
 PLATFORMS = [SENSOR, DEVICE_TRACKER]
 
+# Signal names we are using:
+SIGNAL_DEVICE_NEW = f"{DOMAIN}-device-new"
+
 DOCS = {}
 
 ADVERT_FRESHTIME = 2.5
@@ -38,6 +41,11 @@ ADVERT_FRESHTIME = 2.5
 HIST_KEEP_COUNT = (
     10  # How many old timestamps, rssi, etc to keep for each device/scanner pairing.
 )
+
+# Config entry DATA entries
+
+CONFDATA_SCANNERS = "scanners"
+DOCS[CONFDATA_SCANNERS] = "Persisted set of known scanners (proxies)"
 
 # Configuration and options
 

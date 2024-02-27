@@ -24,6 +24,7 @@ from homeassistant.components.bluetooth.active_update_coordinator import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_HOME
 from homeassistant.const import STATE_NOT_HOME
+from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import callback
 from homeassistant.core import Config
 from homeassistant.core import HomeAssistant
@@ -33,6 +34,7 @@ from homeassistant.helpers import area_registry
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import slugify
 from homeassistant.util.dt import get_age
@@ -44,6 +46,7 @@ from .const import CONF_DEVICES
 from .const import CONF_DEVTRACK_TIMEOUT
 from .const import CONF_MAX_RADIUS
 from .const import CONF_REF_POWER
+from .const import CONFDATA_SCANNERS
 from .const import DEFAULT_ATTENUATION
 from .const import DEFAULT_DEVTRACK_TIMEOUT
 from .const import DEFAULT_MAX_RADIUS
@@ -51,8 +54,8 @@ from .const import DEFAULT_REF_POWER
 from .const import DOMAIN
 from .const import HIST_KEEP_COUNT
 from .const import PLATFORMS
+from .const import SIGNAL_DEVICE_NEW
 from .const import STARTUP_MESSAGE
-from .entity import BermudaEntity
 
 # from bthome_ble import BTHomeBluetoothDeviceData
 
@@ -79,9 +82,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         hass.data.setdefault(DOMAIN, {})
         _LOGGER.info(STARTUP_MESSAGE)
 
-    # username = entry.data.get(CONF_USERNAME)
-    # password = entry.data.get(CONF_PASSWORD)
-
     coordinator = BermudaDataUpdateCoordinator(hass, entry)
     await coordinator.async_refresh()
 
@@ -91,11 +91,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     for platform in PLATFORMS:
-        if entry.options.get(platform, True):
-            coordinator.platforms.append(platform)
-            hass.async_add_job(
-                hass.config_entries.async_forward_entry_setup(entry, platform)
-            )
+        coordinator.platforms.append(platform)
+        hass.async_add_job(
+            hass.config_entries.async_forward_entry_setup(entry, platform)
+        )
 
     entry.add_update_listener(async_reload_entry)
     return True
@@ -345,12 +344,15 @@ class BermudaDevice(dict):
         self.area_distance: float = None  # how far this dev is from that area
         self.area_rssi: float = None  # rssi from closest scanner
         self.area_scanner: str = None  # name of closest scanner
-        self.zone: str = None  # STATE_HOME or STATE_NOT_HOME
+        self.zone: str = STATE_UNAVAILABLE  # STATE_HOME or STATE_NOT_HOME
         self.manufacturer: str = None
         self.connectable: bool = False
         self.is_scanner: bool = False
         self.entry_id: str = None  # used for scanner devices
         self.create_sensor: bool = False  # Create/update a sensor for this device
+        self.create_sensor_done: bool = (
+            False  # If we have requested the sensor be created
+        )
         self.last_seen: float = (
             0  # stamp from most recent scanner spotting. MONOTONIC_TIME
         )
@@ -435,18 +437,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         """Initialize."""
         # self.config_entry = entry
         self.platforms = []
-        self.devices: dict[str, BermudaDevice] = {}
-        self.created_entities: set[BermudaEntity] = set()
 
-        self.area_reg = area_registry.async_get(hass)
+        self.config_entry = entry
+        super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=SCAN_INTERVAL)
 
-        hass.services.async_register(
-            DOMAIN,
-            "dump_devices",
-            self.service_dump_devices,
-            vol.Schema({vol.Optional("addresses"): cv.string}),
-            SupportsResponse.ONLY,
-        )
+        # First time around we freshen the restored scanner info by
+        # forcing a scan of the captured info.
+        self._do_full_scanner_init = True
 
         self.options = {}
         if hasattr(entry, "options"):
@@ -464,11 +461,43 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 ):
                     self.options[key] = val
 
-        super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=SCAN_INTERVAL)
+        self.devices: dict[str, BermudaDevice] = {}
+
+        self.area_reg = area_registry.async_get(hass)
+
+        # Restore the scanners saved in config entry data. We maintain
+        # a list of known scanners so we can
+        # restore the sensor states even if we don't have a full set of
+        # scanner receipts in the discovery data.
+        self.scanner_list = []
+        if hasattr(entry, "data"):
+            for address, saved in entry.data.get(CONFDATA_SCANNERS, {}).items():
+                scanner = self._get_or_create_device(address)
+                for key, value in saved.items():
+                    setattr(scanner, key, value)
+                self.scanner_list.append(address)
+
+        hass.services.async_register(
+            DOMAIN,
+            "dump_devices",
+            self.service_dump_devices,
+            vol.Schema({vol.Optional("addresses"): cv.string}),
+            SupportsResponse.ONLY,
+        )
+
+    def sensor_created(self, address):
+        """Allows sensor platform to report back that sensors have been set up"""
+        dev = self._get_device(address)
+        if dev is not None:
+            dev.create_sensor_done = True
+        else:
+            _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
 
     def _get_device(self, address: str) -> BermudaDevice:
         """Search for a device entry based on mac address"""
         mac = format_mac(address)
+        # format_mac tries to return a lower-cased, colon-separated mac address.
+        # failing that, it returns the original unaltered.
         if mac in self.devices:
             return self.devices[mac]
         return None
@@ -478,7 +507,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         if device is None:
             mac = format_mac(address)
             self.devices[mac] = device = BermudaDevice(
-                address=address, options=self.options
+                address=mac, options=self.options
             )
             device.address = mac
             device.unique_id = mac
@@ -569,7 +598,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 if scanner_device is None:
                     # The receiver doesn't have a device entry yet, let's refresh
                     # all of them in this batch...
-                    self._refresh_scanners(matched_scanners)
+                    self._refresh_scanners(matched_scanners, self._do_full_scanner_init)
+                    self._do_full_scanner_init = False
                     scanner_device = self._get_device(discovered.scanner.source)
 
                 if scanner_device is None:
@@ -586,22 +616,50 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # Replace the scanner entry on the current device
                 device.add_scanner(scanner_device, discovered)
 
+            # Update whether the device has been seen recently, for device_tracker:
+            if (
+                MONOTONIC_TIME()
+                - self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT)
+                < device.last_seen
+            ):
+                device.zone = STATE_HOME
+            else:
+                device.zone = STATE_NOT_HOME
+
             if device.address.upper() in self.options.get(CONF_DEVICES, []):
                 # This is a device we track. Set it up:
 
                 device.create_sensor = True
-
-                # Update whether the device has been seen recently, for device_tracker:
-                if (
-                    MONOTONIC_TIME()
-                    - self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT)
-                    < device.last_seen
-                ):
-                    device.zone = STATE_HOME
-                else:
-                    device.zone = STATE_NOT_HOME
+                # FIXME: If a tracked device isn't present at start-up, the sensor
+                # entities don't get created (via the add_entries call in sensor.py etc)
+                # and we don't have a mechanism to trigger that later. What you see in
+                # the gui is a "restored" entity, marked as no longer being provided by
+                # the integration. I think *here* might be the place to fix that.
 
         self._refresh_areas_by_min_distance()
+
+        # We might need to freshen deliberately on first start this if no new scanners
+        # were discovered in the first scan update. This is likely if nothing has changed
+        # since the last time we booted.
+        if self._do_full_scanner_init:
+            self._refresh_scanners([], self._do_full_scanner_init)
+            self._do_full_scanner_init = False
+
+        # The devices are all updated now (and any new scanners seen have been added),
+        # so let's ensure any devices that we create sensors for are set up ready to go.
+        # We don't do this sooner because we need to ensure we have every active scanner
+        # already loaded up.
+        for address in self.options.get(CONF_DEVICES, []):
+            device = self._get_device(format_mac(address))
+            if device is not None:
+                if not device.create_sensor_done:
+                    _LOGGER.warning("Firing device_new for %s", device.name)
+                    # self.hass.async_run_job(
+                    async_dispatcher_send(
+                        self.hass, SIGNAL_DEVICE_NEW, device.address, self.scanner_list
+                    )
+                    # )
+                    # let the sensor platform do it intead: device.create_sensor_done = True
 
         # end of async update
 
@@ -682,12 +740,17 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             device.area_rssi = None
             device.area_scanner = None
 
-    def _refresh_scanners(self, scanners: list[BluetoothScannerDevice]):
-        """Refresh our local list of scanners (BLE Proxies)"""
+    def _refresh_scanners(
+        self, scanners: list[BluetoothScannerDevice], do_full_scan=False
+    ):
+        """Refresh our local (and saved) list of scanners (BLE Proxies)"""
         addresses = set()
+        update_scannerlist = False
+
         for scanner in scanners:
             addresses.add(scanner.scanner.source.upper())
-        if len(addresses) > 0:
+
+        if do_full_scan or len(addresses) > 0:
             # FIXME: Really? This can't possibly be a sensible nesting of loops.
             # should probably look at the API. Anyway, we are checking any devices
             # that have a "mac" or "bluetooth" connection,
@@ -695,15 +758,49 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 for dev_connection in dev_entry.connections:
                     if dev_connection[0] in ["mac", "bluetooth"]:
                         found_address = dev_connection[1].upper()
-                        if found_address in addresses:
-                            scandev = self._get_or_create_device(found_address)
+                        if do_full_scan or found_address in addresses:
+                            scandev = self._get_device(found_address)
+                            if scandev is None:
+                                # It's a new scanner, we will need to update our saved config.
+                                _LOGGER.warning("New Scanner: %s", found_address)
+                                update_scannerlist = True
+                                scandev = self._get_or_create_device(found_address)
+                            scandev_orig = scandev
                             scandev.area_id = dev_entry.area_id
                             scandev.entry_id = dev_entry.id
                             if dev_entry.name_by_user is not None:
                                 scandev.name = dev_entry.name_by_user
                             else:
                                 scandev.name = dev_entry.name
+                            areas = self.area_reg.async_get_area(dev_entry.area_id)
+                            if hasattr(areas, "name"):
+                                scandev.area_name = areas.name
+                            else:
+                                _LOGGER.warning(
+                                    "No area name for while updating scanner %s",
+                                    scandev.name,
+                                )
                             scandev.is_scanner = True
+                            if scandev_orig != scandev:
+                                # something changed, let's update the saved list.
+                                update_scannerlist = True
+        if update_scannerlist:
+            # We need to update our saved list of scanners in config data.
+            self.scanner_list = []
+            scanners: dict[str, str] = {}
+            for device in self.devices.values():
+                if device.is_scanner:
+                    scanners[device.address] = device.to_dict()
+                    self.scanner_list.append(device.address)
+            _LOGGER.warning(
+                "Replacing config data scanners was %s now %s",
+                self.config_entry.data.get(CONFDATA_SCANNERS, {}),
+                scanners,
+            )
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                data={**self.config_entry.data, CONFDATA_SCANNERS: scanners},
+            )
 
     async def service_dump_devices(self, call):  # pylint: disable=unused-argument;
         """Return a dump of beacon advertisements by receiver"""

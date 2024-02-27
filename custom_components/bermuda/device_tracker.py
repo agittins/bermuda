@@ -42,6 +42,12 @@ class BermudaDeviceTracker(BermudaEntity, BaseTrackerEntity):
     _attr_name = None
 
     @property
+    def unique_id(self):
+        """ "Uniquely identify this sensor so that it gets stored in the entity_registry,
+        and can be maintained / renamed etc by the user"""
+        return self._device.unique_id
+
+    @property
     def extra_state_attributes(self) -> Mapping[str, str]:
         """Return extra state attributes for this device."""
         return {"scanner": self._device.area_scanner, "area": self._device.area_name}
