@@ -7,4 +7,6 @@
 #    CONF_USERNAME,
 # )
 # MOCK_CONFIG = {CONF_USERNAME: "test_username", CONF_PASSWORD: "test_password"}
+from __future__ import annotations
+
 MOCK_CONFIG = {}

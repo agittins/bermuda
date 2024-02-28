@@ -1,4 +1,6 @@
 """Adds config flow for Bermuda BLE Trilateration."""
+from __future__ import annotations
+
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components import bluetooth

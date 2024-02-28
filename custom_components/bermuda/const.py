@@ -1,5 +1,7 @@
 """Constants for Bermuda BLE Trilateration."""
 # Base component constants
+from __future__ import annotations
+
 NAME = "Bermuda BLE Trilateration"
 DOMAIN = "bermuda"
 DOMAIN_DATA = f"{DOMAIN}_data"

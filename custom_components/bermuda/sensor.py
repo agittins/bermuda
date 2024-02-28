@@ -1,4 +1,6 @@
 """Sensor platform for Bermuda BLE Trilateration."""
+from __future__ import annotations
+
 from collections.abc import Mapping
 from typing import Any
 
@@ -6,8 +8,8 @@ from homeassistant import config_entries
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.components.sensor import SensorStateClass
 from homeassistant.const import UnitOfLength
-from homeassistant.core import callback
 from homeassistant.core import HomeAssistant
+from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 

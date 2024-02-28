@@ -13,10 +13,10 @@ from datetime import timedelta
 
 import voluptuous as vol
 from homeassistant.components import bluetooth
+from homeassistant.components.bluetooth import MONOTONIC_TIME
 from homeassistant.components.bluetooth import BluetoothChange
 from homeassistant.components.bluetooth import BluetoothScannerDevice
 from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
-from homeassistant.components.bluetooth import MONOTONIC_TIME
 from homeassistant.components.bluetooth.active_update_coordinator import (
     PassiveBluetoothDataUpdateCoordinator,
 )
@@ -24,10 +24,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_HOME
 from homeassistant.const import STATE_NOT_HOME
 from homeassistant.const import STATE_UNAVAILABLE
-from homeassistant.core import callback
 from homeassistant.core import Config
 from homeassistant.core import HomeAssistant
 from homeassistant.core import SupportsResponse
+from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import area_registry
 from homeassistant.helpers import config_validation as cv

@@ -1,25 +1,18 @@
 """Test Bermuda BLE Trilateration config flow."""
+from __future__ import annotations
+
 from unittest.mock import patch
 
 import pytest
-from custom_components.bermuda.const import (
-    BINARY_SENSOR,
-)
-from custom_components.bermuda.const import (
-    DOMAIN,
-)
-from custom_components.bermuda.const import (
-    PLATFORMS,
-)
-from custom_components.bermuda.const import (
-    SENSOR,
-)
-from custom_components.bermuda.const import (
-    SWITCH,
-)
 from homeassistant import config_entries
 from homeassistant import data_entry_flow
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.bermuda.const import BINARY_SENSOR
+from custom_components.bermuda.const import DOMAIN
+from custom_components.bermuda.const import PLATFORMS
+from custom_components.bermuda.const import SENSOR
+from custom_components.bermuda.const import SWITCH
 
 from .const import MOCK_CONFIG
 
