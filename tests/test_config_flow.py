@@ -1,4 +1,4 @@
-"""Test Bermuda BLE Trilateration config flow."""
+"""Test Bermuda BLE Trilateration config flow."""  # fmt: skip
 from unittest.mock import patch
 
 import pytest
