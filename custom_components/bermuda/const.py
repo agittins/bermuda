@@ -1,4 +1,4 @@
-"""Constants for Bermuda BLE Trilateration."""
+"""Constants for Bermuda BLE Trilateration."""  # fmt: skip
 # Base component constants
 NAME = "Bermuda BLE Trilateration"
 DOMAIN = "bermuda"
