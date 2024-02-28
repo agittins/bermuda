@@ -108,6 +108,7 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
 
         options = []
         for service_info in bluetooth.async_discovered_service_info(self.hass, False):
+            # Add each discovered MAC address to the options list for selecting
             devname = (
                 service_info.name
                 or service_info.advertisement.local_name
@@ -119,6 +120,30 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
                     "label": f"[{service_info.address}] {devname}",
                 }
             )
+
+            # If the device is advertising an iBeacon UUID, add that too
+            for (
+                company,
+                man_data,
+            ) in service_info.advertisement.manufacturer_data.items():
+                if (
+                    company == 0x004C  # company is 76 Apple Inc
+                    and man_data[:2] == b"\x02\x15"  # 0x0215:  # iBeacon packet
+                ):
+                    beacon_uuid = man_data[2:18].hex().upper()
+                    beacon_major = int.from_bytes(man_data[18:20], byteorder="big")
+                    beacon_minor = int.from_bytes(man_data[20:22], byteorder="big")
+
+                    # So, the irony of having major/minor is that the UniversallyUniqueIDentifier
+                    # is not even unique locally, so we need to make one :-)
+                    beacon_unique_id = f"{beacon_uuid}_{beacon_major}_{beacon_minor}"
+
+                    options.append(
+                        {
+                            "value": beacon_unique_id.upper(),
+                            "label": f"iBeacon: {beacon_unique_id}",
+                        }
+                    )
 
         for address in self.options.get(CONF_DEVICES, []):
             if not next(

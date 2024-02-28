@@ -32,16 +32,13 @@ async def async_setup_entry(
     """Setup sensor platform."""
     coordinator: BermudaDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    # We define a callback and attatch it to an (event?) listener,
-    # which the co-ordinator calls each time it finds
-    # a (new) device to track.
-    # FIXME: how do we seed the list of scanners, and ensure each device gets scanner
-    # range entities set up when that list changes?
-
     @callback
     def device_new(address: str, scanners: [str]) -> None:
         """Create entities for newly-found device
 
+        Called from the data co-ordinator when it finds a new device that needs
+        to have sensors created. Not called directly, but via the dispatch
+        facility from HA.
         Make sure you have a full list of scanners ready before calling this.
         """
         entities = []
@@ -56,6 +53,7 @@ async def async_setup_entry(
         async_add_devices(entities, False)
         coordinator.sensor_created(address)
 
+    # Connect device_new to a signal so the coordinator can call it
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, device_new))
 
 

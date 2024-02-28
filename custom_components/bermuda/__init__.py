@@ -41,6 +41,9 @@ from homeassistant.util.dt import get_age
 from homeassistant.util.dt import now
 
 from .const import ADVERT_FRESHTIME
+from .const import BEACON_IBEACON_DEVICE
+from .const import BEACON_IBEACON_SOURCE
+from .const import BEACON_NOT_A_BEACON
 from .const import CONF_ATTENUATION
 from .const import CONF_DEVICES
 from .const import CONF_DEVTRACK_TIMEOUT
@@ -364,6 +367,18 @@ class BermudaDevice(dict):
         self.manufacturer: str = None
         self.connectable: bool = False
         self.is_scanner: bool = False
+        self.beacon_type: bool = BEACON_NOT_A_BEACON
+        self.beacon_sources = (
+            []
+        )  # list of MAC addresses that have advertised this beacon
+        self.beacon_unique_id: str = (
+            None  # combined uuid_major_minor for *really* unique id
+        )
+        self.beacon_uuid: str = None
+        self.beacon_major: str = None
+        self.beacon_minor: str = None
+        self.beacon_power: float = None
+
         self.entry_id: str = None  # used for scanner devices
         self.create_sensor: bool = False  # Create/update a sensor for this device
         self.create_sensor_done: bool = (
@@ -510,8 +525,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             self.updaters[address] = pduc = BermudaPBDUCoordinator(
                 self.hass, _LOGGER, address, dev, self
             )
-            _LOGGER.debug("Registering PDUC for %s", dev.name)
-            self.config_entry.async_on_unload(pduc.async_start())
+            if self.config_entry is not None:
+                _LOGGER.debug("Registering PDUC for %s", dev.name)
+                self.config_entry.async_on_unload(pduc.async_start())
+            else:
+                _LOGGER.debug("Not launching PDUC because entry is not loaded yet")
         else:
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
 
@@ -569,21 +587,77 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         device.address,
                         man_data.hex(),
                     )
-                    device.prefname = man_data.hex()
                     if man_data[:2] == b"\x02\x15":  # 0x0215:  # iBeacon packet
-                        uuid = man_data[2:18].hex().upper()
-                        major = int.from_bytes(man_data[18:20], byteorder="big")
-                        minor = int.from_bytes(man_data[20:22], byteorder="big")
-                        power = int.from_bytes([man_data[22]], signed=True)
+                        # iBeacon / UUID Support
+
+                        # We provide simplistic support for iBeacons. The
+                        # initial/primary use-case is the companion app
+                        # for Android phones. We are working with these
+                        # assumptions to start with:
+                        # - UUID, Major and Minor are static
+                        # - MAC address may or may not be static
+                        # - We treat a given UUID/Major/Minor combination
+                        #   as being unique. If a device sends multiple
+                        #   ID's we treat it as *wanting* to be seen as multiple
+                        #   devices.
+
+                        # Internally, we still treat the MAC address as the primary
+                        # "entity", but if a beacon payload is attached, we
+                        # essentially create a duplicate BermudaDevice which uses
+                        # the UUID as its "address", and we copy the most recently
+                        # received device's details to it. This allows one to decide
+                        # to track the MAC address or the UUID.
+
+                        # Combining multiple Minor/Major's into one device isn't
+                        # supported at this stage, and I'd suggest doing that sort
+                        # of grouping at a higher level (eg using Groups in HA or
+                        # matching automations on attributes or a subset of
+                        # devices), but if there are prominent use-cases we can
+                        # alter our approach.
+                        #
+
+                        device.beacon_type = BEACON_IBEACON_SOURCE
+                        device.beacon_uuid = man_data[2:18].hex().lower()
+                        device.beacon_major = int.from_bytes(
+                            man_data[18:20], byteorder="big"
+                        )
+                        device.beacon_minor = int.from_bytes(
+                            man_data[20:22], byteorder="big"
+                        )
+                        device.beacon_power = int.from_bytes(
+                            [man_data[22]], signed=True
+                        )
+
+                        # So, the irony of having major/minor is that the
+                        # UniversallyUniqueIDentifier is not even unique
+                        # locally, so we need to make one :-)
+
+                        device.beacon_unique_id = f"{device.beacon_uuid}_{device.beacon_major}_{device.beacon_minor}"
+
+                        # Note: it's possible that a device sends multiple
+                        # beacons. We are only going to process the latest
+                        # one in any single update cycle, so we ignore that
+                        # possibility for now. Given we re-process completely
+                        # each cycle it should *just work*, for the most part.
+
                         _LOGGER.debug(
                             "Device %s is iBeacon with UUID %s %s %s %sdB",
                             device.address,
-                            uuid,
-                            major,
-                            minor,
-                            power,
+                            device.beacon_uuid,
+                            device.beacon_major,
+                            device.beacon_minor,
+                            device.beacon_power,
                         )
-                        # ce12cbeb2dbe448bb057c1fe9804b45f00640001c5
+
+                        # NOTE: The processing of the BEACON_IBEACON_DEVICE
+                        # meta-device is done later, after the rest of this
+                        # source device is set up.
+
+                        # expose the full id in prefname
+                        device.prefname = device.beacon_unique_id
+                    else:
+                        # apple but not an iBeacon, expose the data in case it's useful.
+                        device.prefname = man_data.hex()
                 else:
                     _LOGGER.debug(
                         "Found unknown manufacturer %d data: %s %s",
@@ -603,7 +677,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             device.connectable = service_info.connectable
 
             # Try to make a nice name for prefname.
-            # TODO: Add support for user-defined name.
             if device.prefname is None or device.prefname.startswith(DOMAIN + "_"):
                 device.prefname = (
                     device.name
@@ -649,14 +722,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 device.zone = STATE_NOT_HOME
 
             if device.address.upper() in self.options.get(CONF_DEVICES, []):
-                # This is a device we track. Set it up:
-
+                # This is a device we track. Flag it for set-up:
                 device.create_sensor = True
-                # FIXME: If a tracked device isn't present at start-up, the sensor
-                # entities don't get created (via the add_entries call in sensor.py etc)
-                # and we don't have a mechanism to trigger that later. What you see in
-                # the gui is a "restored" entity, marked as no longer being provided by
-                # the integration. I think *here* might be the place to fix that.
 
         self._refresh_areas_by_min_distance()
 
@@ -667,12 +734,17 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             self._refresh_scanners([], self._do_full_scanner_init)
             self._do_full_scanner_init = False
 
-        # The devices are all updated now (and any new scanners seen have been added),
+        # set up any beacons and update their data. We do this after all the devices
+        # have had their updates done since any beacon inherits data from its source
+        # device(s). We do this *before* sensor creation, though.
+        self.configure_beacons()
+
+        # The devices are all updated now (and any new scanners and beacons seen have been added),
         # so let's ensure any devices that we create sensors for are set up ready to go.
         # We don't do this sooner because we need to ensure we have every active scanner
         # already loaded up.
         for address in self.options.get(CONF_DEVICES, []):
-            device = self._get_device(format_mac(address))
+            device = self._get_device(format_mac(address.lower()))
             if device is not None:
                 if not device.create_sensor_done:
                     _LOGGER.debug("Firing device_new for %s", device.name)
@@ -680,10 +752,104 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     async_dispatcher_send(
                         self.hass, SIGNAL_DEVICE_NEW, device.address, self.scanner_list
                     )
-                    # )
-                    # let the sensor platform do it intead: device.create_sensor_done = True
 
         # end of async update
+
+    def configure_beacons(self):
+        """Create iBeacon and other meta-devices from the received advertisements
+
+        Note that at this point all the distances etc should be fresh for
+        the source devices, so we can just copy values from them to the beacon metadevice.
+        """
+
+        # First let's find the freshest device advert for each Beacon unique_id
+        freshest_beacon_sources: dict[str, BermudaDevice] = {}
+        for device in self.devices.values():
+            if device.beacon_type == BEACON_IBEACON_SOURCE:
+                if (
+                    device.beacon_unique_id not in freshest_beacon_sources  # first-find
+                    or device.last_seen
+                    > freshest_beacon_sources[
+                        device.beacon_unique_id
+                    ].last_seen  # fresher find
+                ):
+                    # then we are the freshest!
+                    freshest_beacon_sources[device.beacon_unique_id] = device
+
+        # Now let's go through the freshest adverts and set up those beacons.
+        for beacon_unique_id, device in freshest_beacon_sources.items():
+            # Copy this device's info to the meta-device for tracking the beacon
+
+            metadev = self._get_or_create_device(beacon_unique_id)
+            metadev.beacon_type = BEACON_IBEACON_DEVICE
+
+            # anything that isn't already set to something interesting, overwrite
+            # it with the new device's data.
+            # Defaults:
+            for attribute in [
+                # "create_sensor",  # don't copy this, we might track the device but not the beacon.
+                "local_name",  # name's we copy if there isn't one already.
+                "manufacturer",
+                "name",
+                "options",
+                "prefname",
+            ]:
+                if hasattr(metadev, attribute):
+                    if getattr(metadev, attribute) in [None, False]:
+                        setattr(metadev, attribute, getattr(device, attribute))
+                else:
+                    _LOGGER.error(
+                        "Devices don't have a '%s' attribute, this is a bug.", attribute
+                    )
+            # Anything that's VERY interesting, overwrite it regardless of what's already there:
+            # INTERESTING:
+            for attribute in [
+                "area_distance",
+                "area_id",
+                "area_name",
+                "area_rssi",
+                "area_scanner",
+                "beacon_major",
+                "beacon_minor",
+                "beacon_power",
+                "beacon_unique_id",
+                "beacon_uuid",
+                "connectable",
+                "zone",
+            ]:
+                if hasattr(metadev, attribute):
+                    setattr(metadev, attribute, getattr(device, attribute))
+                else:
+                    _LOGGER.error(
+                        "Devices don't have a '%s' attribute, this is a bug.", attribute
+                    )
+
+            # copy (well, link, I guess) the scanner data.
+            metadev.scanners = device.scanners
+
+            if device.last_seen > metadev.last_seen:
+                metadev.last_seen = device.last_seen
+            elif device.last_seen < metadev.last_seen:
+                _LOGGER.warning("Using freshest advert but it's still too old!")
+            # else there's no newer advert
+
+            if device.address not in metadev.beacon_sources:
+                # add this device as a known source
+                metadev.beacon_sources.insert(0, device.address)
+                # and trim the list of sources
+                del metadev.beacon_sources[HIST_KEEP_COUNT:]
+
+            # Check if we should set up sensors for this beacon
+            if metadev.address.upper() in self.options.get(CONF_DEVICES, []):
+                # This is a meta-device we track. Flag it for set-up:
+                metadev.create_sensor = True
+
+            # BEWARE: Currently we just copy the entire scanners dict from
+            # the freshest device's info. This means the history on the beacon device
+            # doesn't have scanner history etc from other devices, which might be
+            # relevant. If you need this, it's recommended to instead look up the
+            # metadev.beacon_sources list, and iterate through those to put together
+            # the history etc you need.
 
     def dt_mono_to_datetime(self, stamp) -> datetime:
         """Given a monotonic timestamp, convert to datetime object"""
