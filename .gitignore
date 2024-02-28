@@ -11,3 +11,5 @@ config/blueprint*
 config/.HA_VERSION
 config/configuration.yaml
 config/known_devices.yaml
+
+node_modules/.cache*

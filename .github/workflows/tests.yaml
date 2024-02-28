@@ -33,7 +33,7 @@ jobs:
 
       - name: Install Python modules
         run: |
-          pip install --constraint=.github/workflows/constraints.txt pre-commit black flake8 reorder-python-imports
+          pip install --constraint=.github/workflows/constraints.txt pre-commit black flake8 isort
 
       - name: Run pre-commit on all files
         run: |

@@ -1,4 +1,5 @@
 """Create device_tracker entities for Bermuda devices"""
+
 from __future__ import annotations
 
 import logging
