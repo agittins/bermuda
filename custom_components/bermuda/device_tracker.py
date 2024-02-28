@@ -1,4 +1,4 @@
-"""Create device_tracker entities for Bermuda devices"""  #fmt: skip
+"""Create device_tracker entities for Bermuda devices"""  # fmt: skip
 from __future__ import annotations
 
 import logging
