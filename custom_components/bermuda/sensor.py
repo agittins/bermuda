@@ -1,4 +1,4 @@
-"""Sensor platform for Bermuda BLE Trilateration."""  #fmt: skip
+"""Sensor platform for Bermuda BLE Trilateration."""  # fmt: skip
 from collections.abc import Mapping
 from typing import Any
 
