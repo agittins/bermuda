@@ -6,7 +6,8 @@ repos:
       - id: check-yaml
       - id: end-of-file-fixer
       - id: trailing-whitespace
-  - repo: local
+  - repo: https://github.com/psf/black
+    rev: 24.2.0
     hooks:
       - id: black
         name: black
@@ -14,6 +15,8 @@ repos:
         language: system
         types: [python]
         require_serial: true
+  - repo: local
+    hooks:
       - id: flake8
         name: flake8
         entry: flake8
@@ -25,6 +28,6 @@ repos:
     hooks:
       - id: isort
   - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.0.2
+    rev: v4.0.0-alpha.8
     hooks:
       - id: prettier

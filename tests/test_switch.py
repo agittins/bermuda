@@ -1,4 +1,5 @@
 """Test Bermuda BLE Trilateration switch."""
+
 from __future__ import annotations
 
 from unittest.mock import call

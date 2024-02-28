@@ -1,4 +1,5 @@
 """Sensor platform for Bermuda BLE Trilateration."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping

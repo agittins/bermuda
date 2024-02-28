@@ -1,4 +1,5 @@
 """Constants for Bermuda BLE Trilateration."""
+
 # Base component constants
 from __future__ import annotations
 
@@ -58,9 +59,9 @@ CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS = "max_area_radius", 20
 DOCS[CONF_MAX_RADIUS] = "For simple area-detection, max radius from receiver"
 
 CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT = "devtracker_nothome_timeout", 30
-DOCS[
-    CONF_DEVTRACK_TIMEOUT
-] = "Timeout in seconds for setting devices as `Not Home` / `Away`."
+DOCS[CONF_DEVTRACK_TIMEOUT] = (
+    "Timeout in seconds for setting devices as `Not Home` / `Away`."  # fmt: skip
+)
 
 CONF_ATTENUATION, DEFAULT_ATTENUATION = "attenuation", 3
 DOCS[CONF_ATTENUATION] = "Factor for environmental signal attenuation."

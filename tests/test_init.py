@@ -1,4 +1,5 @@
 """Test Bermuda BLE Trilateration setup process."""
+
 from __future__ import annotations
 
 import pytest

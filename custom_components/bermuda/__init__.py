@@ -4,6 +4,7 @@ Custom integration to integrate Bermuda BLE Trilateration with Home Assistant.
 For more details about this integration, please refer to
 https://github.com/agittins/bermuda
 """
+
 from __future__ import annotations
 
 import asyncio
