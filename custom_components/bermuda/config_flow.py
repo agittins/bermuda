@@ -1,4 +1,4 @@
-"""Adds config flow for Bermuda BLE Trilateration."""  #fmt: skip
+"""Adds config flow for Bermuda BLE Trilateration."""  # fmt: skip
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components import bluetooth
