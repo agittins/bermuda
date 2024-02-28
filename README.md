@@ -47,8 +47,11 @@
   out a bit and get a workable impression of where devices and scanners are in relation to each
   other. Math / Geometry geeks are very welcome to assist, I am well out of my depth here!
 
-- As yet it doesn't know how to handle rotating MAC addresses, hopefully it can integrate with
-  the new integration that does that.
+- As yet it doesn't know how to handle iPhones with their rotating MAC addresses, hopefully
+  we can integrate with [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/)
+  to solve that. We do now support iBeacon, so companion apps such as the one for Android
+  will now work, even with the rotating MAC-address. AFAIK the iOS companion app doesn't
+  support sending iBeacon, but you can likely find some other app that does.
 
 ## What you won't need (if this works for you)
 
@@ -56,6 +59,9 @@
   for selected BLE devices, which can be used for Person home/away sensing.
   This is the "Zone" element of homeassistant localisation, where "home" is
   one Zone, and "work" or other large geographic areas might be others.
+
+- You might not need the `iBeacon` integration if you prefer how Bermuda handles
+  beacons. See FAQ for more.
 
 ## How it Works
 
@@ -121,9 +127,36 @@ for any person/user.
 
 ## FAQ
 
+### Can I track my phone?
+
+- Probably! Bermuda now supports the iBeacon format, so if you can get your phone
+  to broadcast iBeacon packets, then yes. The Homeassistant comanion app for
+  Android does, so it works well. For iPhone/iOS you might need to find an app
+  that lets you send iBeacons. If you're concerned about privacy, you might wish
+  to find a way to have the app transmit beacons only when in/near your home.
+
+- Bermuda's iBeacon support is rather simplistic and opinionated, reflecting the
+  author somewhat.
+  - To create a sensor for iBeacons, choose them in the `Configure` dialog where
+    you can pick them from a drop-down, searchable list.
+  - You'll probably want to rename the device and sensors to something sensible.
+  - Bermuda considers every UUID/Major/Minor version to uniquely identify a given
+    iBeacon. That means the MAC address can change, or you can have multiple beacons
+    transmitting the same uuid/major/minor and they'll all be one single device.
+    (for the record the latter case is, IMO, silly).
+  - If your beacon sends multiple uuid's or changes it's major or minor version,
+    they will show up as different "devices" that you can create sensors for. This
+    might be good if you have one device that sends multiple IDs for some reason,
+    or terrible if you have a device that tries to pack information into the major
+    or minor fields. The latter device is, IMO, silly.
+  - If there are known beacons (in reasonable numbers) that do something I thought
+    was silly, I will consider adding support for them. I'd rather they don't exist
+    though, and I think the iBeacon integration suffers because of its trying to
+    support those cases.
+
 ### Why do my bluetooth devices have only the address and no name?
 
-- you need to tell your bluetooth proxies to send an inquiry in response to
+- you can tell your bluetooth proxies to send an inquiry in response to
   advertisements. In esphome, this is done by adding `active: true` to the
   `esp32_ble_tracker` section (this is separate from the active property of
   the `bluetooth_proxy` section, which controls outbound client connections).
@@ -140,7 +173,7 @@ for any person/user.
       active: True
   ```
 
-- Also, when you first restart homeassitant after loading the integration it may
+- Also, when you first restart homeassistant after loading the integration it may
   take a minute or so for the system to collect the names of the devices it sees.
 
 ### Isn't mmWave better?

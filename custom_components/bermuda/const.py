@@ -3,6 +3,8 @@
 # Base component constants
 from __future__ import annotations
 
+from typing import Final
+
 NAME = "Bermuda BLE Trilateration"
 DOMAIN = "bermuda"
 DOMAIN_DATA = f"{DOMAIN}_data"
@@ -32,6 +34,18 @@ PLATFORMS = [SENSOR, DEVICE_TRACKER]
 
 # Signal names we are using:
 SIGNAL_DEVICE_NEW = f"{DOMAIN}-device-new"
+
+# Beacon-handling constants. Source devices are tracked by MAC-address and are the
+# originators of beacon-like data. We then create a "meta-device" for the beacon's
+# uuid. Other non-static-mac protocols should use this method as well, by adding their
+# own BEACON_ types.
+BEACON_NOT_A_BEACON: Final = "not a beacon"  # This device is not any sort of beacon.
+BEACON_IBEACON_SOURCE: Final = (
+    "beacon source"  # The source-device sending a beacon packet (MAC-tracked)
+)
+BEACON_IBEACON_DEVICE: Final = (
+    "beacon device"  # The meta-device created to track the beacon
+)
 
 DOCS = {}
 
