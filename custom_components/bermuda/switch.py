@@ -1,4 +1,4 @@
-"""Switch platform for Bermuda BLE Trilateration."""
+"""Switch platform for Bermuda BLE Trilateration."""  #fmt: skip
 from homeassistant.components.switch import SwitchEntity
 
 from .const import DEFAULT_NAME
