@@ -1,4 +1,4 @@
-"""Global fixtures for Bermuda BLE Trilateration integration."""
+"""Global fixtures for Bermuda BLE Trilateration integration."""  # fmt: skip
 from unittest.mock import patch
 
 import pytest
