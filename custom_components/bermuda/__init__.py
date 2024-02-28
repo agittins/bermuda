@@ -10,7 +10,6 @@ import asyncio
 import logging
 from datetime import datetime
 from datetime import timedelta
-from typing import TYPE_CHECKING
 
 import voluptuous as vol
 from homeassistant.components import bluetooth
@@ -57,10 +56,12 @@ from .const import PLATFORMS
 from .const import SIGNAL_DEVICE_NEW
 from .const import STARTUP_MESSAGE
 
+# from typing import TYPE_CHECKING
+
 # from bthome_ble import BTHomeBluetoothDeviceData
 
-if TYPE_CHECKING:
-    from bleak.backends.device import BLEDevice
+# if TYPE_CHECKING:
+#     from bleak.backends.device import BLEDevice
 
 SCAN_INTERVAL = timedelta(seconds=5)
 
@@ -135,24 +136,34 @@ class BermudaPBDUCoordinator(
 
     Looks like this needs to be run through setup, with a specific
     BLEDevice (address) already specified, so won't do "all adverts"
+
+    We (plan to) use it to capture each monitored addresses' events so we can update more
+    frequently than UPDATE_INTERVAL, and respond in realtime.
+    The co-ordinator will create one of these for each device we create
+    sensors for, and this will just call the coordinator's update routine
+    whenever something changes.
+
+    WORK IN PROGRESS: this doesn't currently do anything.
     """
 
     def __init__(
         self,
         hass: HomeAssistant,
         logger: logging.Logger,
-        ble_device: BLEDevice,
+        address: str,
         device: BermudaDevice,
+        coordinator: BermudaDataUpdateCoordinator,
     ) -> None:
         """Init"""
         super().__init__(
             hass=hass,
             logger=logger,
-            address=ble_device.address,
-            mode=bluetooth.BluetoothScanningMode.ACTIVE,
+            address=address,
+            mode=bluetooth.BluetoothScanningMode.PASSIVE,
             connectable=False,
         )
         self.device = device
+        self.coordinator = coordinator
 
     @callback
     def _async_handle_unavailable(
@@ -164,6 +175,10 @@ class BermudaPBDUCoordinator(
     def _async_handle_bluetooth_event(
         self, service_info: BluetoothServiceInfoBleak, change: BluetoothChange
     ) -> None:
+        _LOGGER.warning(
+            "Update triggered by device %s (this is a good thing)", self.device.name
+        )
+        self.coordinator.async_refresh()
         return super()._async_handle_bluetooth_event(service_info, change)
 
 
@@ -462,6 +477,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     self.options[key] = val
 
         self.devices: dict[str, BermudaDevice] = {}
+        self.updaters: dict[str, BermudaPBDUCoordinator] = {}
 
         self.area_reg = area_registry.async_get(hass)
 
@@ -490,6 +506,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         dev = self._get_device(address)
         if dev is not None:
             dev.create_sensor_done = True
+            self.updaters[address] = pduc = BermudaPBDUCoordinator(
+                self.hass, _LOGGER, address, dev, self
+            )
+            _LOGGER.debug("Registering PDUC for %s", dev.name)
+            self.config_entry.async_on_unload(pduc.async_start())
         else:
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
 
