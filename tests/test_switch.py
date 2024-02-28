@@ -1,4 +1,4 @@
-"""Test Bermuda BLE Trilateration switch."""
+"""Test Bermuda BLE Trilateration switch."""  # fmt: skip
 from unittest.mock import call
 from unittest.mock import patch
 
