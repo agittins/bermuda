@@ -358,6 +358,7 @@ class BermudaDevice(dict):
         self.address: str = address
         self.options = options
         self.unique_id: str = None  # mac address formatted.
+        self.mac_is_random: bool = False
         self.area_id: str = None
         self.area_name: str = None
         self.area_distance: float = None  # how far this dev is from that area
@@ -568,6 +569,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             # Get/Create a device entry
             device = self._get_or_create_device(service_info.address)
+
+            # random mac addresses have 0b11000000 in the MSB. Endianness shenanigans
+            # ensue. I think if we & match on 0x0C in the first _byte_ of the address, that's
+            # what we want. I think. PR welcome!
+            device.mac_is_random = int(device.address[1:2], 16) & 0x0C == 0x0C
 
             # Check if it's broadcasting an Apple Inc manufacturing data (ID: 0x004C)
             for (
@@ -815,6 +821,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 "beacon_unique_id",
                 "beacon_uuid",
                 "connectable",
+                "mac_is_random",
                 "zone",
             ]:
                 if hasattr(metadev, attribute):
