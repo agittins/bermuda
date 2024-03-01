@@ -15,12 +15,7 @@ from datetime import timedelta
 import voluptuous as vol
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import MONOTONIC_TIME
-from homeassistant.components.bluetooth import BluetoothChange
 from homeassistant.components.bluetooth import BluetoothScannerDevice
-from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
-from homeassistant.components.bluetooth.active_update_coordinator import (
-    PassiveBluetoothDataUpdateCoordinator,
-)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_HOME
 from homeassistant.const import STATE_NOT_HOME
@@ -28,7 +23,6 @@ from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import Config
 from homeassistant.core import HomeAssistant
 from homeassistant.core import SupportsResponse
-from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import area_registry
 from homeassistant.helpers import config_validation as cv
@@ -67,7 +61,16 @@ from .const import STARTUP_MESSAGE
 # if TYPE_CHECKING:
 #     from bleak.backends.device import BLEDevice
 
-SCAN_INTERVAL = timedelta(seconds=5)
+# Our update takes around 0.002 seconds per loop (with a single proxy), because
+# we are only examining local data from the bluetooth integration.
+# We could instead act on received packets, but that would result
+# in us running an update at least every 250ms, probably less,
+# so probably better to poll which will keep load more consistent
+# and not be a function of how many adverts we get.
+# It does mean we need to be careful of how long our update loop
+# takes, and we should consider only doing costly things periodically,
+# or perhaps getting hass to schedule a job for them when required.
+SCAN_INTERVAL = timedelta(seconds=0.9)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -133,59 +136,6 @@ def rssi_to_metres(rssi, ref_power=None, attenuation=None):
     return distance
 
 
-class BermudaPBDUCoordinator(
-    PassiveBluetoothDataUpdateCoordinator,
-):
-    """Class for receiving bluetooth adverts in realtime
-
-    Looks like this needs to be run through setup, with a specific
-    BLEDevice (address) already specified, so won't do "all adverts"
-
-    We (plan to) use it to capture each monitored addresses' events so we can update more
-    frequently than UPDATE_INTERVAL, and respond in realtime.
-    The co-ordinator will create one of these for each device we create
-    sensors for, and this will just call the coordinator's update routine
-    whenever something changes.
-
-    WORK IN PROGRESS: this doesn't currently do anything.
-    """
-
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        logger: logging.Logger,
-        address: str,
-        device: BermudaDevice,
-        coordinator: BermudaDataUpdateCoordinator,
-    ) -> None:
-        """Init"""
-        super().__init__(
-            hass=hass,
-            logger=logger,
-            address=address,
-            mode=bluetooth.BluetoothScanningMode.PASSIVE,
-            connectable=False,
-        )
-        self.device = device
-        self.coordinator = coordinator
-
-    @callback
-    def _async_handle_unavailable(
-        self, service_info: BluetoothServiceInfoBleak
-    ) -> None:
-        return super()._async_handle_unavailable(service_info)
-
-    @callback
-    def _async_handle_bluetooth_event(
-        self, service_info: BluetoothServiceInfoBleak, change: BluetoothChange
-    ) -> None:
-        _LOGGER.warning(
-            "Update triggered by device %s (this is a good thing)", self.device.name
-        )
-        self.coordinator.async_refresh()
-        return super()._async_handle_bluetooth_event(service_info, change)
-
-
 class BermudaDeviceScanner(dict):
     """Represents details from a scanner relevant to a specific device
 
@@ -213,7 +163,7 @@ class BermudaDeviceScanner(dict):
         self.rssi: float = None
         self.hist_rssi = []
         self.hist_distance = []
-        self.hist_interval = []
+        self.hist_interval = []  # WARNING: This is actually "age of ad when we polled"
         self.stale_update_count = (
             0  # How many times we did an update but no new stamps were found.
         )
@@ -229,6 +179,12 @@ class BermudaDeviceScanner(dict):
         area_id: str,
         options,
     ):
+        """Update gets called every time we see a new packet or
+        every time we do a polled update.
+
+        This method needs to update all the history and tracking data for this
+        device+scanner combination.
+        """
         # We over-write pretty much everything, except our locally-preserved stats.
         #
         # In case the scanner has changed it's details since startup though:
@@ -280,8 +236,8 @@ class BermudaDeviceScanner(dict):
                 have_new_stamp = False
 
         if len(self.hist_stamp) == 0 or have_new_stamp:
-            # We load anything the first time 'round, but from then on
-            # we are more cautious.
+            # this is the first entry or a new one...
+
             self.rssi: float = scandata.advertisement.rssi
             self.hist_rssi.insert(0, self.rssi)
             self.rssi_distance: float = rssi_to_metres(
@@ -290,9 +246,15 @@ class BermudaDeviceScanner(dict):
                 options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
             )
             self.hist_distance.insert(0, self.rssi_distance)
-            self.hist_interval.insert(0, new_stamp - self.stamp)
+
             # Stamp will be faked from above if required.
             if have_new_stamp:
+                # Note: this is not actually the interval between adverts,
+                # but rather a function of our UPDATE_INTERVAL plus the packet
+                # interval. The bluetooth integration does not currently store
+                # interval data, only stamps of the most recent packet.
+                self.hist_interval.insert(0, new_stamp - self.stamp)
+
                 self.stamp = new_stamp
                 self.hist_stamp.insert(0, self.stamp)
 
@@ -358,6 +320,7 @@ class BermudaDevice(dict):
         self.address: str = address
         self.options = options
         self.unique_id: str = None  # mac address formatted.
+        self.mac_is_random: bool = False
         self.area_id: str = None
         self.area_name: str = None
         self.area_distance: float = None  # how far this dev is from that area
@@ -392,7 +355,12 @@ class BermudaDevice(dict):
     def add_scanner(
         self, scanner_device: BermudaDevice, discoveryinfo: BluetoothScannerDevice
     ):
-        """Add/Replace a scanner entry on this device, indicating a received advertisement"""
+        """Add/Replace a scanner entry on this device, indicating a received advertisement
+
+        This gets called every time a scanner is deemed to have received an advert for
+        this device.
+
+        """
         if format_mac(scanner_device.address) in self.scanners:
             # Device already exists, update it
             self.scanners[format_mac(scanner_device.address)].update(
@@ -493,7 +461,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     self.options[key] = val
 
         self.devices: dict[str, BermudaDevice] = {}
-        self.updaters: dict[str, BermudaPBDUCoordinator] = {}
+        # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
 
         self.area_reg = area_registry.async_get(hass)
 
@@ -522,14 +490,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         dev = self._get_device(address)
         if dev is not None:
             dev.create_sensor_done = True
-            self.updaters[address] = pduc = BermudaPBDUCoordinator(
-                self.hass, _LOGGER, address, dev, self
-            )
-            if self.config_entry is not None:
-                _LOGGER.debug("Registering PDUC for %s", dev.name)
-                self.config_entry.async_on_unload(pduc.async_start())
-            else:
-                _LOGGER.debug("Not launching PDUC because entry is not loaded yet")
         else:
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
 
@@ -569,24 +529,26 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # Get/Create a device entry
             device = self._get_or_create_device(service_info.address)
 
+            # random mac addresses have 0b11000000 in the MSB. Endianness shenanigans
+            # ensue. I think if we & match on 0x0C in the first _byte_ of the address, that's
+            # what we want. I think. PR welcome!
+            device.mac_is_random = int(device.address[1:2], 16) & 0x0C == 0x0C
+
             # Check if it's broadcasting an Apple Inc manufacturing data (ID: 0x004C)
             for (
                 company_code,
                 man_data,
-            ) in (
-                service_info.advertisement.manufacturer_data.items()
-            ):  # .get(0x004C, None)
-                if company_code == 0x00E0:  # 224 Google
-                    _LOGGER.debug(
-                        "Found Google Device: %s %s", device.address, man_data.hex()
-                    )
-                #
-                elif company_code == 0x004C:  # 76 Apple Inc
-                    _LOGGER.debug(
-                        "Found Apple Manufacturer data: %s %s",
-                        device.address,
-                        man_data.hex(),
-                    )
+            ) in service_info.advertisement.manufacturer_data.items():
+                # if company_code == 0x00E0:  # 224 Google
+                #     _LOGGER.debug(
+                #         "Found Google Device: %s %s", device.address, man_data.hex()
+                #     )
+                if company_code == 0x004C:  # 76 Apple Inc
+                    # _LOGGER.debug(
+                    #     "Found Apple Manufacturer data: %s %s",
+                    #     device.address,
+                    #     man_data.hex(),
+                    # )
                     if man_data[:2] == b"\x02\x15":  # 0x0215:  # iBeacon packet
                         # iBeacon / UUID Support
 
@@ -640,14 +602,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         # possibility for now. Given we re-process completely
                         # each cycle it should *just work*, for the most part.
 
-                        _LOGGER.debug(
-                            "Device %s is iBeacon with UUID %s %s %s %sdB",
-                            device.address,
-                            device.beacon_uuid,
-                            device.beacon_major,
-                            device.beacon_minor,
-                            device.beacon_power,
-                        )
+                        # _LOGGER.debug(
+                        #     "Device %s is iBeacon with UUID %s %s %s %sdB",
+                        #     device.address,
+                        #     device.beacon_uuid,
+                        #     device.beacon_major,
+                        #     device.beacon_minor,
+                        #     device.beacon_power,
+                        # )
 
                         # NOTE: The processing of the BEACON_IBEACON_DEVICE
                         # meta-device is done later, after the rest of this
@@ -658,13 +620,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     else:
                         # apple but not an iBeacon, expose the data in case it's useful.
                         device.prefname = man_data.hex()
-                else:
-                    _LOGGER.debug(
-                        "Found unknown manufacturer %d data: %s %s",
-                        company_code,
-                        device.address,
-                        man_data.hex(),
-                    )
+                # else:
+                #     _LOGGER.debug(
+                #         "Found unknown manufacturer %d data: %s %s",
+                #         company_code,
+                #         device.address,
+                #         man_data.hex(),
+                #     )
 
             # We probably don't need to do all of this every time, but we
             # want to catch any changes, eg when the system learns the local
@@ -815,6 +777,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 "beacon_unique_id",
                 "beacon_uuid",
                 "connectable",
+                "mac_is_random",
                 "zone",
             ]:
                 if hasattr(metadev, attribute):
