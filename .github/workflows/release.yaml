@@ -43,6 +43,6 @@ jobs:
           inputs: "${{ env.BERMUDA_ROOT_DIR }}/bermuda.zip"
 
       - name: "Upload the ZIP file to the release"
-        uses: softprops/action-gh-release@v0.1.15
+        uses: softprops/action-gh-release@v2.0.2
         with:
           files: ${{ env.BERMUDA_ROOT_DIR }}/bermuda.zip
