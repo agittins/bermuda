@@ -117,7 +117,7 @@ class BermudaSensor(BermudaEntity):
         current_mac = self._device.address
         if self._device.beacon_type == BEACON_IBEACON_DEVICE:
             if len(self._device.beacon_sources) > 0:
-                current_mac = self._device.beacon_sources
+                current_mac = self._device.beacon_sources[0]
             else:
                 current_mac = STATE_UNAVAILABLE
         return {
