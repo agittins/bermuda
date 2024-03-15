@@ -34,7 +34,6 @@ from homeassistant.util import slugify
 from homeassistant.util.dt import get_age
 from homeassistant.util.dt import now
 
-from .const import ADVERT_FRESHTIME
 from .const import BEACON_IBEACON_DEVICE
 from .const import BEACON_IBEACON_SOURCE
 from .const import BEACON_NOT_A_BEACON
@@ -43,12 +42,14 @@ from .const import CONF_DEVICES
 from .const import CONF_DEVTRACK_TIMEOUT
 from .const import CONF_MAX_RADIUS
 from .const import CONF_REF_POWER
+from .const import CONF_SMOOTHING_SAMPLES
 from .const import CONF_UPDATE_INTERVAL
 from .const import CONFDATA_SCANNERS
 from .const import DEFAULT_ATTENUATION
 from .const import DEFAULT_DEVTRACK_TIMEOUT
 from .const import DEFAULT_MAX_RADIUS
 from .const import DEFAULT_REF_POWER
+from .const import DEFAULT_SMOOTHING_SAMPLES
 from .const import DEFAULT_UPDATE_INTERVAL
 from .const import DOMAIN
 from .const import HIST_KEEP_COUNT
@@ -154,11 +155,17 @@ class BermudaDeviceScanner(dict):
         self.rssi: float = None
         self.hist_rssi = []
         self.hist_distance = []
+        self.hist_distance_by_interval = []  # updated per-interval
+        self.smoothing_sample_count: int = options.get(
+            CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES
+        )
         self.hist_interval = []  # WARNING: This is actually "age of ad when we polled"
         self.stale_update_count = (
             0  # How many times we did an update but no new stamps were found.
         )
         self.tx_power: float = None
+        self.rssi_distance: float = None
+        self.rssi_distance_raw: float = None
 
         # Just pass the rest on to update...
         self.update(device_address, scandata, area_id, options)
@@ -211,18 +218,20 @@ class BermudaDeviceScanner(dict):
                 have_new_stamp = False
         else:
             # Not a bluetooth_proxy device / remote scanner, but probably a USB Bluetooth adaptor.
-            # We don't get advertisement timestamps from bluez, so currently there's no way to
-            # reliably include it in our calculations.
+            # We don't get advertisement timestamps from bluez, so the stamps in our history
+            # won't be terribly accurate, and the advert might actually be rather old.
+            # All we can do is check if it has changed and assume it's fresh from that.
 
             scanner_sends_stamps = False
-            # But if the rssi has changed from last time, consider it "new"
+            # If the rssi has changed from last time, consider it "new"
             if self.rssi != scandata.advertisement.rssi:
-                # Since rssi has changed, we'll consider this "new", but
-                # since it could be pretty much any age, make it a multiple
-                # of freshtime. This means it can still be useful for home/away
-                # detection in device_tracker, but won't factor in to area localisation.
                 have_new_stamp = True
-                new_stamp = MONOTONIC_TIME() - (ADVERT_FRESHTIME * 4)
+                # 2024-03-16: We're going to treat it as fresh for now and see how that goes.
+                # We can do that because we smooth distances now every update_interval, regardless
+                # of when the last advertisement was received, so we shouldn't see bluez trumping
+                # proxies with stale adverts. Hopefully.
+                # new_stamp = MONOTONIC_TIME() - (ADVERT_FRESHTIME * 4)
+                new_stamp = MONOTONIC_TIME()
             else:
                 have_new_stamp = False
 
@@ -231,12 +240,12 @@ class BermudaDeviceScanner(dict):
 
             self.rssi: float = scandata.advertisement.rssi
             self.hist_rssi.insert(0, self.rssi)
-            self.rssi_distance: float = rssi_to_metres(
+            self.rssi_distance_raw: float = rssi_to_metres(
                 self.rssi,
                 options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
                 options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
             )
-            self.hist_distance.insert(0, self.rssi_distance)
+            self.hist_distance.insert(0, self.rssi_distance_raw)
 
             # Stamp will be faked from above if required.
             if have_new_stamp:
@@ -270,6 +279,54 @@ class BermudaDeviceScanner(dict):
         self.adverts: dict[str, bytes] = scandata.advertisement.service_data.items()
         self.scanner_sends_stamps = scanner_sends_stamps
         self.options = options
+        self.smoothing_sample_count = options.get(
+            CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES
+        )
+
+        # ###### Filter and update distance estimates.
+        #
+        # Note: Noise in RSSI readings is VERY asymmetric. Ultimately,
+        # a closer distance is *always* more accurate than a previous
+        # more distant measurement. Any measurement might be true,
+        # or it is likely longer than the truth - and (almost) never
+        # shorter.
+        #
+        # For a new, long measurement to be true, we'd want to see some
+        # indication of rising measurements preceding it, or at least a
+        # long time since our last measurement.
+        #
+        # Also, a lack of recent measurements should be considered a likely
+        # increase in distance, but could also simply be total signal loss
+        # for non-distance related reasons (occlusion).
+        #
+        if self.rssi_distance is None:
+            self.rssi_distance = self.rssi_distance_raw
+        else:
+            # Add the current reading (whether new or old) to
+            # a historical log that is evenly spaced by update_interval
+            self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
+            del self.hist_distance_by_interval[self.smoothing_sample_count :]
+            dist_total = 0
+            dist_count = 0
+            local_min = self.rssi_distance_raw
+            for i, distance in enumerate(self.hist_distance_by_interval):
+                if distance <= local_min:
+                    dist_total += distance
+                    local_min = distance
+                else:
+                    dist_total += local_min
+                dist_count += 1
+
+            if dist_count > 0:
+                movavg = dist_total / dist_count
+            else:
+                movavg = local_min
+
+            # The average is only helpful if it's lower than the actual reading.
+            if movavg < self.rssi_distance_raw:
+                self.rssi_distance = movavg
+            else:
+                self.rssi_distance = self.rssi_distance_raw
 
         # Trim our history lists
         for histlist in (
@@ -452,6 +509,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     CONF_DEVTRACK_TIMEOUT,
                     CONF_MAX_RADIUS,
                     CONF_REF_POWER,
+                    CONF_SMOOTHING_SAMPLES,
                 ):
                     self.options[key] = val
 
@@ -600,7 +658,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         # locally, so we need to make one :-)
 
                         device.beacon_unique_id = f"{device.beacon_uuid}_{device.beacon_major}_{device.beacon_minor}"
-
                         # Note: it's possible that a device sends multiple
                         # beacons. We are only going to process the latest
                         # one in any single update cycle, so we ignore that
@@ -852,20 +909,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     if scanner.stamp > 0:
                         closest_scanner = scanner
                 else:
-                    # is it fresh enough to win on proximity alone?
-                    is_fresh_enough = (
-                        scanner.stamp > closest_scanner.stamp - ADVERT_FRESHTIME
-                    )
-                    # is it so much fresher that it wins outright?
-                    is_fresher = (
-                        scanner.stamp > closest_scanner.stamp + ADVERT_FRESHTIME
-                    )
-                    # is it closer?
-                    is_closer = scanner.rssi_distance < closest_scanner.rssi_distance
-
-                    if is_fresher or (
-                        is_closer and is_fresh_enough
-                    ):  # This scanner is closer, and the advert is still fresh in comparison..
+                    # Now that we are filtering the distance sensor, just rely on it
+                    # regardless of "freshness"
+                    if scanner.rssi_distance < closest_scanner.rssi_distance:
                         closest_scanner = scanner
 
         if closest_scanner is not None:

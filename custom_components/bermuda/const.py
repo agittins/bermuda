@@ -49,11 +49,6 @@ BEACON_IBEACON_DEVICE: Final = (
 
 DOCS = {}
 
-ADVERT_FRESHTIME = 2.5
-# If two scanners are battling to "win" a device, the winner can not be more than
-# this many seconds older than its opponent. Prevents a stale but very close
-# advert from overriding a newer advertisement from a less-close scanner.
-
 
 HIST_KEEP_COUNT = (
     10  # How many old timestamps, rssi, etc to keep for each device/scanner pairing.
@@ -84,6 +79,12 @@ DOCS[CONF_REF_POWER] = "Default RSSI for signal at 1 metre."
 
 CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL = "update_interval", 1.0
 DOCS[CONF_UPDATE_INTERVAL] = "How often to update bluetooth stats, in seconds"
+
+CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES = "smoothing_samples", 20
+DOCS[CONF_SMOOTHING_SAMPLES] = (
+    "How many samples to average distance smoothing. Bigger numbers"
+    " make for slower distance increases. 10 or 20 seems good."
+)
 
 # Defaults
 DEFAULT_NAME = DOMAIN

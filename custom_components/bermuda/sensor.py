@@ -9,6 +9,7 @@ from typing import Any
 from homeassistant import config_entries
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.components.sensor import SensorStateClass
+from homeassistant.const import SIGNAL_STRENGTH_DECIBELS_MILLIWATT
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.const import UnitOfLength
 from homeassistant.core import HomeAssistant
@@ -52,9 +53,15 @@ async def async_setup_entry(
             entities = []
             entities.append(BermudaSensor(coordinator, entry, address))
             entities.append(BermudaSensorRange(coordinator, entry, address))
+            entities.append(BermudaSensorScanner(coordinator, entry, address))
+            entities.append(BermudaSensorRssi(coordinator, entry, address))
+
             for scanner in scanners:
                 entities.append(
                     BermudaSensorScannerRange(coordinator, entry, address, scanner)
+                )
+                entities.append(
+                    BermudaSensorScannerRangeRaw(coordinator, entry, address, scanner)
                 )
             _LOGGER.debug("Sensor received new_device signal for %s", address)
             # We set update before add to False because we are being
@@ -101,6 +108,14 @@ class BermudaSensor(BermudaEntity):
         # return self.coordinator.data.get("body")
         return self._device.area_name
 
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        """Declare if entity should be automatically enabled on adding"""
+        if self.name in ["Area", "Distance"]:
+            return True
+        else:
+            return False
+
     # @property
     # def icon(self):
     #    """Return the icon of the sensor."""
@@ -120,22 +135,67 @@ class BermudaSensor(BermudaEntity):
                 current_mac = self._device.beacon_sources[0]
             else:
                 current_mac = STATE_UNAVAILABLE
-        return {
-            "last_seen": self.coordinator.dt_mono_to_datetime(self._device.last_seen),
-            "area_id": self._device.area_id,
-            "area_name": self._device.area_name,
-            "area_distance": self._device.area_distance,
-            "area_rssi": self._device.area_rssi,
-            "area_scanner": self._device.area_scanner,
-            "current_mac": current_mac,
-        }
+
+        # Limit how many attributes we list - prefer new sensors instead
+        # since oft-changing attribs cause more db writes than sensors
+        # "last_seen": self.coordinator.dt_mono_to_datetime(self._device.last_seen),
+        attribs = {}
+        if self.name in ["Area"]:
+            attribs["area_id"] = self._device.area_id
+            attribs["area_name"] = self._device.area_name
+        attribs["current_mac"] = current_mac
+
+        return attribs
+
+
+class BermudaSensorScanner(BermudaSensor):
+    """Sensor for name of nearest detected scanner"""
+
+    @property
+    def unique_id(self):
+        return self._device.unique_id + "_scanner"
+
+    @property
+    def name(self):
+        return "Nearest Scanner"
+
+    @property
+    def state(self):
+        return self._device.area_scanner
+
+
+class BermudaSensorRssi(BermudaSensor):
+    """Sensor for RSSI of closest scanner"""
+
+    @property
+    def unique_id(self):
+        """Return unique id for the entity"""
+        return self._device.unique_id + "_rssi"
+
+    @property
+    def name(self):
+        return "Nearest RSSI"
+
+    @property
+    def state(self):
+        return self._device.area_rssi
+
+    @property
+    def device_class(self):
+        return SensorDeviceClass.SIGNAL_STRENGTH
+
+    @property
+    def native_unit_of_measurement(self):
+        return SIGNAL_STRENGTH_DECIBELS_MILLIWATT
+
+    @property
+    def state_class(self):
+        """These are graphable measurements"""
+        return SensorStateClass.MEASUREMENT
 
 
 class BermudaSensorRange(BermudaSensor):
-    """Extra sensor for range-to-closest-area
-
-    Note it extends the other sensor, so we only need to set unique_id, name and value
-    """
+    """Extra sensor for range-to-closest-area"""
 
     @property
     def unique_id(self):
@@ -235,12 +295,44 @@ class BermudaSensorScannerRange(BermudaSensorRange):
         devscanner = self._device.scanners.get(self._scanner.address, {})
         if hasattr(devscanner, "source"):
             return {
-                "last_seen": self.coordinator.dt_mono_to_datetime(devscanner.stamp),
                 "area_id": self._scanner.area_id,
                 "area_name": self._scanner.area_name,
-                "area_rssi": devscanner.rssi,
                 "area_scanner_mac": self._scanner.address,
                 "area_scanner_name": self._scanner.name,
             }
         else:
             return None
+
+
+class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
+    """Provides un-filtered latest distances per-scanner"""
+
+    @property
+    def unique_id(self):
+        return self._device.unique_id + "_" + self._scanner.address + "_range_raw"
+
+    @property
+    def name(self):
+        return "Unfiltered Distance to " + self._scanner.name
+
+    # @property
+    # def native_value(self):
+    #     """Expose distance to given scanner.
+
+    #     Don't break if that scanner's never heard of us!"""
+    #     devscanner = self._device.scanners.get(self._scanner.address, {})
+    #     distance = getattr(devscanner, "rssi_distance_raw", None)
+    #     if distance is not None:
+    #         return round(distance, 3)
+    #     return None
+
+    @property
+    def state(self):
+        """Expose distance to given scanner.
+
+        Don't break if that scanner's never heard of us!"""
+        devscanner = self._device.scanners.get(self._scanner.address, {})
+        distance = getattr(devscanner, "rssi_distance_raw", None)
+        if distance is not None:
+            return round(distance, 3)
+        return None

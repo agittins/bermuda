@@ -69,7 +69,6 @@ class BermudaEntity(CoordinatorEntity):
             "identifiers": {(DOMAIN, self._device.unique_id)},
             "connections": connection,
             "name": self._device.prefname,
-            # TODO: Could use this to indicate tracker type (IRK, iBeacon etc).
         }
 
     @property
