@@ -8,6 +8,7 @@ from typing import Any
 from homeassistant import config_entries
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.components.sensor import SensorStateClass
+from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.const import UnitOfLength
 from homeassistant.core import HomeAssistant
 from homeassistant.core import callback
@@ -15,6 +16,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BermudaDataUpdateCoordinator
+from .const import BEACON_IBEACON_DEVICE
 from .const import DOMAIN
 from .const import SIGNAL_DEVICE_NEW
 from .entity import BermudaEntity
@@ -96,6 +98,12 @@ class BermudaSensor(BermudaEntity):
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
+        current_mac = self._device.address
+        if self._device.beacon_type == BEACON_IBEACON_DEVICE:
+            if len(self._device.beacon_sources) > 0:
+                current_mac = self._device.beacon_sources
+            else:
+                current_mac = STATE_UNAVAILABLE
         return {
             "last_seen": self.coordinator.dt_mono_to_datetime(self._device.last_seen),
             "area_id": self._device.area_id,
@@ -103,6 +111,7 @@ class BermudaSensor(BermudaEntity):
             "area_distance": self._device.area_distance,
             "area_rssi": self._device.area_rssi,
             "area_scanner": self._device.area_scanner,
+            "current_mac": current_mac,
         }
 
 
