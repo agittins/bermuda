@@ -43,11 +43,13 @@ from .const import CONF_DEVICES
 from .const import CONF_DEVTRACK_TIMEOUT
 from .const import CONF_MAX_RADIUS
 from .const import CONF_REF_POWER
+from .const import CONF_UPDATE_INTERVAL
 from .const import CONFDATA_SCANNERS
 from .const import DEFAULT_ATTENUATION
 from .const import DEFAULT_DEVTRACK_TIMEOUT
 from .const import DEFAULT_MAX_RADIUS
 from .const import DEFAULT_REF_POWER
+from .const import DEFAULT_UPDATE_INTERVAL
 from .const import DOMAIN
 from .const import HIST_KEEP_COUNT
 from .const import PLATFORMS
@@ -60,17 +62,6 @@ from .const import STARTUP_MESSAGE
 
 # if TYPE_CHECKING:
 #     from bleak.backends.device import BLEDevice
-
-# Our update takes around 0.002 seconds per loop (with a single proxy), because
-# we are only examining local data from the bluetooth integration.
-# We could instead act on received packets, but that would result
-# in us running an update at least every 250ms, probably less,
-# so probably better to poll which will keep load more consistent
-# and not be a function of how many adverts we get.
-# It does mean we need to be careful of how long our update loop
-# takes, and we should consider only doing costly things periodically,
-# or perhaps getting hass to schedule a job for them when required.
-SCAN_INTERVAL = timedelta(seconds=0.9)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -438,7 +429,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.platforms = []
 
         self.config_entry = entry
-        super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=SCAN_INTERVAL)
+
+        interval = entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+
+        super().__init__(
+            hass, _LOGGER, name=DOMAIN, update_interval=timedelta(seconds=interval)
+        )
 
         # First time around we freshen the restored scanner info by
         # forcing a scan of the captured info.

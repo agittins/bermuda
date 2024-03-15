@@ -82,6 +82,9 @@ DOCS[CONF_ATTENUATION] = "Factor for environmental signal attenuation."
 CONF_REF_POWER, DEFAULT_REF_POWER = "ref_power", -55.0
 DOCS[CONF_REF_POWER] = "Default RSSI for signal at 1 metre."
 
+CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL = "update_interval", 1.0
+DOCS[CONF_UPDATE_INTERVAL] = "How often to update bluetooth stats, in seconds"
+
 # Defaults
 DEFAULT_NAME = DOMAIN
 
