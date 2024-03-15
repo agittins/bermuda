@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from homeassistant.core import callback
 from homeassistant.helpers import area_registry
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -32,6 +33,14 @@ class BermudaEntity(CoordinatorEntity):
         self.config_entry = config_entry
         self._device = coordinator.devices[address]
         self.area_reg = area_registry.async_get(coordinator.hass)
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the co-ordinator
+
+        (we don't need to implement this, but if we want to do anything special we can)
+        """
+        self.async_write_ha_state()
 
     @property
     def unique_id(self):

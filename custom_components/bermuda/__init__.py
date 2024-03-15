@@ -335,9 +335,8 @@ class BermudaDevice(dict):
 
         self.entry_id: str = None  # used for scanner devices
         self.create_sensor: bool = False  # Create/update a sensor for this device
-        self.create_sensor_done: bool = (
-            False  # If we have requested the sensor be created
-        )
+        self.create_sensor_done: bool = False  # Sensor should now exist
+        self.create_tracker_done: bool = False  # device_tracker should now exist
         self.last_seen: float = (
             0  # stamp from most recent scanner spotting. MONOTONIC_TIME
         )
@@ -486,6 +485,16 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         dev = self._get_device(address)
         if dev is not None:
             dev.create_sensor_done = True
+            _LOGGER.debug("Sensor confirmed created for %s", address)
+        else:
+            _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
+
+    def device_tracker_created(self, address):
+        """Allows device_tracker platform to report back that sensors have been set up"""
+        dev = self._get_device(address)
+        if dev is not None:
+            dev.create_tracker_done = True
+            _LOGGER.debug("Device_tracker confirmed created for %s", address)
         else:
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
 
@@ -704,9 +713,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         for address in self.options.get(CONF_DEVICES, []):
             device = self._get_device(format_mac(address.lower()))
             if device is not None:
-                if not device.create_sensor_done:
-                    _LOGGER.debug("Firing device_new for %s", device.name)
-                    # self.hass.async_run_job(
+                if not device.create_sensor_done or not device.create_tracker_done:
+                    _LOGGER.debug(
+                        "Firing device_new for %s (%s)", device.name, device.address
+                    )
                     async_dispatcher_send(
                         self.hass, SIGNAL_DEVICE_NEW, device.address, self.scanner_list
                     )
