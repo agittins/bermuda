@@ -15,10 +15,14 @@ from .const import CONF_DEVICES
 from .const import CONF_DEVTRACK_TIMEOUT
 from .const import CONF_MAX_RADIUS
 from .const import CONF_REF_POWER
+from .const import CONF_SMOOTHING_SAMPLES
+from .const import CONF_UPDATE_INTERVAL
 from .const import DEFAULT_ATTENUATION
 from .const import DEFAULT_DEVTRACK_TIMEOUT
 from .const import DEFAULT_MAX_RADIUS
 from .const import DEFAULT_REF_POWER
+from .const import DEFAULT_SMOOTHING_SAMPLES
+from .const import DEFAULT_UPDATE_INTERVAL
 from .const import DOMAIN
 from .const import NAME
 
@@ -162,6 +166,16 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_DEVTRACK_TIMEOUT,
                 default=self.options.get(
                     CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT
+                ),
+            ): vol.Coerce(int),
+            vol.Required(
+                CONF_UPDATE_INTERVAL,
+                default=self.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SMOOTHING_SAMPLES,
+                default=self.options.get(
+                    CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES
                 ),
             ): vol.Coerce(int),
             vol.Required(

@@ -10,10 +10,13 @@ from homeassistant.components.device_tracker.config_entry import BaseTrackerEnti
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_HOME
 from homeassistant.core import HomeAssistant
+from homeassistant.core import callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BermudaDataUpdateCoordinator
 from .const import DOMAIN
+from .const import SIGNAL_DEVICE_NEW
 from .entity import BermudaEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,12 +30,36 @@ async def async_setup_entry(
     """Load Device Tracker entities for a config entry."""
     coordinator: BermudaDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    # We go through each "device" in the co-ordinator, and create the entities
-    entities = []
-    for device in coordinator.devices.values():
-        if device.create_sensor:
-            entities.append(BermudaDeviceTracker(coordinator, entry, device.address))
-    async_add_devices(entities, True)
+    created_devices = []  # list of devices we've already created entities for
+
+    @callback
+    def device_new(address: str, scanners: [str]) -> None:
+        """Create entities for newly-found device
+
+        Called from the data co-ordinator when it finds a new device that needs
+        to have sensors created. Not called directly, but via the dispatch
+        facility from HA.
+        Make sure you have a full list of scanners ready before calling this.
+        """
+        if address not in created_devices:
+            entities = []
+            entities.append(BermudaDeviceTracker(coordinator, entry, address))
+            # We set update before add to False because we are being
+            # call(back(ed)) from the update, so causing it to call another would be... bad.
+            async_add_devices(entities, False)
+            created_devices.append(address)
+        else:
+            _LOGGER.debug(
+                "Ignoring create request for existing dev_tracker %s", address
+            )
+        # tell the co-ord we've done it.
+        coordinator.device_tracker_created(address)
+
+    # Connect device_new to a signal so the coordinator can call it
+    entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, device_new))
+
+    # Now we must tell the co-ord to do initial refresh, so that it will call our callback.
+    await coordinator.async_config_entry_first_refresh()
 
 
 class BermudaDeviceTracker(BermudaEntity, BaseTrackerEntity):

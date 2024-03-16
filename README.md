@@ -24,19 +24,21 @@
 
 - Area-based device location (ie, device-level room prescence) is working reasonably well.
 - Creates sensors for Area and Distance for devices you choose
-- Creates `device_tracker` entities for chosen devices, which can be linked to "Person"s for Home/Away tracking
+- Supports iBeacon devices, including those with randomised MAC addresses (like Android phones running HA Companion App)
+- Creates `device_tracker` entities for chosen devices, which can be linked to "Person"s for Home/Not Home tracking
 - Configurable settings for rssi reference level, environmental attenuation, max tracking radius
-- Provides a json/yaml dump of devices and their distances from each bluetooth
+- Provides a comprehensive json/yaml dump of devices and their distances from each bluetooth
   receiver, via the `bermuda.dump_devices` service.
 
 ## What you need:
 
-- One or more devices providing bluetooth proxy information to HA. I like the D1-Mini32 boards because
-  they're cheap and easy to deploy. The Shelly bluetooth proxy devices should also work but I don't have any
-  so can't test them myself. Issue reports with debug info welcome.
+- One or more devices providing bluetooth proxy information to HA using esphome's `bluetooth_proxy` component.
+  I like the D1-Mini32 boards because they're cheap and easy to deploy.
+  The Shelly bluetooth proxy devices are reported to work well.
+  Only natively-supported bluetooth devices are supported, meaning there's no current or planned support for MQTT devices etc.
 
 - USB Bluetooth on your HA host is not ideal, since it does not timestamp the advertisement packets.
-  However it can be used for simple "Home/Not Home" tracking, just not Area/Room-based tracking at this time.
+  However it can be used for simple "Home/Not Home" tracking, and Area distance support is enabled currently.
 
 - Some bluetooth BLE devices you want to track. Smart watches, beacon tiles, thermometers etc
 
@@ -50,25 +52,34 @@
 - As yet it doesn't know how to handle iPhones with their rotating MAC addresses, hopefully
   we can integrate with [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/)
   to solve that. We do now support iBeacon, so companion apps such as the one for Android
-  will now work, even with the rotating MAC-address. AFAIK the iOS companion app doesn't
-  support sending iBeacon, but you can likely find some other app that does.
+  will now work, even with the rotating MAC-address. iBeacon apps on iOS behave oddly when
+  backgrounded (an iOS-enforced oddity), so we don't support that either currently. We will
+  have Private BLE working at some point though, watch this space.
 
 ## What you won't need (if this works for you)
 
-- Can replace `bluetooth_ble_tracker` by creating `device_tracker` entities for home/not_home
-  for selected BLE devices, which can be used for Person home/away sensing.
-  This is the "Zone" element of homeassistant localisation, where "home" is
-  one Zone, and "work" or other large geographic areas might be others.
+- Bermuda provides equivalent functionality to `bluetooth_ble_tracker` by
+  creating `device_tracker` entities for selected BLE devices.
+  These can be used for Person home/away sensing.
 
 - You might not need the `iBeacon` integration if you prefer how Bermuda handles
   beacons. See FAQ for more.
 
+- You won't need separate devices dedicated to bluetooth sensing, as in you can deploy esp32 devices running esphome.
+  These devices can also provide PIR motion sensors or other sensor functions, as well as bluetooth proxying
+  for all sorts of other devices.
+  Be careful not to have your esphome devices doing too many jobs though - the bluetooth stack is pretty demanding for
+  the esphome, so you may have stability problems if you try too much (like streaming an esp32-cam!)
+
 ## How it Works
 
 This integration uses the advertisement data gathered by your esphome or
-Shelley bluetooth-proxy deployments into Homeassistant to track or ultimately
+Shelley bluetooth-proxy deployments into Homeassistant to track (and ultimately)
 triangulate (more correctly, trilaterate) the relative positions of any BLE devices
 observed around your home.
+
+For now that means it can tell you which "Area" a device is closest to. In future it's hoped to
+have it tell you "where" in your home a device is, in relative co-ordinates (ie, a map).
 
 Note that this is more properly called "Tri*lateration*", as we are not
 measuring the angles, but instead measuring distances. The bottom line
@@ -78,7 +89,7 @@ probably bandy that term about a bit :-)
 The integration gathers the advertisement data from the bluetooth integration,
 and uses it to glean location/area info for all devices.
 
-You can view the internal state by calling the `bermuda.dump_devices` service.
+You can view the internal state of Bermuda by calling the `bermuda.dump_devices` service.
 
 Currently it munges this into three entities for each tracked device:
 
@@ -91,6 +102,9 @@ Currently it munges this into three entities for each tracked device:
 
 - A `Distance` sensor which gives the estimated distance from the nearest bluetooth proxy.
   This may help give a more relative indication of presence.
+
+- A bunch of other fun sensors like "Distance from scanner x" and stuff - these are disabled by
+  default because there are _many_ of them, and enabling lots WILL bog down your system.
 
 Ultimately, it is hoped to also provide a mud-map of the home, where relative positions of
 proxies and devices can be visually expressed. This assumes that we can (with some level of reliability)
@@ -114,9 +128,8 @@ Choosing the device screen shows the current sensors and other info.
 
 ![Screenshot of device information view](img/screenshots/deviceinfo.png)
 
-The sensor information also includes attributes for which scanner detected the device,
-the measured rssi etc. (these will probably be removed from the Area sensor to reduce
-database history churn, but will probably stay for the Distance sensor)
+The sensor information also includes attributes area name and id, relevant MAC addresses
+etc.
 
 ![Bermuda sensor information](img/screenshots/sensor-info.png)
 
@@ -129,11 +142,10 @@ for any person/user.
 
 ### Can I track my phone?
 
-- Probably! Bermuda now supports the iBeacon format, so if you can get your phone
+- Android: Yes! iPhone: Soon!? Bermuda now supports the iBeacon format, so if you can get your phone
   to broadcast iBeacon packets, then yes. The Homeassistant comanion app for
-  Android does, so it works well. For iPhone/iOS you might need to find an app
-  that lets you send iBeacons. If you're concerned about privacy, you might wish
-  to find a way to have the app transmit beacons only when in/near your home.
+  Android does, so it works well.
+  iPhone will be supported soon by tying in to the `Private BLE Device` integration.
 
 - Bermuda's iBeacon support is rather simplistic and opinionated, reflecting the
   author somewhat.
@@ -142,8 +154,8 @@ for any person/user.
   - You'll probably want to rename the device and sensors to something sensible.
   - Bermuda considers every UUID/Major/Minor version to uniquely identify a given
     iBeacon. That means the MAC address can change, or you can have multiple beacons
-    transmitting the same uuid/major/minor and they'll all be one single device.
-    (for the record the latter case is, IMO, silly).
+    transmitting the same uuid/major/minor and they'll all be one single device - but
+    don't do that though, IMO it's silly.
   - If your beacon sends multiple uuid's or changes it's major or minor version,
     they will show up as different "devices" that you can create sensors for. This
     might be good if you have one device that sends multiple IDs for some reason,
@@ -157,7 +169,8 @@ for any person/user.
 ### Why do my bluetooth devices have only the address and no name?
 
 - you can tell your bluetooth proxies to send an inquiry in response to
-  advertisements. In esphome, this is done by adding `active: true` to the
+  advertisements, this _might_ cause names to show up.
+  In esphome, this is done by adding `active: true` to the
   `esp32_ble_tracker` section (this is separate from the active property of
   the `bluetooth_proxy` section, which controls outbound client connections).
 
@@ -199,9 +212,21 @@ So how does that help?
 
 ### How quickly does it react?
 
-- That will mainly depend on how often your beacon transmits advertisements, however
-  right now the integration only re-calculates on a timed basis. This should be changed
-  to a realtime recalculation based on incoming advertisements soon.
+- There are three main factors.
+  - First is how often your beacon transmits advertisements. Most are less than 2 seconds.
+  - How short you have the `update_interval` set in the configuration. One second (or 0.9 if
+    you like sliding windows) works pretty well on most systems, just check it doesn't impact
+    your system load.
+  - Whether your proxies are missing advertisement packets. In my esphome proxies I usually
+    use these settings to ensure we don't miss toooo many:
+    ```
+    esp32_ble_tracker:
+      interval: 1000ms # default 320ms. Time spent per adv channel
+      window:   900ms # default 30ms. Time spent listening during interval.
+    ```
+    This makes sure the device is spending the majority of its time listening for
+    bluetooth advertisements. 320/280 also works, but I think that 1000/900 gives a better
+    balance of dedicated listening vs enough time for wifi tasks.
 
 ### How is the distance calculated?
 
@@ -245,6 +270,24 @@ So how does that help?
   a pet leaves the property a shorter value might be wiser, although I'd recommend using the Area and Distance sensors
   instead in that case, and choosing your own effective timeouts in the automation.
 
+- `How often in seconds to update bluetooth data` or `update_interval` is usually best set at around 1.1 seconds.
+  You can probably lower this for more responsive sensors, but it might impact your cpu usage.
+  Using 1 second works well but if your proxies are sending updates every second (per the `interval` setting in esphome)
+  and your device is advertising in multiples of 1 second, you might miss fresh adverts more often.
+  Tweak to taste, at this stage my updates seem a bit more consistent with 1.1 versus 1.0.
+
+- `How many samples to use for smoothing distance readings` or `smoothing_samples`. The bigger this number, the slower
+  Bermuda will _increase_ distances for devices that are moving away. This is good for filtering noisy data (noise always
+  makes the distance longer). 10 gives a moderately increasing distance, 20 seems pretty reliable. You can enable one
+  of the "raw/unfiltered" sensor entities and graph them against the distance to get a feel for how well it works. Note that
+  the smoothing algorithm will change over time, so don't get too attached to this setting, or spend too long tuning it!
+
+- `Environment attenuation factor` is for "fudging" the rate at which the signal strength drops off with distance. In
+  a vacuum with no other objects, the signal drops off predictably, but so would we. This factor helps to account for
+  things like humidity, air density (altitude, pollution etc) and in some part the way that the surroundings might
+  interfere with the signal. Basically we fiddle with this so that after we calibrate our 1 metre setting, we get a
+  sensible result at other distances like at 4 metres etc. See the calibration section for how to do that.
+
 - `Default RSSI at 1 metre` is how strong a signal the receiver sees when the transmitter is 1 metre away. Some beacons
   will actually advertise this figure in their data, and some of them might even be true. But ignore that. See the
   calibration section below for how to measure and set this for your own particular setup. Note that this number is
@@ -254,11 +297,10 @@ So how does that help?
   measure the device you care most about against the proxy you have the most of. And bear in mind that "distance" is
   really a relative term when trying to measure it using the amplitude of radio waves.
 
-- `Environment attenuation factor` is for "fudging" the rate at which the signal strength drops off with distance. In
-  a vacuum with no other objects, the signal drops off predictably, but so would we. This factor helps to account for
-  things like humidity, air density (altitude, pollution etc) and in some part the way that the surroundings might
-  interfere with the signal. Basically we fiddle with this so that after we calibrate our 1 metre setting, we get a
-  sensible result at other distances like at 4 metres etc. See the calibration section for how to do that.
+- `List of Bluetooth devices to specifically create tracking entities for` this split-infinitive lets you select which devices
+  you want to track. Any advertising devices that are in range, and any iBeacons should be available to select in here.
+  If you don't see any devices check that your esphome or other proxies are connected to Homeassistant and configured to
+  relay bluetooth traffic.
 
 ### How do I choose values for Attenuation and Ref_Power?
 
@@ -277,18 +319,13 @@ So how does that help?
 
 ## TODO / Ideas
 
-- [x] Basic `bermuda.dump_devices` service that responds with measurements.
-- [x] `area` if a device is within a max distance of a receiver
-- [x] An interface to choose which devices should have sensors created for them
-- [x] Sensors created for selected devices, showing their estimated location
-- [ ] Switch to performing updates on receipt of advertisements, instead of periodic polling
+- [ ] ~~Switch to performing updates on receipt of advertisements, instead of periodic polling~~ (nope, intervals work better)
 - [ ] "Solve" realtime approximation of inter-proxy distances using Triangle Inequality
 - [ ] Resolve x/y co-ordinates of all scanners and proxies (!)
 - [ ] Some sort of map, just pick two proxies as an x-axis vector and go
 - [ ] Config setting to define absolute locations of two proxies
 - [ ] Support some way to "pin" more than two proxies/tags, and have it not break.
 - [ ] An interface to define Areas in relation to the pinned proxies
-- [x] Create entities (use `device_tracker`? or create own?) for each detected beacon
 - [ ] Experiment with some of
       [these algo's](https://mdpi-res.com/d_attachment/applsci/applsci-10-02003/article_deploy/applsci-10-02003.pdf?version=1584265508)
       for improving accuracy (too much math for me!). Particularly weighting shorter
@@ -313,12 +350,13 @@ need that you can solve with template sensors etc.
 
 If called with no paramaters, the service will return all data. Paramaters are available
 which let you limit or reformat the resulting data to make it easier to work with. In particular
-the `addresses` paramater is helpful to only return data relevant for one or more MAC addresses.
+the `addresses` paramater is helpful to only return data relevant for one or more MAC addresses
+(or iBeacon UUIDs).
 See the information on paramaters in the `Services` page in home assistant, under `Developer Tools`.
 
 Important: If you decide to use the results of this call for your own templates etc, bear in mind that
-the format might change in any release, and won't necessarily be considered a "breaking change", since
-this structure is used internally, rather than being a published API. That said, efforts will be made
+the format might change in any release, and won't necessarily be considered a "breaking change".
+This is beacuse the structure is used internally, rather than being a published API. That said, efforts will be made
 to indicate in the release notes if fields in the structure are renamed or moved, but not for adding new
 items.
 
@@ -338,13 +376,6 @@ ESPrescence looks cool, but I don't want to dedicate my nodes to non-esphome use
 it doesn't leverage the bluetooth proxy features now in HA. I am probably reinventing
 a fair amount of ESPrescense's wheel.
 
-**This component will set up the following platforms.**
-
-| Platform         | Description                                                                                                                                                            |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sensor`         | For any bluetooth devices you select in the integration's configuration, a device will be created with two sensors, tracking the "Area" and "Distance" from that area. |
-| `device_tracker` | A device tracker entity will be created for each configured bluetooth address, which you can use to influence the "Home/Away" state of a "Person".                     |
-
 ## Installation
 
 Definitely use the HACS interface! Once you have HACS installed, go to `Integrations`, click the
@@ -353,7 +384,11 @@ the `Repository` field, and choose `Integration` for the `Category`. Click `Add`
 
 You should now be able to add the `Bermuda BLE Trilateration` integration. Once you have done that,
 you need to restart Homeassistant, then in `Settings`, `Devices & Services` choose `Add Integration`
-and search for `Bermuda BLE Trilateration`.
+and search for `Bermuda BLE Trilateration`. It's possible that it will autodetect for you just by
+noticing nearby bluetooth devices.
+
+Once the integration is added, you need to set up your devices by clicking `Configure` in `Devices and Services`,
+`Bermuda BLE Trilateration`.
 
 In the `Configuration` dialog, you can choose which bluetooth devices you would like the integration to track.
 
