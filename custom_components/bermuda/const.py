@@ -35,6 +35,16 @@ PLATFORMS = [SENSOR, DEVICE_TRACKER]
 # Signal names we are using:
 SIGNAL_DEVICE_NEW = f"{DOMAIN}-device-new"
 
+DISTANCE_TIMEOUT = 30  # seconds to wait before marking a sensor distance measurement
+# as unknown/none/stale/away. Separate from device_tracker.
+
+UPDATE_INTERVAL = 1.05  # Seconds between bluetooth data processing cycles
+# Note: this is separate from the CONF_UPDATE_INTERVAL which allows the
+# user to indicate how often sensors should update. We need to check bluetooth
+# stats often to get good responsiveness for beacon approaches and to make
+# the smoothing algo's easier. But sensor updates should bear in mind how
+# much data it generates for databases and browser traffic.
+
 # Beacon-handling constants. Source devices are tracked by MAC-address and are the
 # originators of beacon-like data. We then create a "meta-device" for the beacon's
 # uuid. Other non-static-mac protocols should use this method as well, by adding their
@@ -77,9 +87,9 @@ DOCS[CONF_ATTENUATION] = "Factor for environmental signal attenuation."
 CONF_REF_POWER, DEFAULT_REF_POWER = "ref_power", -55.0
 DOCS[CONF_REF_POWER] = "Default RSSI for signal at 1 metre."
 
-CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL = "update_interval", 1.1
+CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL = "update_interval", 10
 DOCS[CONF_UPDATE_INTERVAL] = (
-    "How often to update bluetooth stats, in seconds. 1.1 is pretty good, I reckon."  # fmt: skip
+    "Maximum time between sensor updates in seconds. Smaller intervals means more data, bigger database."  # fmt: skip
 )
 
 CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES = "smoothing_samples", 20

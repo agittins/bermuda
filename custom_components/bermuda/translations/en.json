@@ -23,7 +23,7 @@
         "data": {
           "max_area_radius": "Max radius in metres for simple AREA detection",
           "devtracker_nothome_timeout": "Timeout in seconds to consider a device as `Not Home`.",
-          "update_interval": "How often in seconds to update bluetooth data",
+          "update_interval": "How often in seconds to update sensor readings data",
           "attenuation": "Environment attenuation factor for distance calculation.",
           "ref_power": "Default rssi at 1 metre distance.",
           "configured_devices": "List of Bluetooth devices to specifically create tracking entities for.",
@@ -32,7 +32,7 @@
         "data_description": {
           "max_area_radius": "In the simple `AREA` feature, a device will be marked as being in the AREA of it's closest receiver, if inside this radius. If you set it small, devices will go to `unknown` between receivers, but if large devices will always appear as in their closest Area.",
           "devtracker_nothome_timeout": "How quickly to mark device_tracker entities as `not_home` after we stop seeing advertisements. 30 seconds or more is probably good.",
-          "update_interval": "Around 1 second will give good update freshness, but might slow your system and grow your database size.",
+          "update_interval": "Distance readings indicating approaches will still trigger immediately, but increasing distances will be rate limited by this to reduce how much your database grows.",
           "smoothing_samples": "How many samples to average distance smoothing. Bigger numbers make for slower distance increases. 10 or 20 seems good."
         }
       }
