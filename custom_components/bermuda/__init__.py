@@ -158,10 +158,8 @@ class BermudaDeviceScanner(dict):
         self.hist_rssi = []
         self.hist_distance = []
         self.hist_distance_by_interval = []  # updated per-interval
-        self.smoothing_sample_count: int = options.get(
-            CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES
-        )
         self.hist_interval = []  # WARNING: This is actually "age of ad when we polled"
+        self.hist_velocity = []  # Effective velocity versus previous stamped reading
         self.stale_update_count = (
             0  # How many times we did an update but no new stamps were found.
         )
@@ -287,9 +285,6 @@ class BermudaDeviceScanner(dict):
         self.tx_power: float = scandata.advertisement.tx_power
         self.adverts: dict[str, bytes] = scandata.advertisement.service_data.items()
         self.options = options
-        self.smoothing_sample_count = options.get(
-            CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES
-        )
 
         # ###### Filter and update distance estimates.
         #
@@ -329,13 +324,73 @@ class BermudaDeviceScanner(dict):
 
         else:
             # Add the current reading (whether new or old) to
-            # a historical log that is evenly spaced by update_interval,
-            # and calculate our new smoothed/estimated distance
-            self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
-            del self.hist_distance_by_interval[self.smoothing_sample_count :]
+            # a historical log that is evenly spaced by update_interval.
 
-            # A moving-window average, that only includes historical values
-            # if their "closer" (ie more reliable).
+            # Verify the new reading is vaguely sensible. If it isn't, we
+            # ignore it by duplicating the last cycle's reading.
+            MAX_VELOCITY = 3  # m/s for how fast a device can retreat.
+            if len(self.hist_stamp) > 1:
+                # How far (away) did it travel in how long?
+                # we check this reading against the recent readings to find
+                # the peak average velocity we are alleged to have reached.
+                velo_newdistance = self.hist_distance[0]
+                velo_newstamp = self.hist_stamp[0]
+                peak_velocity = 0
+                # walk through the history of distances/stamps, and find
+                # the peak
+                for i, old_distance in enumerate(self.hist_distance):
+                    if i == 0:
+                        # (skip the first entry since it's what we're comparing with)
+                        continue
+
+                    delta_t = velo_newstamp - self.hist_stamp[i]
+                    delta_d = velo_newdistance - self.hist_distance[i]
+                    velocity = delta_d / delta_t
+
+                    # Approach velocities are only interesting vs the previous
+                    # reading, while retreats need to be sensible over time
+                    if i == 1:
+                        # on first round we want approach or retreat velocity
+                        peak_velocity = velocity
+                        if velocity < 0:
+                            # if our new reading is an approach, we are done here
+                            # (not so for == 0 since it might still be an invalid retreat)
+                            break
+
+                    if velocity > peak_velocity:
+                        # but on subsequent comparisons we only care if they're faster retreats
+                        peak_velocity = velocity
+                # we've been through the history and have peak velo retreat, or the most recent
+                # approach velo.
+                velocity = peak_velocity
+            else:
+                # There's no history, so no velocity
+                velocity = 0
+
+            self.hist_velocity.insert(0, velocity)
+
+            if velocity > MAX_VELOCITY:
+                if device_address.upper() in self.options[CONF_DEVICES]:
+                    _LOGGER.debug(
+                        "This sparrow %s flies too fast (%dm/s), ignoring",
+                        device_address,
+                        velocity,
+                    )
+                # Discard the bogus reading by duplicating the last.
+                self.hist_distance_by_interval.insert(
+                    0, self.hist_distance_by_interval[0]
+                )
+            else:
+                # Looks valid enough, add the current reading to the interval log
+                self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
+
+            # trim the log to length
+            del self.hist_distance_by_interval[
+                self.options.get(CONF_SMOOTHING_SAMPLES) :
+            ]
+
+            # Calculate a moving-window average, that only includes
+            # historical values if their "closer" (ie more reliable).
             #
             # This might be improved by weighting the values by age, but
             # already does a fairly reasonable job of hugging the bottom
@@ -371,6 +426,7 @@ class BermudaDeviceScanner(dict):
             self.hist_interval,
             self.hist_rssi,
             self.hist_stamp,
+            self.hist_velocity,
         ):
             del histlist[HIST_KEEP_COUNT:]
 
@@ -543,6 +599,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # TODO: This is only here because we haven't set up migration of config
         # entries yet, so some users might not have this defined after an update.
         self.options[CONF_MAX_RADIUS] = DEFAULT_MAX_RADIUS
+        self.options[CONF_SMOOTHING_SAMPLES] = DEFAULT_SMOOTHING_SAMPLES
 
         if hasattr(entry, "options"):
             # Firstly, on some calls (specifically during reload after settings changes)
