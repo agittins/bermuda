@@ -51,11 +51,13 @@ from .const import DEFAULT_MAX_RADIUS
 from .const import DEFAULT_REF_POWER
 from .const import DEFAULT_SMOOTHING_SAMPLES
 from .const import DEFAULT_UPDATE_INTERVAL
+from .const import DISTANCE_TIMEOUT
 from .const import DOMAIN
 from .const import HIST_KEEP_COUNT
 from .const import PLATFORMS
 from .const import SIGNAL_DEVICE_NEW
 from .const import STARTUP_MESSAGE
+from .const import UPDATE_INTERVAL
 
 # from typing import TYPE_CHECKING
 
@@ -295,17 +297,46 @@ class BermudaDeviceScanner(dict):
         # indication of rising measurements preceding it, or at least a
         # long time since our last measurement.
         #
-        # Also, a lack of recent measurements should be considered a likely
-        # increase in distance, but could also simply be total signal loss
-        # for non-distance related reasons (occlusion).
-        #
-        if self.rssi_distance is None:
+        # It's tempting to treat no recent measurement as implying an increase
+        # in distance, but doing so would wreak havoc when we later try to
+        # implement trilateration, so better to simply cut a sensor off as
+        # "away" from a scanner when it hears no new adverts. DISTANCE_TIMEOUT
+        # is how we decide how long to wait, and should accommodate for dropped
+        # packets and for temporary occlusion (dogs' bodies etc)
+
+        if have_new_stamp and self.rssi_distance is None:
+            # DEVICE HAS ARRIVED!
+            # We have just newly come into range (or we're starting up)
+            # accept the new reading as-is.
             self.rssi_distance = self.rssi_distance_raw
+            # And ensure the smoothing history gets a fresh start
+            self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
+            del self.hist_distance_by_interval[1:]
+
+        elif not have_new_stamp and self.stamp < MONOTONIC_TIME() - DISTANCE_TIMEOUT:
+            # DEVICE IS AWAY!
+            # Last distance reading is stale, mark device distance as unknown.
+            self.rssi_distance = None
+            # Clear the smoothing history
+            if len(self.hist_distance_by_interval) > 0:
+                self.hist_distance_by_interval = []
+
         else:
             # Add the current reading (whether new or old) to
-            # a historical log that is evenly spaced by update_interval
+            # a historical log that is evenly spaced by update_interval,
+            # and calculate our new smoothed/estimated distance
             self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
             del self.hist_distance_by_interval[self.smoothing_sample_count :]
+
+            # A moving-window average, that only includes historical values
+            # if their "closer" (ie more reliable).
+            #
+            # This might be improved by weighting the values by age, but
+            # already does a fairly reasonable job of hugging the bottom
+            # of the noisy rssi data. A better way to control the maximum
+            # slope angle (other than increasing bucket count) might be
+            # helpful, but probably dependent on use-case.
+            #
             dist_total = 0
             dist_count = 0
             local_min = self.rssi_distance_raw
@@ -486,10 +517,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         self.config_entry = entry
 
-        interval = entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+        self.sensor_interval = entry.options.get(
+            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+        )
 
         super().__init__(
-            hass, _LOGGER, name=DOMAIN, update_interval=timedelta(seconds=interval)
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=timedelta(seconds=UPDATE_INTERVAL),
         )
 
         # First time around we freshen the restored scanner info by
@@ -497,6 +533,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self._do_full_scanner_init = True
 
         self.options = {}
+
+        # TODO: This is only here because we haven't set up migration of config
+        # entries yet, so some users might not have this defined after an update.
+        self.options[CONF_MAX_RADIUS] = DEFAULT_MAX_RADIUS
+
         if hasattr(entry, "options"):
             # Firstly, on some calls (specifically during reload after settings changes)
             # we seem to get called with a non-existant config_entry.
@@ -898,20 +939,20 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         closest_scanner: BermudaDeviceScanner = None
 
         for scanner in device.scanners.values():
-            # whittle down to the closest beacon inside max range
-            if scanner.rssi_distance < self.options.get(
-                CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS
-            ):  # It's inside max_radius...
+            # Check each scanner and keep note of the closest one based on rssi_distance.
+            # Note that rssi_distance is smoothed/filtered, and might be None if the last
+            # reading was old enough that our algo decides it's "away".
+            if (
+                scanner.rssi_distance is not None
+                and scanner.rssi_distance < self.options.get(CONF_MAX_RADIUS)
+            ):
+                # It's inside max_radius...
                 if closest_scanner is None:
-                    # no encumbent, we win! (unless we don't have a stamp to validate our claim)
-                    # FIXME: This effectively excludes HCI/usb adaptors currently since we
-                    # haven't found a way to get ad timestamps from HA's bluez yet.
-                    if scanner.stamp > 0:
-                        closest_scanner = scanner
+                    # no encumbent, we win!
+                    closest_scanner = scanner
                 else:
-                    # Now that we are filtering the distance sensor, just rely on it
-                    # regardless of "freshness"
                     if scanner.rssi_distance < closest_scanner.rssi_distance:
+                        # We're closer than the last-closest, we win!
                         closest_scanner = scanner
 
         if closest_scanner is not None:
@@ -993,6 +1034,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                             scandev.is_scanner = True
                             if scandev_orig != scandev:
                                 # something changed, let's update the saved list.
+                                _LOGGER.debug(
+                                    "Scanner info for %s has changed, we'll update our saved data.",
+                                    scandev.name,
+                                )
                                 update_scannerlist = True
         if update_scannerlist:
             # We need to update our saved list of scanners in config data.
