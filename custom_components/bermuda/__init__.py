@@ -190,11 +190,12 @@ class BermudaDeviceScanner(dict):
         # In case the scanner has changed it's details since startup though:
         self.name: str = scandata.scanner.name
         self.area_id: str = area_id
+        have_new_stamp = False
 
         # Only remote scanners log timestamps here (local usb adaptors do not),
         if hasattr(scandata.scanner, "_discovered_device_timestamps"):
             # Found a remote scanner which has timestamp history...
-            scanner_sends_stamps = True
+            self.scanner_sends_stamps = True
             # FIXME: Doesn't appear to be any API to get this otherwise...
             # pylint: disable-next=protected-access
             stamps = scandata.scanner._discovered_device_timestamps
@@ -208,6 +209,7 @@ class BermudaDeviceScanner(dict):
                 else:
                     # We have no updated advert in this run.
                     have_new_stamp = False
+                    new_stamp = None
                     self.stale_update_count += 1
             else:
                 # This shouldn't happen, as we shouldn't have got a record
@@ -218,24 +220,26 @@ class BermudaDeviceScanner(dict):
                     device_address,
                 )
                 have_new_stamp = False
+                new_stamp = None
         else:
             # Not a bluetooth_proxy device / remote scanner, but probably a USB Bluetooth adaptor.
             # We don't get advertisement timestamps from bluez, so the stamps in our history
             # won't be terribly accurate, and the advert might actually be rather old.
             # All we can do is check if it has changed and assume it's fresh from that.
 
-            scanner_sends_stamps = False
+            self.scanner_sends_stamps = False
             # If the rssi has changed from last time, consider it "new"
             if self.rssi != scandata.advertisement.rssi:
-                have_new_stamp = True
                 # 2024-03-16: We're going to treat it as fresh for now and see how that goes.
                 # We can do that because we smooth distances now every update_interval, regardless
                 # of when the last advertisement was received, so we shouldn't see bluez trumping
                 # proxies with stale adverts. Hopefully.
                 # new_stamp = MONOTONIC_TIME() - (ADVERT_FRESHTIME * 4)
                 new_stamp = MONOTONIC_TIME()
+                have_new_stamp = True
             else:
                 have_new_stamp = False
+                new_stamp = None
 
         if len(self.hist_stamp) == 0 or have_new_stamp:
             # this is the first entry or a new one...
@@ -249,16 +253,19 @@ class BermudaDeviceScanner(dict):
             )
             self.hist_distance.insert(0, self.rssi_distance_raw)
 
-            # Stamp will be faked from above if required.
-            if have_new_stamp:
-                # Note: this is not actually the interval between adverts,
-                # but rather a function of our UPDATE_INTERVAL plus the packet
-                # interval. The bluetooth integration does not currently store
-                # interval data, only stamps of the most recent packet.
-                self.hist_interval.insert(0, new_stamp - self.stamp)
+            # Note: this is not actually the interval between adverts,
+            # but rather a function of our UPDATE_INTERVAL plus the packet
+            # interval. The bluetooth integration does not currently store
+            # interval data, only stamps of the most recent packet.
+            # So it more accurately reflects "How much time passed between
+            # the two last packets we observed" - which should be a multiple
+            # of the true inter-packet interval. For stamps from local bluetooth
+            # adaptors (usb dongles) it reflects "Which update cycle last saw a
+            # different rssi", which will be a multiple of our update interval.
+            self.hist_interval.insert(0, new_stamp - self.stamp)
 
-                self.stamp = new_stamp
-                self.hist_stamp.insert(0, self.stamp)
+            self.stamp = new_stamp
+            self.hist_stamp.insert(0, self.stamp)
 
         # Safe to update these values regardless of stamps...
 
@@ -279,7 +286,6 @@ class BermudaDeviceScanner(dict):
             )
         self.tx_power: float = scandata.advertisement.tx_power
         self.adverts: dict[str, bytes] = scandata.advertisement.service_data.items()
-        self.scanner_sends_stamps = scanner_sends_stamps
         self.options = options
         self.smoothing_sample_count = options.get(
             CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES
@@ -313,7 +319,7 @@ class BermudaDeviceScanner(dict):
             self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
             del self.hist_distance_by_interval[1:]
 
-        elif not have_new_stamp and self.stamp < MONOTONIC_TIME() - DISTANCE_TIMEOUT:
+        elif (not have_new_stamp) and self.stamp < MONOTONIC_TIME() - DISTANCE_TIMEOUT:
             # DEVICE IS AWAY!
             # Last distance reading is stale, mark device distance as unknown.
             self.rssi_distance = None
