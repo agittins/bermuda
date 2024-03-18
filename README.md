@@ -2,9 +2,9 @@
 
 # Bermuda BLE Trilateration
 
-- Track bluetooth devices by Area in [HomeAssistant](https://home-assistant.io/), using [ESPHome](https://esphome.io/) [bluetooth_proxy](https://esphome.io/components/bluetooth_proxy.html) devices.
+- Track bluetooth devices by Area (Room) in [HomeAssistant](https://home-assistant.io/), using [ESPHome](https://esphome.io/) [bluetooth_proxy](https://esphome.io/components/bluetooth_proxy.html) devices.
 
-- (eventually) Triangulate device positions! Maybe.
+- (eventually) Triangulate device positions! Like, on a map. Maybe.
 
 [![GitHub Release][releases-shield]][releases]
 [![GitHub Activity][commits-shield]][commits]
@@ -22,6 +22,8 @@
 
 ## What it does:
 
+Bermuda aims to let you track any bluetooth device, and have Homeassistant tell you where in your house that device is. The only extra hardware you need are esp32 devices running esphome that act as bluetooth proxies. Alternatively, Shelly Plus devices can also perform this function.
+
 - Area-based device location (ie, device-level room prescence) is working reasonably well.
 - Creates sensors for Area and Distance for devices you choose
 - Supports iBeacon devices, including those with randomised MAC addresses (like Android phones running HA Companion App)
@@ -34,7 +36,7 @@
 
 - One or more devices providing bluetooth proxy information to HA using esphome's `bluetooth_proxy` component.
   I like the D1-Mini32 boards because they're cheap and easy to deploy.
-  The Shelly bluetooth proxy devices are reported to work well.
+  The Shelly Plus bluetooth proxy devices are reported to work well.
   Only natively-supported bluetooth devices are supported, meaning there's no current or planned support for MQTT devices etc.
 
 - USB Bluetooth on your HA host is not ideal, since it does not timestamp the advertisement packets.
@@ -44,7 +46,7 @@
 
 ## What it does not do
 
-- It does not (yet) provide location relative to multiple beacons, but that is the ultimate
+- It does not (yet) provide a location in 2D space, but that is the ultimate
   goal. RSSI is extremely "noisy" as data goes, but the hope is to find ways to smooth that
   out a bit and get a workable impression of where devices and scanners are in relation to each
   other. Math / Geometry geeks are very welcome to assist, I am well out of my depth here!
@@ -65,8 +67,8 @@
 - You might not need the `iBeacon` integration if you prefer how Bermuda handles
   beacons. See FAQ for more.
 
-- You won't need separate devices dedicated to bluetooth sensing, as in you can deploy esp32 devices running esphome.
-  These devices can also provide PIR motion sensors or other sensor functions, as well as bluetooth proxying
+- You won't need separate devices dedicated to bluetooth sensing, as in you can deploy Shelly Plus devices or esp32 devices running esphome.
+  These devices can also provide PIR motion sensors or other sensor functions as well as bluetooth proxying
   for all sorts of other devices.
   Be careful not to have your esphome devices doing too many jobs though - the bluetooth stack is pretty demanding for
   the esphome, so you may have stability problems if you try too much (like streaming an esp32-cam!)
@@ -74,7 +76,7 @@
 ## How it Works
 
 This integration uses the advertisement data gathered by your esphome or
-Shelley bluetooth-proxy deployments into Homeassistant to track (and ultimately)
+Shelly Plus bluetooth-proxy deployments into Homeassistant to track (and ultimately)
 triangulate (more correctly, trilaterate) the relative positions of any BLE devices
 observed around your home.
 
@@ -91,7 +93,7 @@ and uses it to glean location/area info for all devices.
 
 You can view the internal state of Bermuda by calling the `bermuda.dump_devices` service.
 
-Currently it munges this into three entities for each tracked device:
+Currently it munges this into three types of entities for each tracked device:
 
 - A `device_tracker` entity, which exposes a "home/not home" state. This entity can be mapped
   to a `person` to indicate if they are home (eg, by tracking their smart watch).
@@ -103,8 +105,8 @@ Currently it munges this into three entities for each tracked device:
 - A `Distance` sensor which gives the estimated distance from the nearest bluetooth proxy.
   This may help give a more relative indication of presence.
 
-- A bunch of other fun sensors like "Distance from scanner x" and stuff - these are disabled by
-  default because there are _many_ of them, and enabling lots WILL bog down your system.
+- It also provides a bunch of other fun sensors like "Distance from scanner x" and stuff - these are disabled by
+  default because there are _many_ of them, and enabling lots WILL bog down your system, and cause your `recorder` database to grow - possibly by _a lot_.
 
 Ultimately, it is hoped to also provide a mud-map of the home, where relative positions of
 proxies and devices can be visually expressed. This assumes that we can (with some level of reliability)
@@ -120,11 +122,11 @@ After installing, the integration should be visible in Settings, Devices & Servi
 
 Press the `CONFIGURE` button to see the configuration dialog. At the bottom is a field
 where you can enter/list any bluetooth devices the system can see. Choosing devices
-will add them to the configured devices list and creating sensor entities for them.
+will add them to the configured devices list and creating sensor entities for them. See [How Do The Settings Work?](#how-do-the-settings-work) for more info.
 
 ![Bermuda integration configuration option flow](img/screenshots/configuration.png)
 
-Choosing the device screen shows the current sensors and other info.
+Choosing the device screen shows the current sensors and other info. Note that there are extra sensors in the "not shown" section that are disabled by default (the screenshot shows several of these enabled already). You can edit the properties of these to enable them for more detailed data on your device locations. This is primarily intended for troubleshooting or development, though.
 
 ![Screenshot of device information view](img/screenshots/deviceinfo.png)
 
@@ -213,20 +215,20 @@ So how does that help?
 ### How quickly does it react?
 
 - There are three main factors.
-  - First is how often your beacon transmits advertisements. Most are less than 2 seconds.
-  - How short you have the `update_interval` set in the configuration. One second (or 0.9 if
-    you like sliding windows) works pretty well on most systems, just check it doesn't impact
-    your system load.
-  - Whether your proxies are missing advertisement packets. In my esphome proxies I usually
+  - How often your beacon transmits advertisements. Most are less than 2 seconds.
+  - Bermuda only checks for new advertisements every second.
+  - The proxies might not catch every advertisement. In my esphome proxies I usually
     use these settings to ensure we don't miss toooo many:
-    ```
+    ```yaml
     esp32_ble_tracker:
       interval: 1000ms # default 320ms. Time spent per adv channel
-      window:   900ms # default 30ms. Time spent listening during interval.
+      window: 900ms # default 30ms. Time spent listening during interval.
     ```
     This makes sure the device is spending the majority of its time listening for
     bluetooth advertisements. 320/280 also works, but I think that 1000/900 gives a better
-    balance of dedicated listening vs enough time for wifi tasks.
+    balance of dedicated listening vs enough time for wifi tasks.^[citation required!]
+- So if your beacon transmits every second, it might take up to two seconds for Bermuda to come up with a new distance measurement, assuming no packets were lost. Which happens a lot.
+- Due to the noise inherent in RSSI measurements, we do a lot of filtering on the values. The upshot of this is that measurements that read "closer" come through a lot faster because they're more reliable / more likely to be accurate, while readings of an increasing distance will be tracked a lot slower because most of them are signals that were weakened by noise, reflections, dog bodies etc. So asserting that something is _in_ an area is authorative and quick, while asserting that something is _leaving_ or not in an area carries less confidence and higher latency.
 
 ### How is the distance calculated?
 
@@ -236,45 +238,90 @@ So how does that help?
   - `ref_power` is the rssi value you get when the device is 1 metre from the receiver.
     Currently you can configure this as a global setting in the options.
   - `rssi` is the "received signal strength indicator", being a measurement of RF power
-    expressed in dB. rssi will usually range from -30 or so "up" to -100 or more. Numbers
+    expressed in dBm. RSSI will usually range from -30 or so "down" to -100 or more. Numbers
     closer to zero are "stronger" or closer.
-  - `attenuation` is a constant for the losses in the environment (humidity, air pressure(!),
-    mammals etc). It's a "fudge factor". This is also set in the options. Experimentation with values
-    ranging from 1.something to 3ish will usually get you somewhere.
+  - `attenuation` is a "constant" for the losses in the environment (humidity, air pressure(!),
+    mammals etc). It's a bit of a "fudge factor". This is also set in the options. Typical values
+    are between 1 and 3 but can vary. Finding this value is part of the calibration/setup process.
   - `distance` is the resulting distance in metres.
 
-- The values won't be suitable for all use-cases. Apart from the environmental factors we can't calculate
+- The default values won't be suitable for all use-cases. Apart from the environmental factors we can't calculate
   (like walls, reflective surfaces etc), each device might transmit a different power level, and every transmitter
   and receiver might have antennae that perform differently. Because of this it is planned to allow separate
   calibration of scanners and devices to account for the variances.
 
+- See [How do I choose values for Attenuation and Ref_power](#how-do-i-choose-values-for-attenuation-and-ref_power) for instructions on calibration.
+
 ### How do the settings work?
 
-- `Max Radius` is used by the `device_tracker` and Area sensors to limit how far away a device can be while still
-  considered to be in that location. For `device_tracker` purposes (this is the Home/Away sensor you can attach to a
-  `Person`), it probably makes sense for this to be quite large - since you want to be "home" even if you're out
+- `Max Radius` is used by the `device_tracker` and `Area` sensors to limit how far away a device can be while still
+  considered to be in that location. For `device_tracker` purposes (this is the `Home`/`Away` sensor you can attach to a
+  `Person`), it probably makes sense for this to be quite large - since you still want to be "home" even if you're out
   in the yard or elsewhere that doesn't have good coverage. Bear in mind that "distance" is really a function of
-  signal strength, so sitting in your car, inside the garage is going to show a much more distant signal than standing
-  next to the car, say.
+  signal strength, so sitting in your car, inside the garage is likely to show a much more distant signal than standing
+  next to the car or perhaps even out on the street.
   For the `Area` sensor, a large `max_radius` may also make sense _if_ you have proxies in most of the rooms you want
   to track for. The Area will switch to the closest room, so you can consider it to mean "I am _near_ my office".
   However if you have proxies only in a few rooms, you might want a more definitive sense of "I am _not_ in my office",
-  in which case you may wish to lower the max_radius to 4 metres or similar, so that being in the adjacent room doesn't
+  in which case you may wish to lower the `max_radius` to 4 metres (13') or similar, so that being in the adjacent room doesn't
   show you as still being in your office. Note that results will probably be more reliable by putting a proxy in the
   adjacent room instead, but that depends on how many proxies you have.
+  On that note, the concept of "you can't prove a negative" is quite pertinent, if not factually accurate. If Bermuda detects
+  that something _is_ in an Area, you can be pretty confident that this is true. This is because there's no way for a
+  proxy to receive a stronger signal than physics wants it to, other than some truly unlikely reflections. However, the idea
+  of being "away" from an Area is much less confidence-inspiring, since signals often get attenuated (weakened) by reflections,
+  or the transmitter being sat on, or sun-spots, or the dark arts of RF propagation. So when designing your system, try to
+  think in terms of how you can assert that something _IS_ somewhere, rather than hoping to prove that it _ISN'T_.
 
-- `Timeout` applies _only_ to the `device_tracker` integration. If no proxy has received a broadcast from the device
-  in `timeout` seconds, that device will be marked as "not home" / Away. If you experience false triggers for being away
-  (or more likely, false triggers for arriving home) then try increasing this value. Something like 300 (5 minutes) is
-  probably fairly sensible for things where you want to automate arriving home. For things like automating an alert if
-  a pet leaves the property a shorter value might be wiser, although I'd recommend using the Area and Distance sensors
-  instead in that case, and choosing your own effective timeouts in the automation.
+- `Max Velocity` is expressed in metres per second. When we receive a reading that implies the device moved _away_ from us
+  at an unlikely speed, we can ignore that reading as it's likely very noise-affected. We check this by comparing recent
+  measurements and their timestamps against the new measurement to work out what the device's peak velocity must have been
+  if the latest measurement is accurate. We can assume this because closer measurements are "always" "more accurate" than distant
+  measurements. Humans tend to walk at around 1.42m/s (5km/h ~ 3mph). The default is 3m/s (10km/h or ~ 6mph) to accomodate
+  dogs, cats and children holding scissors. If you get more spikes in distances than you like, reducing the max velocity may
+  help the algo to ignore those spikes. Note that we only ignore velocities _away_ from the scanner, since we treat a fresh,
+  closer measurement as intrinsically more accurate and therefore more authorative than filtered values.
 
-- `How often in seconds to update bluetooth data` or `update_interval` is usually best set at around 1.1 seconds.
-  You can probably lower this for more responsive sensors, but it might impact your cpu usage.
-  Using 1 second works well but if your proxies are sending updates every second (per the `interval` setting in esphome)
-  and your device is advertising in multiples of 1 second, you might miss fresh adverts more often.
-  Tweak to taste, at this stage my updates seem a bit more consistent with 1.1 versus 1.0.
+- `Devtracker Timeout in seconds to consider a device as "Not Home"` applies _only_ to the `device_tracker` platform.
+  If no proxy has received a broadcast from the device
+  in `timeout` seconds, that device will be marked as `not_home` / `Away`. If you experience false "away" readings then try
+  increasing this value. Something like 300 (5 minutes) is probably fairly sensible for things where you want to
+  automate arriving home, while not getting false triggers from general signal loss when moving about the home.
+  For things like automating an alert if a pet leaves the property a shorter value might be wiser, however I'd much more stronly
+  suggest using the Area and Distance sensors instead. That way you can apply your own timeouts in the automation, and also
+  think about "proving a positive" instead - put a proxy at the front gate, or detect that your pet _is_ in the garden, rather than
+  trying to prove that they _are not_ in the house.
+
+- `Update Interval - How often in seconds to update sensor data` defaults to 5 seconds.
+  This defines a maximum interval between sensor updates on distance and rssi. If a device moves closer the sensor
+  will always update immediately (within a second, anyway), but for distances that are increasing (likewise RSSI values that are
+  decreasing) the sensor won't bother updating until this interval has passed.
+  Note that decisions about what area a device is in is done every second regardless of this setting, using the finer-grained values contained in the
+  back-end - so this only affects the UI, not the underlying decision algorithm.
+  The idea is that this reduces the amount of "churn" on the sensors, which reduces how much data gets pumped into your
+  history database. My 100GB Postgres/TimeseriesDB on raid doesn't mind so much, but if you are using an SD card for your
+  storage you'll probably want to either keep it at 5 seconds or perhaps even increase it.
+  If you are doing some testing and want to get a better idea of the values and how the filtering works in the background you can lower this to 1 second (1 second is the most often it will update, as the backend only refreshes values at this rate). Just don't forget
+  to put it back afterwards! You can change this setting in the UI and it will take effect immediately, which is nice.
+  It's worth noting here that the main distance sensor is also rounded to a single decimal place (10cm or ~4"), but the
+  "Distance to xx" sensors are rounded to 3 decimal places (1mm or ~ 0.04"). Of course values even at 10cm are pretty unreliable
+  but it helps to see that new values are coming in versus missing adverts.
+
+  If you need to avoid growing your database but still want frequent updates, you can filter out specific sensors (or patterns/globs)
+  of sensors from being written to the history db by adding something like this to your `configuration.yaml` (thanks @jaymunro). I
+  think you might need an identical snippet in your `ltss` section to filter from your long-term statistics, too:
+
+  ```yaml
+  recorder:
+  exclude:
+    entity_globs:
+      # to filter specific sensors
+      - sensor.*_distance_to_aska*
+      - sensor.*_distance_to_back*
+      # ...etc
+      # or filter all the distance-to sensors
+      - sensor.*_distance_to_*
+  ```
 
 - `How many samples to use for smoothing distance readings` or `smoothing_samples`. The bigger this number, the slower
   Bermuda will _increase_ distances for devices that are moving away. This is good for filtering noisy data (noise always
@@ -286,16 +333,15 @@ So how does that help?
   a vacuum with no other objects, the signal drops off predictably, but so would we. This factor helps to account for
   things like humidity, air density (altitude, pollution etc) and in some part the way that the surroundings might
   interfere with the signal. Basically we fiddle with this so that after we calibrate our 1 metre setting, we get a
-  sensible result at other distances like at 4 metres etc. See the calibration section for how to do that.
+  sensible result at other distances like at 4 metres etc. See [How do I choose values for Attenuation and Ref_power](#how-do-i-choose-values-for-attenuation-and-ref_power) for instructions on calibration.
 
 - `Default RSSI at 1 metre` is how strong a signal the receiver sees when the transmitter is 1 metre away. Some beacons
-  will actually advertise this figure in their data, and some of them might even be true. But ignore that. See the
-  calibration section below for how to measure and set this for your own particular setup. Note that this number is
+  will actually advertise this figure in their data, and some of them might even be true. But ignore that. See [How do I choose values for Attenuation and Ref_power](#how-do-i-choose-values-for-attenuation-and-ref_power) below for how to measure and set this for your own particular setup. Note that this number is
   dependent on the transmitter's software, the power it transmits at, the style (and orientation) of its antenna,
-  the enclosure it's in, and depend on the receiver's enclosure, antenna and circuit's sensitivity. And everything in-
+  the enclosure it's in, and also depends on the _receiver's_ enclosure, antenna and circuit's sensitivity. And everything in-
   between. Future versions of Bermuda will let you set the value per-device and offset it per-receiver, but for now,
   measure the device you care most about against the proxy you have the most of. And bear in mind that "distance" is
-  really a relative term when trying to measure it using the amplitude of radio waves.
+  really a relative term when trying to measure it using the simple amplitude of radio waves.
 
 - `List of Bluetooth devices to specifically create tracking entities for` this split-infinitive lets you select which devices
   you want to track. Any advertising devices that are in range, and any iBeacons should be available to select in here.
