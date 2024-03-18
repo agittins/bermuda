@@ -41,6 +41,7 @@ from .const import CONF_ATTENUATION
 from .const import CONF_DEVICES
 from .const import CONF_DEVTRACK_TIMEOUT
 from .const import CONF_MAX_RADIUS
+from .const import CONF_MAX_VELOCITY
 from .const import CONF_REF_POWER
 from .const import CONF_SMOOTHING_SAMPLES
 from .const import CONF_UPDATE_INTERVAL
@@ -48,6 +49,7 @@ from .const import CONFDATA_SCANNERS
 from .const import DEFAULT_ATTENUATION
 from .const import DEFAULT_DEVTRACK_TIMEOUT
 from .const import DEFAULT_MAX_RADIUS
+from .const import DEFAULT_MAX_VELOCITY
 from .const import DEFAULT_REF_POWER
 from .const import DEFAULT_SMOOTHING_SAMPLES
 from .const import DEFAULT_UPDATE_INTERVAL
@@ -328,7 +330,6 @@ class BermudaDeviceScanner(dict):
 
             # Verify the new reading is vaguely sensible. If it isn't, we
             # ignore it by duplicating the last cycle's reading.
-            MAX_VELOCITY = 3  # m/s for how fast a device can retreat.
             if len(self.hist_stamp) > 1:
                 # How far (away) did it travel in how long?
                 # we check this reading against the recent readings to find
@@ -369,10 +370,10 @@ class BermudaDeviceScanner(dict):
 
             self.hist_velocity.insert(0, velocity)
 
-            if velocity > MAX_VELOCITY:
+            if velocity > self.options.get(CONF_MAX_VELOCITY):
                 if device_address.upper() in self.options[CONF_DEVICES]:
                     _LOGGER.debug(
-                        "This sparrow %s flies too fast (%dm/s), ignoring",
+                        "This sparrow %s flies too fast (%2fm/s), ignoring",
                         device_address,
                         velocity,
                     )
@@ -600,6 +601,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # entries yet, so some users might not have this defined after an update.
         self.options[CONF_MAX_RADIUS] = DEFAULT_MAX_RADIUS
         self.options[CONF_SMOOTHING_SAMPLES] = DEFAULT_SMOOTHING_SAMPLES
+        self.options[CONF_MAX_VELOCITY] = DEFAULT_MAX_VELOCITY
 
         if hasattr(entry, "options"):
             # Firstly, on some calls (specifically during reload after settings changes)
@@ -612,6 +614,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     CONF_DEVICES,
                     CONF_DEVTRACK_TIMEOUT,
                     CONF_MAX_RADIUS,
+                    CONF_MAX_VELOCITY,
                     CONF_REF_POWER,
                     CONF_SMOOTHING_SAMPLES,
                 ):

@@ -22,6 +22,7 @@
       "globalopts": {
         "data": {
           "max_area_radius": "Max radius in metres for simple AREA detection",
+          "max_velocity": "In metres per second - ignore readings that imply movement away faster than this limit. 3m/s (10km/h) is good.",
           "devtracker_nothome_timeout": "Timeout in seconds to consider a device as `Not Home`.",
           "update_interval": "How often in seconds to update sensor readings data",
           "attenuation": "Environment attenuation factor for distance calculation.",
