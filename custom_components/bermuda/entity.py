@@ -48,7 +48,7 @@ class BermudaEntity(CoordinatorEntity):
         self.bermuda_last_state: Any = 0
         self.bermuda_last_stamp: int = 0
 
-    def _cached_ratelimit(self, statevalue: Any, FastFalling=True, FastRising=False):
+    def _cached_ratelimit(self, statevalue: Any, fast_falling=True, fast_rising=False):
         """Uses the CONF_UPDATE_INTERVAL and other logic to return either the given statevalue
         or an older, cached value. Helps to reduce excess sensor churn without compromising latency.
 
@@ -62,8 +62,10 @@ class BermudaEntity(CoordinatorEntity):
             )  # Cache is stale
             or (self.bermuda_last_state is None)  # Nothing compares to you.
             or (statevalue is None)  # or you.
-            or (FastFalling and statevalue < self.bermuda_last_state)  # (like Distance)
-            or (FastRising and statevalue > self.bermuda_last_state)  # (like RSSI)
+            or (
+                fast_falling and statevalue < self.bermuda_last_state
+            )  # (like Distance)
+            or (fast_rising and statevalue > self.bermuda_last_state)  # (like RSSI)
         ):
             # Publish the new value and update cache
             self.bermuda_last_stamp = nowstamp

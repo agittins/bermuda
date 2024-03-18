@@ -171,7 +171,7 @@ class BermudaSensorRssi(BermudaSensor):
     @property
     def native_value(self):
         return self._cached_ratelimit(
-            self._device.area_rssi, FastFalling=False, FastRising=True
+            self._device.area_rssi, fast_falling=False, fast_rising=True
         )
 
     @property

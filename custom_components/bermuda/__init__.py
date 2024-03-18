@@ -153,8 +153,10 @@ class BermudaDeviceScanner(dict):
         # which is a bit silly, I suspect.
         self.name: str = scandata.scanner.name
         self.area_id: str = area_id
+        self.parent_device = device_address
 
         self.stamp: float = 0
+        self.new_stamp = None  # Set when a new advert is loaded from update
         self.hist_stamp = []
         self.rssi: float = None
         self.hist_rssi = []
@@ -170,9 +172,9 @@ class BermudaDeviceScanner(dict):
         self.rssi_distance_raw: float = None
 
         # Just pass the rest on to update...
-        self.update(device_address, scandata, area_id, options)
+        self.update_advertisement(device_address, scandata, area_id, options)
 
-    def update(
+    def update_advertisement(
         self,
         device_address: str,
         scandata: BluetoothScannerDevice,
@@ -183,14 +185,14 @@ class BermudaDeviceScanner(dict):
         every time we do a polled update.
 
         This method needs to update all the history and tracking data for this
-        device+scanner combination.
+        device+scanner combination. This method only gets called when a given scanner
+        claims to have data.
         """
-        # We over-write pretty much everything, except our locally-preserved stats.
-        #
-        # In case the scanner has changed it's details since startup though:
+
+        # In case the scanner has changed it's details since startup:
         self.name: str = scandata.scanner.name
         self.area_id: str = area_id
-        have_new_stamp = False
+        new_stamp = None
 
         # Only remote scanners log timestamps here (local usb adaptors do not),
         if hasattr(scandata.scanner, "_discovered_device_timestamps"):
@@ -204,11 +206,9 @@ class BermudaDeviceScanner(dict):
             uppermac = device_address.upper()
             if uppermac in stamps:
                 if stamps[uppermac] > self.stamp:
-                    have_new_stamp = True
                     new_stamp = stamps[uppermac]
                 else:
                     # We have no updated advert in this run.
-                    have_new_stamp = False
                     new_stamp = None
                     self.stale_update_count += 1
             else:
@@ -219,7 +219,6 @@ class BermudaDeviceScanner(dict):
                     scandata.scanner.source,
                     device_address,
                 )
-                have_new_stamp = False
                 new_stamp = None
         else:
             # Not a bluetooth_proxy device / remote scanner, but probably a USB Bluetooth adaptor.
@@ -236,20 +235,18 @@ class BermudaDeviceScanner(dict):
                 # proxies with stale adverts. Hopefully.
                 # new_stamp = MONOTONIC_TIME() - (ADVERT_FRESHTIME * 4)
                 new_stamp = MONOTONIC_TIME()
-                have_new_stamp = True
             else:
-                have_new_stamp = False
                 new_stamp = None
 
-        if len(self.hist_stamp) == 0 or have_new_stamp:
+        if len(self.hist_stamp) == 0 or new_stamp is not None:
             # this is the first entry or a new one...
 
             self.rssi: float = scandata.advertisement.rssi
             self.hist_rssi.insert(0, self.rssi)
             self.rssi_distance_raw: float = rssi_to_metres(
                 self.rssi,
-                options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
-                options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
+                options.get(CONF_REF_POWER),
+                options.get(CONF_ATTENUATION),
             )
             self.hist_distance.insert(0, self.rssi_distance_raw)
 
@@ -288,26 +285,54 @@ class BermudaDeviceScanner(dict):
         self.adverts: dict[str, bytes] = scandata.advertisement.service_data.items()
         self.options = options
 
-        # ###### Filter and update distance estimates.
-        #
-        # Note: Noise in RSSI readings is VERY asymmetric. Ultimately,
-        # a closer distance is *always* more accurate than a previous
-        # more distant measurement. Any measurement might be true,
-        # or it is likely longer than the truth - and (almost) never
-        # shorter.
-        #
-        # For a new, long measurement to be true, we'd want to see some
-        # indication of rising measurements preceding it, or at least a
-        # long time since our last measurement.
-        #
-        # It's tempting to treat no recent measurement as implying an increase
-        # in distance, but doing so would wreak havoc when we later try to
-        # implement trilateration, so better to simply cut a sensor off as
-        # "away" from a scanner when it hears no new adverts. DISTANCE_TIMEOUT
-        # is how we decide how long to wait, and should accommodate for dropped
-        # packets and for temporary occlusion (dogs' bodies etc)
+        self.new_stamp = new_stamp
 
-        if have_new_stamp and self.rssi_distance is None:
+    def calculate_data(self):
+        """Filter and update distance estimates.
+
+        All smoothing and noise-management of the distance between a scanner
+        and a device should be done in this method, as it is
+        guaranteed to be called on every update cycle, for every
+        scanner that has ever reported an advert for this device
+        (even if it is not reporting one currently).
+
+        If new_stamp is None it implies that the scanner has not reported
+        an updated advertisement since our last update cycle,
+        so we may need to check if this device should be timed
+        out or otherwise dealt with.
+
+        If new_stamp is not None it means we just had an updated
+        rssi_distance_raw value which should be processed.
+
+        This is called by self.update, but should also be called for
+        any remaining scanners that have not sent in an update in this
+        cycle. This is mainly beacuse usb/bluez adaptors seem to flush
+        their advertisement lists quicker than we time out, so we need
+        to make sure we still update the scanner entry even if the scanner
+        no longer carries advert history for this device.
+
+        Note: Noise in RSSI readings is VERY asymmetric. Ultimately,
+        a closer distance is *always* more accurate than a previous
+        more distant measurement. Any measurement might be true,
+        or it is likely longer than the truth - and (almost) never
+        shorter.
+
+        For a new, long measurement to be true, we'd want to see some
+        indication of rising measurements preceding it, or at least a
+        long time since our last measurement.
+
+        It's tempting to treat no recent measurement as implying an increase
+        in distance, but doing so would wreak havoc when we later try to
+        implement trilateration, so better to simply cut a sensor off as
+        "away" from a scanner when it hears no new adverts. DISTANCE_TIMEOUT
+        is how we decide how long to wait, and should accommodate for dropped
+        packets and for temporary occlusion (dogs' bodies etc)
+        """
+
+        new_stamp = self.new_stamp  # should have been set by update()
+        self.new_stamp = None  # Clear so we know if an update is missed next cycle
+
+        if new_stamp is not None and self.rssi_distance is None:
             # DEVICE HAS ARRIVED!
             # We have just newly come into range (or we're starting up)
             # accept the new reading as-is.
@@ -316,7 +341,7 @@ class BermudaDeviceScanner(dict):
             self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
             del self.hist_distance_by_interval[1:]
 
-        elif (not have_new_stamp) and self.stamp < MONOTONIC_TIME() - DISTANCE_TIMEOUT:
+        elif (new_stamp is None) and self.stamp < MONOTONIC_TIME() - DISTANCE_TIMEOUT:
             # DEVICE IS AWAY!
             # Last distance reading is stale, mark device distance as unknown.
             self.rssi_distance = None
@@ -345,7 +370,7 @@ class BermudaDeviceScanner(dict):
                         continue
 
                     delta_t = velo_newstamp - self.hist_stamp[i]
-                    delta_d = velo_newdistance - self.hist_distance[i]
+                    delta_d = velo_newdistance - old_distance
                     velocity = delta_d / delta_t
 
                     # Approach velocities are only interesting vs the previous
@@ -371,10 +396,10 @@ class BermudaDeviceScanner(dict):
             self.hist_velocity.insert(0, velocity)
 
             if velocity > self.options.get(CONF_MAX_VELOCITY):
-                if device_address.upper() in self.options[CONF_DEVICES]:
+                if self.parent_device.upper() in self.options[CONF_DEVICES]:
                     _LOGGER.debug(
                         "This sparrow %s flies too fast (%2fm/s), ignoring",
-                        device_address,
+                        self.parent_device,
                         velocity,
                     )
                 # Discard the bogus reading by duplicating the last.
@@ -493,18 +518,42 @@ class BermudaDevice(dict):
         )
         self.scanners: dict[str, BermudaDeviceScanner] = {}
 
-    def add_scanner(
+    def calculate_data(self):
+        """Call after doing update_scanner() calls so that distances
+        etc can be freshly smoothed and filtered.
+
+        """
+        for scanner in self.scanners.values():
+            scanner.calculate_data()
+
+        # Update whether the device has been seen recently, for device_tracker:
+        if (
+            self.last_seen is not None
+            and MONOTONIC_TIME()
+            - self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT)
+            < self.last_seen
+        ):
+            self.zone = STATE_HOME
+        else:
+            self.zone = STATE_NOT_HOME
+
+        if self.address.upper() in self.options.get(CONF_DEVICES, []):
+            # We are a device we track. Flag for set-up:
+            self.create_sensor = True
+
+    def update_scanner(
         self, scanner_device: BermudaDevice, discoveryinfo: BluetoothScannerDevice
     ):
-        """Add/Replace a scanner entry on this device, indicating a received advertisement
+        """Add/Update a scanner entry on this device, indicating a received advertisement
 
         This gets called every time a scanner is deemed to have received an advert for
-        this device.
+        this device. It only loads data into the structure, all calculations are done
+        with calculate_data()
 
         """
         if format_mac(scanner_device.address) in self.scanners:
             # Device already exists, update it
-            self.scanners[format_mac(scanner_device.address)].update(
+            self.scanners[format_mac(scanner_device.address)].update_advertisement(
                 self.address,
                 discoveryinfo,  # the entire BluetoothScannerDevice struct
                 scanner_device.area_id,
@@ -599,9 +648,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         # TODO: This is only here because we haven't set up migration of config
         # entries yet, so some users might not have this defined after an update.
+        self.options[CONF_ATTENUATION] = DEFAULT_ATTENUATION
+        self.options[CONF_DEVTRACK_TIMEOUT] = DEFAULT_DEVTRACK_TIMEOUT
         self.options[CONF_MAX_RADIUS] = DEFAULT_MAX_RADIUS
-        self.options[CONF_SMOOTHING_SAMPLES] = DEFAULT_SMOOTHING_SAMPLES
         self.options[CONF_MAX_VELOCITY] = DEFAULT_MAX_VELOCITY
+        self.options[CONF_REF_POWER] = DEFAULT_REF_POWER
+        self.options[CONF_SMOOTHING_SAMPLES] = DEFAULT_SMOOTHING_SAMPLES
+        self.options[CONF_UPDATE_INTERVAL] = DEFAULT_UPDATE_INTERVAL
 
         if hasattr(entry, "options"):
             # Firstly, on some calls (specifically during reload after settings changes)
@@ -839,22 +892,16 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     )
                     continue
 
-                # Replace the scanner entry on the current device
-                device.add_scanner(scanner_device, discovered)
+                # Update the scanner entry on the current device
+                device.update_scanner(scanner_device, discovered)
 
-            # Update whether the device has been seen recently, for device_tracker:
-            if (
-                MONOTONIC_TIME()
-                - self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT)
-                < device.last_seen
-            ):
-                device.zone = STATE_HOME
-            else:
-                device.zone = STATE_NOT_HOME
+            # END of per-advertisement-by-device loop
 
-            if device.address.upper() in self.options.get(CONF_DEVICES, []):
-                # This is a device we track. Flag it for set-up:
-                device.create_sensor = True
+        # Scanner entries have been loaded up with latest data, now we can process data for all devices
+        # over all scanners.
+        for device in self.devices.values():
+            # Recalculate smoothed distances, last_seen etc
+            device.calculate_data()
 
         self._refresh_areas_by_min_distance()
 
