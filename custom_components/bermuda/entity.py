@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from typing import Any
 
+from homeassistant.components.bluetooth import MONOTONIC_TIME
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers import area_registry
 from homeassistant.helpers import device_registry as dr
@@ -11,6 +14,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import ATTRIBUTION
 from .const import BEACON_IBEACON_DEVICE
+from .const import CONF_UPDATE_INTERVAL
+from .const import DEFAULT_UPDATE_INTERVAL
 from .const import DOMAIN
 
 if TYPE_CHECKING:
@@ -27,13 +32,46 @@ class BermudaEntity(CoordinatorEntity):
     """
 
     def __init__(
-        self, coordinator: BermudaDataUpdateCoordinator, config_entry, address: str
+        self,
+        coordinator: BermudaDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        address: str,
     ):
         super().__init__(coordinator)
         self.coordinator = coordinator
         self.config_entry = config_entry
         self._device = coordinator.devices[address]
         self.area_reg = area_registry.async_get(coordinator.hass)
+        self.bermuda_update_interval = config_entry.options.get(
+            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+        )
+        self.bermuda_last_state: Any = 0
+        self.bermuda_last_stamp: int = 0
+
+    def _cached_ratelimit(self, statevalue: Any, FastFalling=True, FastRising=False):
+        """Uses the CONF_UPDATE_INTERVAL and other logic to return either the given statevalue
+        or an older, cached value. Helps to reduce excess sensor churn without compromising latency.
+
+        Only suitable for MEASUREMENTS, as numerical comparison is used.
+        """
+
+        nowstamp = MONOTONIC_TIME()
+        if (
+            (
+                self.bermuda_last_stamp < nowstamp - self.bermuda_update_interval
+            )  # Cache is stale
+            or (self.bermuda_last_state is None)  # Nothing compares to you.
+            or (statevalue is None)  # or you.
+            or (FastFalling and statevalue < self.bermuda_last_state)  # (like Distance)
+            or (FastRising and statevalue > self.bermuda_last_state)  # (like RSSI)
+        ):
+            # Publish the new value and update cache
+            self.bermuda_last_stamp = nowstamp
+            self.bermuda_last_state = statevalue
+            return statevalue
+        else:
+            # Send the cached value, don't update cache
+            return self.bermuda_last_state
 
     @callback
     def _handle_coordinator_update(self) -> None:

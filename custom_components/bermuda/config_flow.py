@@ -14,12 +14,14 @@ from .const import CONF_ATTENUATION
 from .const import CONF_DEVICES
 from .const import CONF_DEVTRACK_TIMEOUT
 from .const import CONF_MAX_RADIUS
+from .const import CONF_MAX_VELOCITY
 from .const import CONF_REF_POWER
 from .const import CONF_SMOOTHING_SAMPLES
 from .const import CONF_UPDATE_INTERVAL
 from .const import DEFAULT_ATTENUATION
 from .const import DEFAULT_DEVTRACK_TIMEOUT
 from .const import DEFAULT_MAX_RADIUS
+from .const import DEFAULT_MAX_VELOCITY
 from .const import DEFAULT_REF_POWER
 from .const import DEFAULT_SMOOTHING_SAMPLES
 from .const import DEFAULT_UPDATE_INTERVAL
@@ -117,6 +119,7 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
                 service_info.name
                 or service_info.advertisement.local_name
                 or service_info.device.name
+                or service_info.address
             )
             options.append(
                 {
@@ -161,6 +164,10 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Required(
                 CONF_MAX_RADIUS,
                 default=self.options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_MAX_VELOCITY,
+                default=self.options.get(CONF_MAX_VELOCITY, DEFAULT_MAX_VELOCITY),
             ): vol.Coerce(float),
             vol.Required(
                 CONF_DEVTRACK_TIMEOUT,

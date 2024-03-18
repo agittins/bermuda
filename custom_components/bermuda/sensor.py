@@ -8,6 +8,7 @@ from typing import Any
 
 from homeassistant import config_entries
 from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.sensor import SensorStateClass
 from homeassistant.const import SIGNAL_STRENGTH_DECIBELS_MILLIWATT
 from homeassistant.const import STATE_UNAVAILABLE
@@ -22,10 +23,6 @@ from .const import BEACON_IBEACON_DEVICE
 from .const import DOMAIN
 from .const import SIGNAL_DEVICE_NEW
 from .entity import BermudaEntity
-
-# from .const import DEFAULT_NAME
-# from .const import ICON
-# from .const import SENSOR
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -82,7 +79,7 @@ async def async_setup_entry(
     await coordinator.async_config_entry_first_refresh()
 
 
-class BermudaSensor(BermudaEntity):
+class BermudaSensor(BermudaEntity, SensorEntity):
     """bermuda Sensor class."""
 
     @property
@@ -103,7 +100,7 @@ class BermudaSensor(BermudaEntity):
         return "Area"
 
     @property
-    def state(self):
+    def native_value(self):
         """Return the state of the sensor."""
         # return self.coordinator.data.get("body")
         return self._device.area_name
@@ -115,11 +112,6 @@ class BermudaSensor(BermudaEntity):
             return True
         else:
             return False
-
-    # @property
-    # def icon(self):
-    #    """Return the icon of the sensor."""
-    #    return ICON
 
     @property
     def device_class(self):
@@ -160,7 +152,7 @@ class BermudaSensorScanner(BermudaSensor):
         return "Nearest Scanner"
 
     @property
-    def state(self):
+    def native_value(self):
         return self._device.area_scanner
 
 
@@ -177,8 +169,10 @@ class BermudaSensorRssi(BermudaSensor):
         return "Nearest RSSI"
 
     @property
-    def state(self):
-        return self._device.area_rssi
+    def native_value(self):
+        return self._cached_ratelimit(
+            self._device.area_rssi, FastFalling=False, FastRising=True
+        )
 
     @property
     def device_class(self):
@@ -209,28 +203,15 @@ class BermudaSensorRange(BermudaSensor):
 
     @property
     def native_value(self):
-        """Define the native value of the measurement."""
+        """Return the native value of the sensor"""
         distance = self._device.area_distance
         if distance is not None:
-            return round(distance, 3)
-        return None
-
-    @property
-    def state(self):
-        """Return the user-facing state of the sensor"""
-        distance = self._device.area_distance
-        if distance is not None:
-            return round(distance, 3)
+            return self._cached_ratelimit(round(distance, 1))
         return None
 
     @property
     def device_class(self):
         return SensorDeviceClass.DISTANCE
-
-    @property
-    def unit_of_measurement(self):
-        """Results are in Metres"""
-        return UnitOfLength.METERS
 
     @property
     def native_unit_of_measurement(self):
@@ -275,18 +256,7 @@ class BermudaSensorScannerRange(BermudaSensorRange):
         devscanner = self._device.scanners.get(self._scanner.address, {})
         distance = getattr(devscanner, "rssi_distance", None)
         if distance is not None:
-            return round(distance, 3)
-        return None
-
-    @property
-    def state(self):
-        """Expose distance to given scanner.
-
-        Don't break if that scanner's never heard of us!"""
-        devscanner = self._device.scanners.get(self._scanner.address, {})
-        distance = getattr(devscanner, "rssi_distance", None)
-        if distance is not None:
-            return round(distance, 3)
+            return self._cached_ratelimit(round(distance, 3))
         return None
 
     @property
@@ -315,19 +285,8 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
     def name(self):
         return "Unfiltered Distance to " + self._scanner.name
 
-    # @property
-    # def native_value(self):
-    #     """Expose distance to given scanner.
-
-    #     Don't break if that scanner's never heard of us!"""
-    #     devscanner = self._device.scanners.get(self._scanner.address, {})
-    #     distance = getattr(devscanner, "rssi_distance_raw", None)
-    #     if distance is not None:
-    #         return round(distance, 3)
-    #     return None
-
     @property
-    def state(self):
+    def native_value(self):
         """Expose distance to given scanner.
 
         Don't break if that scanner's never heard of us!"""
