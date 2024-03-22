@@ -1010,7 +1010,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             if device.last_seen > metadev.last_seen:
                 metadev.last_seen = device.last_seen
             elif device.last_seen < metadev.last_seen:
-                _LOGGER.warning("Using freshest advert but it's still too old!")
+                # FIXME: This is showing up for some people (see https://github.com/agittins/bermuda/issues/138)
+                # but I can't see why. Downgrading to debug since it doesn't seem to affect ops, and adding
+                # params so I can perhaps get more info later.
+                _LOGGER.debug(
+                    "Using freshest advert from %s for %s but it's still too old!",
+                    device.name,
+                    metadev.name,
+                )
             # else there's no newer advert
 
             if device.address not in metadev.beacon_sources:
