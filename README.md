@@ -27,6 +27,7 @@ Bermuda aims to let you track any bluetooth device, and have Homeassistant tell 
 - Area-based device location (ie, device-level room prescence) is working reasonably well.
 - Creates sensors for Area and Distance for devices you choose
 - Supports iBeacon devices, including those with randomised MAC addresses (like Android phones running HA Companion App)
+- Supports IRK (resolvable keys) via the [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) core component. Once your iOS device (or Android!) is set up in Private BLE Device, it will automatically receive Bermuda sensors as well!
 - Creates `device_tracker` entities for chosen devices, which can be linked to "Person"s for Home/Not Home tracking
 - Configurable settings for rssi reference level, environmental attenuation, max tracking radius
 - Provides a comprehensive json/yaml dump of devices and their distances from each bluetooth
@@ -50,13 +51,6 @@ Bermuda aims to let you track any bluetooth device, and have Homeassistant tell 
   goal. RSSI is extremely "noisy" as data goes, but the hope is to find ways to smooth that
   out a bit and get a workable impression of where devices and scanners are in relation to each
   other. Math / Geometry geeks are very welcome to assist, I am well out of my depth here!
-
-- As yet it doesn't know how to handle iPhones with their rotating MAC addresses, hopefully
-  we can integrate with [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/)
-  to solve that. We do now support iBeacon, so companion apps such as the one for Android
-  will now work, even with the rotating MAC-address. iBeacon apps on iOS behave oddly when
-  backgrounded (an iOS-enforced oddity), so we don't support that either currently. We will
-  have Private BLE working at some point though, watch this space.
 
 ## What you won't need (if this works for you)
 
@@ -144,10 +138,13 @@ for any person/user.
 
 ### Can I track my phone?
 
-- Android: Yes! iPhone: Soon!? Bermuda now supports the iBeacon format, so if you can get your phone
-  to broadcast iBeacon packets, then yes. The Homeassistant comanion app for
-  Android does, so it works well.
-  iPhone will be supported soon by tying in to the `Private BLE Device` integration.
+- Yes! Both Android and iOS devices (iPhone, iPad) are supported. iWatch should
+  also work, providing you can get them showing up in the
+  [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/)
+  core integration.
+
+- Android: you have the option of using IRK (Private BLE Device) or iBeacon support
+  via the HA Companion app.
 
 - Bermuda's iBeacon support is rather simplistic and opinionated, reflecting the
   author somewhat.
@@ -170,8 +167,12 @@ for any person/user.
 
 ### Why do my bluetooth devices have only the address and no name?
 
-- you can tell your bluetooth proxies to send an inquiry in response to
-  advertisements, this _might_ cause names to show up.
+- You can simply rename your entities if you like.
+
+- You can also tell your bluetooth proxies to send an inquiry in response to
+  advertisements, this _might_ cause names to show up. Consider also though
+  that it means while your proxy is asking a device for its name it can't be
+  listening for BLE traffic to proxy.
   In esphome, this is done by adding `active: true` to the
   `esp32_ble_tracker` section (this is separate from the active property of
   the `bluetooth_proxy` section, which controls outbound client connections).
@@ -216,7 +217,9 @@ So how does that help?
 
 - There are three main factors.
   - How often your beacon transmits advertisements. Most are less than 2 seconds.
-  - Bermuda only checks for new advertisements every second.
+  - Bermuda only checks for new advertisements every second. It will update sensors
+    immediately if devices get "closer", but it is more leisurely for devices that
+    appear to be "leaving" an area.
   - The proxies might not catch every advertisement. In my esphome proxies I usually
     use these settings to ensure we don't miss toooo many:
     ```yaml
