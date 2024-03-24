@@ -20,6 +20,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BermudaDataUpdateCoordinator
 from .const import BEACON_IBEACON_DEVICE
+from .const import BEACON_PRIVATE_BLE_DEVICE
 from .const import DOMAIN
 from .const import SIGNAL_DEVICE_NEW
 from .entity import BermudaEntity
@@ -38,7 +39,7 @@ async def async_setup_entry(
     created_devices = []  # list of already-created devices
 
     @callback
-    def device_new(address: str, scanners: [str]) -> None:
+    def device_new(address: str, scanners: list[str]) -> None:
         """Create entities for newly-found device
 
         Called from the data co-ordinator when it finds a new device that needs
@@ -122,7 +123,10 @@ class BermudaSensor(BermudaEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
         current_mac = self._device.address
-        if self._device.beacon_type == BEACON_IBEACON_DEVICE:
+        if self._device.beacon_type in [
+            BEACON_IBEACON_DEVICE,
+            BEACON_PRIVATE_BLE_DEVICE,
+        ]:
             if len(self._device.beacon_sources) > 0:
                 current_mac = self._device.beacon_sources[0]
             else:

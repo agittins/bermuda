@@ -32,6 +32,9 @@ DEVICE_TRACKER = "device_tracker"
 # PLATFORMS = [BINARY_SENSOR, SENSOR, SWITCH]
 PLATFORMS = [SENSOR, DEVICE_TRACKER]
 
+# Should probably retreive this from the component, but it's in "DOMAIN" *shrug*
+DOMAIN_PRIVATE_BLE_DEVICE = "private_ble_device"
+
 # Signal names we are using:
 SIGNAL_DEVICE_NEW = f"{DOMAIN}-device-new"
 
@@ -55,6 +58,12 @@ BEACON_IBEACON_SOURCE: Final = (
 )
 BEACON_IBEACON_DEVICE: Final = (
     "beacon device"  # The meta-device created to track the beacon
+)
+BEACON_PRIVATE_BLE_SOURCE: Final = (
+    "private_ble_src"  # current (random) MAC of a private ble device
+)
+BEACON_PRIVATE_BLE_DEVICE: Final = (
+    "private_ble_device"  # meta-device create to track private ble device
 )
 
 DOCS = {}
