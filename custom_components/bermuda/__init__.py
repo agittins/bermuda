@@ -1128,7 +1128,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             for dev_entry in self.hass.data["device_registry"].devices.data.values():
                 for dev_connection in dev_entry.connections:
                     if dev_connection[0] in ["mac", "bluetooth"]:
-                        found_address = dev_connection[1].upper()
+                        found_address = format_mac(dev_connection[1])
                         if found_address in addresses:
                             scandev = self._get_device(found_address)
                             if scandev is None:
@@ -1136,6 +1136,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                 _LOGGER.debug("New Scanner: %s", found_address)
                                 update_scannerlist = True
                                 scandev = self._get_or_create_device(found_address)
+                            # Found the device entry and have created our scannerdevice,
+                            # now update any fields that might be new from the device reg:
                             scandev_orig = scandev
                             scandev.area_id = dev_entry.area_id
                             scandev.entry_id = dev_entry.id
@@ -1152,6 +1154,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                     scandev.name,
                                 )
                             scandev.is_scanner = True
+                            # If the scanner data we loaded from our saved data appears
+                            # out of date, trigger a full rescan of seen scanners.
                             if scandev_orig != scandev:
                                 # something changed, let's update the saved list.
                                 _LOGGER.debug(
