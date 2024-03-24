@@ -38,7 +38,7 @@ async def async_setup_entry(
     created_devices = []  # list of already-created devices
 
     @callback
-    def device_new(address: str, scanners: [str]) -> None:
+    def device_new(address: str, scanners: list[str]) -> None:
         """Create entities for newly-found device
 
         Called from the data co-ordinator when it finds a new device that needs
