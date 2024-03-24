@@ -14,9 +14,11 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import ATTRIBUTION
 from .const import BEACON_IBEACON_DEVICE
+from .const import BEACON_PRIVATE_BLE_DEVICE
 from .const import CONF_UPDATE_INTERVAL
 from .const import DEFAULT_UPDATE_INTERVAL
 from .const import DOMAIN
+from .const import DOMAIN_PRIVATE_BLE_DEVICE
 
 if TYPE_CHECKING:
     from . import BermudaDataUpdateCoordinator
@@ -42,6 +44,8 @@ class BermudaEntity(CoordinatorEntity):
         self.config_entry = config_entry
         self._device = coordinator.devices[address]
         self.area_reg = area_registry.async_get(coordinator.hass)
+        self.devreg = dr.async_get(coordinator.hass)
+
         self.bermuda_update_interval = config_entry.options.get(
             CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
         )
@@ -96,20 +100,39 @@ class BermudaEntity(CoordinatorEntity):
         # For scanners we use ethernet MAC, which looks like they are
         # normally stored lowercased, otherwise we use our btmac, which
         # seem to be stored uppercased.
+        # existing_device_id = None
+        domain_name = DOMAIN
+
         if self._device.is_scanner:
             connection = {(dr.CONNECTION_NETWORK_MAC, self._device.address.lower())}
         elif self._device.beacon_type == BEACON_IBEACON_DEVICE:
             # ibeacon doesn't (yet) actually set a connection, but
             # this "matches" what it stores for identifier.
             connection = {("ibeacon", self._device.address.lower())}
+        elif self._device.beacon_type == BEACON_PRIVATE_BLE_DEVICE:
+            # Private BLE Device integration doesn't specify "connection" tuples,
+            # so we use what it defines for the "connection" instead.
+            connection = {("private_ble_device", self._device.address.lower())}
+            # We look up and use the device from the registry so we get
+            # the private_ble_device device congealment!
+            # The "connection" is actually being used as the "identifiers" tuple
+            # here.
+            # dr_device = self.devreg.async_get_device(connection)
+            # if dr_device is not None:
+            #    existing_device_id = dr_device.id
+            domain_name = DOMAIN_PRIVATE_BLE_DEVICE
         else:
             connection = {(dr.CONNECTION_BLUETOOTH, self._device.address.upper())}
 
-        return {
-            "identifiers": {(DOMAIN, self._device.unique_id)},
+        device_info = {
+            "identifiers": {(domain_name, self._device.unique_id)},
             "connections": connection,
             "name": self._device.prefname,
         }
+        # if existing_device_id is not None:
+        #    device_info['id'] = existing_device_id
+
+        return device_info
 
     @property
     def device_state_attributes(self):
