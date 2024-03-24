@@ -21,11 +21,14 @@ from homeassistant.const import STATE_HOME
 from homeassistant.const import STATE_NOT_HOME
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import Config
+from homeassistant.core import Event
 from homeassistant.core import HomeAssistant
 from homeassistant.core import SupportsResponse
+from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import area_registry
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.device_registry import EVENT_DEVICE_REGISTRY_UPDATED
 from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -198,7 +201,8 @@ class BermudaDeviceScanner(dict):
         if hasattr(scandata.scanner, "_discovered_device_timestamps"):
             # Found a remote scanner which has timestamp history...
             self.scanner_sends_stamps = True
-            # FIXME: Doesn't appear to be any API to get this otherwise...
+            # There's no API for this, so we somewhat sneakily are accessing
+            # what is intended to be a protected dict.
             # pylint: disable-next=protected-access
             stamps = scandata.scanner._discovered_device_timestamps
 
@@ -644,6 +648,24 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # forcing a scan of the captured info.
         self._do_full_scanner_init = True
 
+        @callback
+        def handle_devreg_changes(ev: Event):
+            """Update our scanner list if the device registry is changed.
+
+            This catches area changes, for the most part."""
+            # We could try filtering on "updates" and "area" but I doubt
+            # this will fire all that often, and even when it does the difference
+            # in cycle time appears to be less than 1ms.
+            _LOGGER.debug(
+                "Device registry has changed, we will reload scanners. ev: %s", ev
+            )
+            # Mark so that we will rebuild scanner list on next update cycle.
+            self._do_full_scanner_init = True
+
+        # Listen for changes to the device registry and handle them.
+        # Primarily for when scanners get moved to a different area.
+        hass.bus.async_listen(EVENT_DEVICE_REGISTRY_UPDATED, handle_devreg_changes)
+
         self.options = {}
 
         # TODO: This is only here because we haven't set up migration of config
@@ -897,8 +919,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             # END of per-advertisement-by-device loop
 
-        # Scanner entries have been loaded up with latest data, now we can process data for all devices
-        # over all scanners.
+        # Scanner entries have been loaded up with latest data, now we can
+        # process data for all devices over all scanners.
         for device in self.devices.values():
             # Recalculate smoothed distances, last_seen etc
             device.calculate_data()
@@ -1010,8 +1032,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             if device.last_seen > metadev.last_seen:
                 metadev.last_seen = device.last_seen
             elif device.last_seen < metadev.last_seen:
-                # FIXME: This is showing up for some people (see https://github.com/agittins/bermuda/issues/138)
-                # but I can't see why. Downgrading to debug since it doesn't seem to affect ops, and adding
+                # FIXME: This is showing up for some people
+                # (see https://github.com/agittins/bermuda/issues/138)
+                # but I can't see why. Downgrading to debug since it
+                # doesn't seem to affect ops, and adding
                 # params so I can perhaps get more info later.
                 _LOGGER.debug(
                     "Using freshest advert from %s for %s but it's still too old!",
