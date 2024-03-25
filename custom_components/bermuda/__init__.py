@@ -996,26 +996,48 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # and ensure for each "device" we create a source device.
             self._do_private_device_init = False
             _LOGGER.debug("Refreshing Private BLE Device list")
-            for entity_id in self.hass.states.async_entity_ids(DEVICE_TRACKER):
-                # The device_tracker entity in private ble has no suffix on its unique_id.
-                if f"{DEVICE_TRACKER}.{DOMAIN_PRIVATE_BLE_DEVICE}" in entity_id:
-                    # We have a private_ble_device to track!
-                    pb_entity = entreg.async_get(entity_id)
-                    pb_device = devreg.async_get(pb_entity.device_id)
-                    pb_state = self.hass.states.get(entity_id)
-                    pb_address = pb_state.attributes.get(
-                        "current_address", "broken_address"
-                    ).lower()
-                    if pb_address:
-                        pble_source_device = self._get_or_create_device(pb_address)
-                        pble_source_device.name = (
-                            pb_device.name_by_user or pb_device.name
+            # We dig through the state engine because we need the temporary mac
+            # address in `current_address`.
+            pb_entries = self.hass.config_entries.async_entries(
+                DOMAIN_PRIVATE_BLE_DEVICE
+            )
+            for pb_entry in pb_entries:
+                pb_entities = entreg.entities.get_entries_for_config_entry_id(
+                    pb_entry.entry_id
+                )
+                # This will be a list of entities for a given device, let's pull out the
+                # device_tracker one, since it has the state info we need.
+                for pb_entity in pb_entities:
+                    if pb_entity.domain == DEVICE_TRACKER:
+                        # We found the device_tracker for this device.
+                        _LOGGER.debug(
+                            "Found a Private BLE Device! %s", pb_entity.entity_id
                         )
-                        pble_source_device.prefname = (
-                            pb_device.name_by_user or pb_device.name
-                        )
-                        pble_source_device.beacon_type = BEACON_PRIVATE_BLE_SOURCE
-                        pble_source_device.beacon_unique_id = pb_entity.unique_id
+
+                        pb_device = devreg.async_get(pb_entity.device_id)
+                        pb_state = self.hass.states.get(pb_entity.entity_id)
+                        pb_address = pb_state.attributes.get(
+                            "current_address", "invalid_address"
+                        ).lower()
+                        if pb_address is not None and pb_address != "invalid_address":
+                            # We've got a MAC address, let's tag up our current source "device"
+                            # so that we'll later create the meta-device based on it.
+                            source_device = self._get_or_create_device(pb_address)
+                            # Override name and prefname, as the user will (hopefully)
+                            # chosen something nice for their private ble device name.
+                            source_device.name = (
+                                pb_device.name_by_user or pb_device.name
+                            )
+                            source_device.prefname = (
+                                pb_device.name_by_user or pb_device.name
+                            )
+                            source_device.beacon_type = BEACON_PRIVATE_BLE_SOURCE
+                            source_device.beacon_unique_id = pb_entity.unique_id
+                        else:
+                            _LOGGER.warning(
+                                "Unable to get address for PB Device %s",
+                                pb_entity.entity_id,
+                            )
 
         # First let's find the freshest device advert for each Beacon unique_id
         # Start keeping a winners-list by beacon/pb id
