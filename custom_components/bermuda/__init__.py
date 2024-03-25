@@ -17,6 +17,7 @@ from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import MONOTONIC_TIME
 from homeassistant.components.bluetooth import BluetoothScannerDevice
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_STATE_CHANGED
 from homeassistant.const import STATE_HOME
 from homeassistant.const import STATE_NOT_HOME
 from homeassistant.const import STATE_UNAVAILABLE
@@ -650,6 +651,48 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=UPDATE_INTERVAL),
         )
 
+        # Track the list of Private BLE devices, noting their entity id
+        # and current "last address".
+        self.pb_state_sources: dict[str, str] = {}
+
+        @callback
+        def handle_state_changes(ev: Event):
+            """Watch for new mac addresses on private ble devices and act."""
+            if ev.event_type == EVENT_STATE_CHANGED:
+                event_entity = ev.data.get("entity_id")
+                if event_entity in self.pb_state_sources:
+                    # It's a state change of entity we are tracking.
+                    new_state = ev.data.get("new_state")
+                    if new_state:
+                        # _LOGGER.debug("New state change! %s", new_state)
+                        # check new_state.attributes.assumed_state
+                        if hasattr(new_state, "attributes"):
+                            new_address = new_state.attributes.get("current_address")
+                            if (
+                                new_address is not None
+                                and new_address.lower()
+                                != self.pb_state_sources[event_entity]
+                            ):
+                                _LOGGER.debug(
+                                    "Have a new source address for %s, %s",
+                                    event_entity,
+                                    new_address,
+                                )
+                                self.pb_state_sources[
+                                    event_entity
+                                ] = new_address.lower()
+                                # Flag that we need new pb checks, and work them out:
+                                self._do_private_device_init = True
+                                self.configure_beacons()
+                                # If no sensors have yet been configured, the coordinator won't be getting
+                                # polled for fresh data. Since we have found something, we should get it to
+                                # do that.
+                                self.hass.add_job(
+                                    self.async_config_entry_first_refresh()
+                                )
+
+        hass.bus.async_listen(EVENT_STATE_CHANGED, handle_state_changes)
+
         # First time around we freshen the restored scanner info by
         # forcing a scan of the captured info.
         self._do_full_scanner_init = True
@@ -1016,9 +1059,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                         pb_device = devreg.async_get(pb_entity.device_id)
                         pb_state = self.hass.states.get(pb_entity.entity_id)
-                        pb_address = pb_state.attributes.get(
-                            "current_address", "invalid_address"
-                        ).lower()
+                        pb_address = None
+                        if pb_state:  # in case it's not there yet
+                            pb_address = pb_state.attributes.get(
+                                "current_address", "invalid_address"
+                            ).lower()
                         if pb_address is not None and pb_address != "invalid_address":
                             # We've got a MAC address, let's tag up our current source "device"
                             # so that we'll later create the meta-device based on it.
@@ -1033,11 +1078,19 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                             )
                             source_device.beacon_type = BEACON_PRIVATE_BLE_SOURCE
                             source_device.beacon_unique_id = pb_entity.unique_id
+                            # Store the entity_id in beacon_uuid. We use that to query
+                            # and get notified by the state engine of when the source
+                            # mac address changes.
+                            source_device.beacon_uuid = pb_entity.entity_id
+                            self.pb_state_sources[pb_entity.entity_id] = pb_address
                         else:
-                            _LOGGER.warning(
-                                "Unable to get address for PB Device %s",
+                            _LOGGER.debug(
+                                "No address available yet for PB Device %s",
                                 pb_entity.entity_id,
                             )
+                            # create the empty record though so we know to keep watching
+                            # for it in a state change
+                            self.pb_state_sources[pb_entity.entity_id] = None
 
         # First let's find the freshest device advert for each Beacon unique_id
         # Start keeping a winners-list by beacon/pb id
