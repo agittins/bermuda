@@ -11,7 +11,7 @@ on:
     - cron: "0 0 * * *"
 
 env:
-  DEFAULT_PYTHON: 3.11
+  DEFAULT_PYTHON: 3.12
 
 jobs:
   pre-commit:
