@@ -678,9 +678,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                     event_entity,
                                     new_address,
                                 )
-                                self.pb_state_sources[
-                                    event_entity
-                                ] = new_address.lower()
+                                self.pb_state_sources[event_entity] = (
+                                    new_address.lower()
+                                )
                                 # Flag that we need new pb checks, and work them out:
                                 self._do_private_device_init = True
                                 self.configure_beacons()
@@ -1052,12 +1052,16 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # device_tracker one, since it has the state info we need.
                 for pb_entity in pb_entities:
                     if pb_entity.domain == DEVICE_TRACKER:
-                        # We found the device_tracker for this device.
+                        # We found a *device_tracker* entity for the private_ble integration.
                         _LOGGER.debug(
-                            "Found a Private BLE Device! %s", pb_entity.entity_id
+                            "Found a Private BLE Device Tracker! %s",
+                            pb_entity.entity_id,
                         )
 
-                        pb_device = devreg.async_get(pb_entity.device_id)
+                        if pb_entity.device_id is not None:
+                            pb_device = devreg.async_get(pb_entity.device_id)
+                        else:
+                            pb_device = None
                         pb_state = self.hass.states.get(pb_entity.entity_id)
                         pb_address = None
                         if pb_state:  # in case it's not there yet
@@ -1077,11 +1081,20 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                 pb_device.name_by_user or pb_device.name
                             )
                             source_device.beacon_type = BEACON_PRIVATE_BLE_SOURCE
-                            source_device.beacon_unique_id = pb_entity.unique_id
+
+                            # As of 2024.4.0b4 Private_ble appends _device_tracker to the
+                            # unique_id of the entity, while we really want to know
+                            # the actual IRK, so handle either case:
+                            source_device.beacon_unique_id = pb_entity.unique_id.split(
+                                "_"
+                            )[0]
+
                             # Store the entity_id in beacon_uuid. We use that to query
                             # and get notified by the state engine of when the source
-                            # mac address changes.
+                            # mac address changes. will be something like
+                            # `device_tracker.my_ipad`
                             source_device.beacon_uuid = pb_entity.entity_id
+
                             self.pb_state_sources[pb_entity.entity_id] = pb_address
                         else:
                             _LOGGER.debug(
@@ -1375,10 +1388,10 @@ async def async_remove_config_entry_device(
     for ident in device_entry.identifiers:
         try:
             if ident[0] == DOMAIN:
-                # the identifier should be the mac address, and
-                # may have "_range" or some other per-sensor suffix. Just grab
-                # the mac address part.
-                address = ident[1][:17]
+                # the identifier should be the base device address, and
+                # may have "_range" or some other per-sensor suffix.
+                # The address might be a mac address, IRK or iBeacon uuid
+                address = ident[1].split("_")[0]
         except KeyError:
             pass
     if address is not None:
@@ -1387,7 +1400,13 @@ async def async_remove_config_entry_device(
         except KeyError:
             _LOGGER.warning("Failed to locate device entry for %s", address)
         return True
-    return False
+    # Even if we don't know this address it probably just means it's stale or from
+    # a previous version that used weirder names. Allow it.
+    _LOGGER.warning(
+        "Didn't find address for %s but allowing deletion to proceed.",
+        device_entry.name,
+    )
+    return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
