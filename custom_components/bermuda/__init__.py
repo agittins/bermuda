@@ -62,6 +62,7 @@ from .const import DEFAULT_REF_POWER
 from .const import DEFAULT_SMOOTHING_SAMPLES
 from .const import DEFAULT_UPDATE_INTERVAL
 from .const import DEVICE_TRACKER
+from .const import DISTANCE_INFINITE
 from .const import DISTANCE_TIMEOUT
 from .const import DOMAIN
 from .const import DOMAIN_PRIVATE_BLE_DEVICE
@@ -106,9 +107,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     for platform in PLATFORMS:
         coordinator.platforms.append(platform)
-        hass.async_add_job(
-            hass.config_entries.async_forward_entry_setup(entry, platform)
-        )
+        await hass.config_entries.async_forward_entry_setup(entry, platform)
 
     entry.add_update_listener(async_reload_entry)
     return True
@@ -165,10 +164,12 @@ class BermudaDeviceScanner(dict):
         self.area_id: str = area_id
         self.parent_device = device_address
 
-        self.stamp: float = 0
-        self.new_stamp = None  # Set when a new advert is loaded from update
+        self.stamp: float | None = 0
+        self.new_stamp: float | None = (
+            None  # Set when a new advert is loaded from update
+        )
         self.hist_stamp = []
-        self.rssi: float = None
+        self.rssi: float | None = None
         self.hist_rssi = []
         self.hist_distance = []
         self.hist_distance_by_interval = []  # updated per-interval
@@ -177,9 +178,10 @@ class BermudaDeviceScanner(dict):
         self.stale_update_count = (
             0  # How many times we did an update but no new stamps were found.
         )
-        self.tx_power: float = None
-        self.rssi_distance: float = None
-        self.rssi_distance_raw: float = None
+        self.tx_power: float | None = None
+        self.rssi_distance: float | None = None
+        self.rssi_distance_raw: float | None = None
+        self.adverts: dict[str, bytes] = {}
 
         # Just pass the rest on to update...
         self.update_advertisement(device_address, scandata, area_id, options)
@@ -202,7 +204,7 @@ class BermudaDeviceScanner(dict):
         # In case the scanner has changed it's details since startup:
         self.name: str = scandata.scanner.name
         self.area_id: str = area_id
-        new_stamp = None
+        new_stamp: float | None = None
 
         # Only remote scanners log timestamps here (local usb adaptors do not),
         if hasattr(scandata.scanner, "_discovered_device_timestamps"):
@@ -252,9 +254,9 @@ class BermudaDeviceScanner(dict):
         if len(self.hist_stamp) == 0 or new_stamp is not None:
             # this is the first entry or a new one...
 
-            self.rssi: float = scandata.advertisement.rssi
+            self.rssi = scandata.advertisement.rssi
             self.hist_rssi.insert(0, self.rssi)
-            self.rssi_distance_raw: float = rssi_to_metres(
+            self.rssi_distance_raw = rssi_to_metres(
                 self.rssi,
                 options.get(CONF_REF_POWER),
                 options.get(CONF_ATTENUATION),
@@ -270,7 +272,11 @@ class BermudaDeviceScanner(dict):
             # of the true inter-packet interval. For stamps from local bluetooth
             # adaptors (usb dongles) it reflects "Which update cycle last saw a
             # different rssi", which will be a multiple of our update interval.
-            self.hist_interval.insert(0, new_stamp - self.stamp)
+            if new_stamp is not None and self.stamp is not None:
+                _interval = new_stamp - self.stamp
+            else:
+                _interval = None
+            self.hist_interval.insert(0, _interval)
 
             self.stamp = new_stamp
             self.hist_stamp.insert(0, self.stamp)
@@ -292,8 +298,9 @@ class BermudaDeviceScanner(dict):
                 device_address,
                 scandata.advertisement.tx_power,
             )
-        self.tx_power: float = scandata.advertisement.tx_power
-        self.adverts: dict[str, bytes] = scandata.advertisement.service_data.items()
+        self.tx_power = scandata.advertisement.tx_power
+        for ad_str, ad_bytes in scandata.advertisement.service_data.items():
+            self.adverts[ad_str] = ad_bytes
         self.options = options
 
         self.new_stamp = new_stamp
@@ -435,9 +442,9 @@ class BermudaDeviceScanner(dict):
             # slope angle (other than increasing bucket count) might be
             # helpful, but probably dependent on use-case.
             #
-            dist_total = 0
-            dist_count = 0
-            local_min = self.rssi_distance_raw
+            dist_total: float = 0
+            dist_count: int = 0
+            local_min: float = self.rssi_distance_raw or DISTANCE_INFINITE
             for i, distance in enumerate(self.hist_distance_by_interval):
                 if distance <= local_min:
                     dist_total += distance
@@ -492,35 +499,35 @@ class BermudaDevice(dict):
 
     def __init__(self, address, options):
         """Initial (empty) data"""
-        self.name: str = None
-        self.local_name: str = None
-        self.prefname: str = None  # "preferred" name - ideally local_name
+        self.name: str | None = None
+        self.local_name: str | None = None
+        self.prefname: str | None = None  # "preferred" name - ideally local_name
         self.address: str = address
         self.options = options
-        self.unique_id: str = None  # mac address formatted.
+        self.unique_id: str | None = None  # mac address formatted.
         self.mac_is_random: bool = False
-        self.area_id: str = None
-        self.area_name: str = None
-        self.area_distance: float = None  # how far this dev is from that area
-        self.area_rssi: float = None  # rssi from closest scanner
-        self.area_scanner: str = None  # name of closest scanner
+        self.area_id: str | None = None
+        self.area_name: str | None = None
+        self.area_distance: float | None = None  # how far this dev is from that area
+        self.area_rssi: float | None = None  # rssi from closest scanner
+        self.area_scanner: str | None = None  # name of closest scanner
         self.zone: str = STATE_UNAVAILABLE  # STATE_HOME or STATE_NOT_HOME
-        self.manufacturer: str = None
+        self.manufacturer: str | None = None
         self.connectable: bool = False
         self.is_scanner: bool = False
-        self.beacon_type: bool = BEACON_NOT_A_BEACON
+        self.beacon_type = BEACON_NOT_A_BEACON
         self.beacon_sources = (
             []
         )  # list of MAC addresses that have advertised this beacon
-        self.beacon_unique_id: str = (
+        self.beacon_unique_id: str | None = (
             None  # combined uuid_major_minor for *really* unique id
         )
-        self.beacon_uuid: str = None
-        self.beacon_major: str = None
-        self.beacon_minor: str = None
-        self.beacon_power: float = None
+        self.beacon_uuid: str | None = None
+        self.beacon_major: str | None = None
+        self.beacon_minor: str | None = None
+        self.beacon_power: float | None = None
 
-        self.entry_id: str = None  # used for scanner devices
+        self.entry_id: str | None = None  # used for scanner devices
         self.create_sensor: bool = False  # Create/update a sensor for this device
         self.create_sensor_done: bool = False  # Sensor should now exist
         self.create_tracker_done: bool = False  # device_tracker should now exist
@@ -653,7 +660,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         # Track the list of Private BLE devices, noting their entity id
         # and current "last address".
-        self.pb_state_sources: dict[str, str] = {}
+        self.pb_state_sources: dict[str, str | None] = {}
 
         @callback
         def handle_state_changes(ev: Event):
@@ -806,7 +813,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         else:
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
 
-    def _get_device(self, address: str) -> BermudaDevice:
+    def _get_device(self, address: str) -> BermudaDevice | None:
         """Search for a device entry based on mac address"""
         mac = format_mac(address).lower()
         # format_mac tries to return a lower-cased, colon-separated mac address.
@@ -1240,7 +1247,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     def _refresh_area_by_min_distance(self, device: BermudaDevice):
         """Very basic Area setting by finding closest beacon to a given device"""
         assert device.is_scanner is not True
-        closest_scanner: BermudaDeviceScanner = None
+        closest_scanner: BermudaDeviceScanner | None = None
 
         for scanner in device.scanners.values():
             # Check each scanner and keep note of the closest one based on rssi_distance.

@@ -40,6 +40,7 @@ SIGNAL_DEVICE_NEW = f"{DOMAIN}-device-new"
 
 DISTANCE_TIMEOUT = 30  # seconds to wait before marking a sensor distance measurement
 # as unknown/none/stale/away. Separate from device_tracker.
+DISTANCE_INFINITE = 999  # arbitrary distance for infinite/unknown rssi range
 
 UPDATE_INTERVAL = 1.05  # Seconds between bluetooth data processing cycles
 # Note: this is separate from the CONF_UPDATE_INTERVAL which allows the
