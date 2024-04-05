@@ -34,15 +34,15 @@ async def test_setup_unload_and_reload_entry(hass, bypass_get_data):
     # call, no code from custom_components/bermuda/api.py actually runs.
     assert await async_setup_entry(hass, config_entry)
     assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
-    assert type(hass.data[DOMAIN][config_entry.entry_id]).isinstance(
-        BermudaDataUpdateCoordinator
+    assert isinstance(
+        hass.data[DOMAIN][config_entry.entry_id], BermudaDataUpdateCoordinator
     )
 
     # Reload the entry and assert that the data from above is still there
     assert await async_reload_entry(hass, config_entry) is None
     assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
-    assert type(hass.data[DOMAIN][config_entry.entry_id]).isinstance(
-        BermudaDataUpdateCoordinator
+    assert isinstance(
+        hass.data[DOMAIN][config_entry.entry_id], BermudaDataUpdateCoordinator
     )
 
     # Unload the entry and verify that the data has been removed
@@ -57,5 +57,10 @@ async def test_setup_entry_exception(hass, error_on_get_data):
     # In this case we are testing the condition where async_setup_entry raises
     # ConfigEntryNotReady using the `error_on_get_data` fixture which simulates
     # an error.
+
+    # Hmmm... this doesn't seem to be how this works. The super's _async_refresh might
+    # handle exceptions, in which it then sets self.last_update_status, which is what
+    # async_setup_entry checks in order to raise ConfigEntryNotReady, but I don't think
+    # anything will "catch" our over-ridded async_refresh's exception.
     with pytest.raises(ConfigEntryNotReady):
         assert await async_setup_entry(hass, config_entry)
