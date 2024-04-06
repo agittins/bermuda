@@ -9,6 +9,9 @@
    id="svg21"
    inkscape:version="1.2.1 (9c6d41e410, 2022-07-14)"
    sodipodi:docname="bermuda-logos.svg"
+   inkscape:export-filename="bermuda-logo-dark-1280x640.png"
+   inkscape:export-xdpi="107.15847"
+   inkscape:export-ydpi="107.15847"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -26,14 +29,14 @@
      inkscape:document-units="mm"
      showgrid="false"
      inkscape:zoom="0.84096521"
-     inkscape:cx="524.99199"
-     inkscape:cy="281.22448"
+     inkscape:cx="943.55865"
+     inkscape:cy="282.41359"
      inkscape:window-width="1920"
      inkscape:window-height="1047"
      inkscape:window-x="1920"
      inkscape:window-y="33"
      inkscape:window-maximized="1"
-     inkscape:current-layer="g339" />
+     inkscape:current-layer="g295" />
   <defs
      id="defs18">
     <linearGradient
@@ -148,10 +151,10 @@
        style="color-interpolation-filters:sRGB"
        inkscape:label="Drop Shadow"
        id="filter7153"
-       x="-0.012150207"
-       y="-0.086067525"
-       width="1.0302201"
-       height="1.2140681">
+       x="-0.034483225"
+       y="-0.088324187"
+       width="1.0852122"
+       height="1.2182597">
       <feFlood
          flood-opacity="0.615686"
          flood-color="rgb(119,118,123)"
@@ -330,7 +333,7 @@
      inkscape:groupmode="layer"
      id="g4600"
      inkscape:label="textICON"
-     style="display:inline">
+     style="display:none">
     <text
        xml:space="preserve"
        style="font-size:34.3217px;line-height:123.8%;font-family:'Fira Mono';-inkscape-font-specification:'Fira Mono';text-decoration:none;text-decoration-line:none;text-decoration-color:#000000;fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0.405195;stroke-linecap:butt;stroke-linejoin:round;stroke-opacity:1;filter:url(#filter7153);stop-color:#000000"
@@ -359,12 +362,12 @@
   <g
      inkscape:groupmode="layer"
      id="g339"
-     inkscape:label="textLOGO"
+     inkscape:label="textLOGO dark"
      style="display:none;stroke-width:0.523667"
      transform="matrix(1.9096088,0,0,1.9096088,108.1871,-32.459451)">
     <text
        xml:space="preserve"
-       style="font-size:34.3217px;line-height:123.8%;font-family:'Fira Mono';-inkscape-font-specification:'Fira Mono';text-decoration:none;text-decoration-line:none;text-decoration-color:#000000;fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0.186673;stroke-linecap:butt;stroke-linejoin:round;stroke-opacity:1;filter:url(#filter7153);stop-color:#000000"
+       style="font-size:34.3217px;line-height:123.8%;font-family:'Fira Mono';-inkscape-font-specification:'Fira Mono';text-decoration:none;text-decoration-line:none;text-decoration-color:#000000;display:inline;fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0.186673;stroke-linecap:butt;stroke-linejoin:round;stroke-opacity:1;filter:url(#filter7153);stop-color:#000000"
        x="33.044971"
        y="58.89764"
        id="text337"
@@ -376,7 +379,7 @@
          id="tspan449">Bermuda</tspan></text>
     <text
        xml:space="preserve"
-       style="font-size:34.3217px;line-height:123.8%;font-family:'Fira Mono';-inkscape-font-specification:'Fira Mono';text-decoration:none;text-decoration-line:none;text-decoration-color:#000000;fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0.436245;stroke-linecap:butt;stroke-linejoin:round;stroke-opacity:1;filter:url(#filter7153);stop-color:#000000"
+       style="font-size:34.3217px;line-height:123.8%;font-family:'Fira Mono';-inkscape-font-specification:'Fira Mono';text-decoration:none;text-decoration-line:none;text-decoration-color:#000000;display:inline;fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0.436245;stroke-linecap:butt;stroke-linejoin:round;stroke-opacity:1;filter:url(#filter7153);stop-color:#000000"
        x="33.044971"
        y="58.89764"
        id="text455"
@@ -386,6 +389,37 @@
          x="33.044971"
          y="58.89764"
          id="tspan453">BLE Trilateration</tspan></text>
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="g295"
+     inkscape:label="textLOGO white"
+     style="display:inline;stroke-width:0.523667"
+     transform="matrix(1.9096088,0,0,1.9096088,108.1871,-32.459451)">
+    <text
+       xml:space="preserve"
+       style="font-size:34.3217px;line-height:123.8%;font-family:'Fira Mono';-inkscape-font-specification:'Fira Mono';text-decoration:none;text-decoration-line:none;text-decoration-color:#000000;display:inline;fill:#ffffff;fill-opacity:1;stroke:#ffffff;stroke-width:0.186673;stroke-linecap:butt;stroke-linejoin:round;stroke-opacity:1;filter:url(#filter7153);stop-color:#000000"
+       x="33.044971"
+       y="58.89764"
+       id="text289"
+       transform="matrix(0.71361287,0,0,0.77441257,-16.143043,3.2551888)"><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-family:Aldrich;-inkscape-font-specification:'Aldrich Bold';fill:#ffffff;fill-opacity:1;stroke:#ffffff;stroke-width:0.186673;stroke-opacity:1"
+         x="33.044971"
+         y="58.89764"
+         id="tspan287">Bermuda</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:34.3217px;line-height:123.8%;font-family:'Fira Mono';-inkscape-font-specification:'Fira Mono';text-decoration:none;text-decoration-line:none;text-decoration-color:#000000;display:inline;fill:#ffffff;fill-opacity:1;stroke:#ffffff;stroke-width:0.436245;stroke-linecap:butt;stroke-linejoin:round;stroke-opacity:1;filter:url(#filter7153);stop-color:#000000"
+       x="33.044971"
+       y="58.89764"
+       id="text293"
+       transform="matrix(0.30646817,0,0,0.3301802,-12.370558,38.977719)"><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-family:Aldrich;-inkscape-font-specification:'Aldrich Bold';fill:#ffffff;fill-opacity:1;stroke:#ffffff;stroke-width:0.436245;stroke-opacity:1"
+         x="33.044971"
+         y="58.89764"
+         id="tspan291">BLE Trilateration</tspan></text>
   </g>
   <g
      inkscape:groupmode="layer"
@@ -408,7 +442,7 @@
      inkscape:groupmode="layer"
      id="g1082"
      inkscape:label="CROP-LOGO"
-     style="display:inline;stroke-width:1.06024"
+     style="display:none;stroke-width:1.06024"
      transform="matrix(1,0,0,0.88958069,0,6.5067966)"
      inkscape:export-filename="logo@2X.png"
      inkscape:export-xdpi="124.04"
