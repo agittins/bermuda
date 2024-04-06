@@ -6,7 +6,10 @@ from unittest.mock import patch
 
 import pytest
 
+from .const import SERVICE_INFOS
+
 # from custom_components.bermuda import BermudaDataUpdateCoordinator
+
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
@@ -55,3 +58,17 @@ def error_get_data_fixture():
         side_effect=Exception,
     ):
         yield
+
+
+@pytest.fixture(autouse=True)
+def mock_bluetooth(enable_bluetooth):
+    """Auto mock bluetooth."""
+
+
+# This fixture ensures that the config flow gets service info for the anticipated address
+# to go into configured_devices
+@pytest.fixture(autouse=True)
+def mock_service_info():
+    """Simulate a discovered advertisement for config_flow"""
+    with patch("custom_components.bermuda.bluetooth.async_discovered_service_info"):
+        return SERVICE_INFOS

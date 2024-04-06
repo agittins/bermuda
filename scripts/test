@@ -6,4 +6,9 @@
 # Install requirements
 pip install -r requirements_test.txt
 # Run tests and get a summary of successes/failures and code coverage
-pytest --durations=10 --cov-report term-missing --cov=custom_components.bermuda tests
+pytest --durations=10 --cov-report term-missing --cov=custom_components.bermuda tests --cov-fail-under=43
+
+# Note that the github workflow runs:
+#
+# pytest --timeout=9 --durations=10 -n auto -p no:sugar tests
+# which doesn't care about coverage.
