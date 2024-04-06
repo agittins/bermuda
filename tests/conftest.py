@@ -14,6 +14,11 @@ from .const import SERVICE_INFOS
 pytest_plugins = "pytest_homeassistant_custom_component"
 
 
+@pytest.fixture(autouse=True)
+def mock_bluetooth(enable_bluetooth):
+    """Auto mock bluetooth."""
+
+
 # This fixture enables loading custom integrations in all tests.
 # Remove to enable selective use of this fixture
 @pytest.fixture(autouse=True)
@@ -58,11 +63,6 @@ def error_get_data_fixture():
         side_effect=Exception,
     ):
         yield
-
-
-@pytest.fixture(autouse=True)
-def mock_bluetooth(enable_bluetooth):
-    """Auto mock bluetooth."""
 
 
 # This fixture ensures that the config flow gets service info for the anticipated address
