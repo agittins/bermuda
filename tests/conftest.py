@@ -6,7 +6,20 @@ from unittest.mock import patch
 
 import pytest
 
+from .const import SERVICE_INFOS
+
+# from custom_components.bermuda import BermudaDataUpdateCoordinator
+
+
 pytest_plugins = "pytest_homeassistant_custom_component"
+
+
+# This fixture enables loading custom integrations in all tests.
+# Remove to enable selective use of this fixture
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(enable_custom_integrations):
+    """Enable loading custom integrations."""
+    yield
 
 
 # This fixture is used to prevent HomeAssistant from
@@ -30,9 +43,8 @@ def skip_notifications_fixture():
 @pytest.fixture(name="bypass_get_data")
 def bypass_get_data_fixture():
     """Skip calls to get data from API."""
-    # AJG: We don't implement this, so nothing to monkeypatch.
-    # with patch("custom_components.bermuda.BermudaApiClient.async_get_data"):
-    #    yield
+    with patch("custom_components.bermuda.BermudaDataUpdateCoordinator.async_refresh"):
+        yield
 
 
 # In this fixture, we are forcing calls to async_get_data to raise
@@ -41,9 +53,22 @@ def bypass_get_data_fixture():
 @pytest.fixture(name="error_on_get_data")
 def error_get_data_fixture():
     """Simulate error when retrieving data from API."""
-    # AJG: again we don't implement async_get_data...
-    # with patch(
-    #    "custom_components.bermuda.BermudaApiClient.async_get_data",
-    #    side_effect=Exception,
-    # ):
-    #    yield
+    with patch(
+        "custom_components.bermuda.BermudaDataUpdateCoordinator.async_refresh",
+        side_effect=Exception,
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def mock_bluetooth(enable_bluetooth):
+    """Auto mock bluetooth."""
+
+
+# This fixture ensures that the config flow gets service info for the anticipated address
+# to go into configured_devices
+@pytest.fixture(autouse=True)
+def mock_service_info():
+    """Simulate a discovered advertisement for config_flow"""
+    with patch("custom_components.bermuda.bluetooth.async_discovered_service_info"):
+        return SERVICE_INFOS
