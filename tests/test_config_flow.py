@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 from homeassistant import config_entries
 from homeassistant import data_entry_flow
+from homeassistant.core import HomeAssistant  # noqa: F401
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bermuda.const import DOMAIN

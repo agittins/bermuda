@@ -5,5 +5,7 @@ pytest-homeassistant-custom-component
 pre-commit
 isort
 black==24.3.0
+# AJG 2024-04-07: github not completing tests due to this.
+pyudev
 pyserial-asyncio==0.6
 pyserial==3.5
