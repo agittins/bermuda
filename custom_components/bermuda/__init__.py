@@ -480,7 +480,7 @@ class BermudaDeviceScanner(dict):
         for var, val in vars(self).items():
             if var == "adverts":
                 val = {}
-                for uuid, thebytes in self.adverts:
+                for uuid, thebytes in self.adverts.items():
                     val[uuid] = thebytes.hex()
             out[var] = val
         return out
