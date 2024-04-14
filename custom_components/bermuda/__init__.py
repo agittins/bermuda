@@ -7,7 +7,6 @@ https://github.com/agittins/bermuda
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime
 from datetime import timedelta
@@ -174,20 +173,19 @@ async def async_setup(
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Set up this integration using UI."""
     if hass.data.get(DOMAIN) is None:
-        hass.data.setdefault(DOMAIN, {})
         _LOGGER.info(STARTUP_MESSAGE)
 
-    coordinator = BermudaDataUpdateCoordinator(hass, entry)
+    coordinator = hass.data.setdefault(DOMAIN, {})[entry.entry_id] = (
+        BermudaDataUpdateCoordinator(hass, entry)
+    )
+
     await coordinator.async_refresh()
 
     if not coordinator.last_update_success:
+        _LOGGER.debug("Coordinator last update failed, rasing ConfigEntryNotReady")
         raise ConfigEntryNotReady
 
-    hass.data[DOMAIN][entry.entry_id] = coordinator
-
-    for platform in PLATFORMS:
-        coordinator.platforms.append(platform)
-        await hass.config_entries.async_forward_entry_setup(entry, platform)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.add_update_listener(async_reload_entry)
     return True
@@ -722,7 +720,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         entry: ConfigEntry,
     ) -> None:
         """Initialize."""
-        # self.config_entry = entry
         self.platforms = []
 
         self.config_entry = entry
@@ -1088,8 +1085,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # were discovered in the first scan update. This is likely if nothing has changed
         # since the last time we booted.
         if self._do_full_scanner_init:
-            self._refresh_scanners([], self._do_full_scanner_init)
-            self._do_full_scanner_init = False
+            if not self._refresh_scanners([], self._do_full_scanner_init):
+                _LOGGER.debug(
+                    "Failed to refresh scanners, likely config entry not ready."
+                )
+                # don't fail the update, just try again next time.
+                # self.last_update_success = False
+            else:
+                self._do_full_scanner_init = False
 
         # set up any beacons and update their data. We do this after all the devices
         # have had their updates done since any beacon inherits data from its source
@@ -1109,6 +1112,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     )
 
         # end of async update
+        self.last_update_success = True
 
     def configure_beacons(self):
         """Create iBeacon, Private_BLE and other meta-devices from the received advertisements
@@ -1390,6 +1394,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # scanner addresses to the list, since that will cover
         # the scanners that have been restored from config.data
         if do_full_scan:
+            update_scannerlist = True
             for address in self.scanner_list:
                 addresses.add(address.lower())
 
@@ -1418,12 +1423,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                             else:
                                 scandev.name = dev_entry.name
                             areas = self.area_reg.async_get_area(dev_entry.area_id)
-                            if hasattr(areas, "name"):
+                            if areas is not None and hasattr(areas, "name"):
                                 scandev.area_name = areas.name
                             else:
-                                _LOGGER.warning(
-                                    "No area name for while updating scanner %s",
+                                _LOGGER_SPAM_LESS.warning(
+                                    f"no_area_on_update{scandev.name}",
+                                    "No area name or no area id while updating scanner %s, area_id %s",
                                     scandev.name,
+                                    areas,
                                 )
                             scandev.is_scanner = True
                             # If the scanner data we loaded from our saved data appears
@@ -1436,22 +1443,36 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                 )
                                 update_scannerlist = True
         if update_scannerlist:
-            # We need to update our saved list of scanners in config data.
+            # Take the existing list of scanners and save them into config data
+            # for our next start-up.
+            for entry in self.hass.config_entries.async_entries(
+                DOMAIN, include_disabled=False, include_ignore=False
+            ):
+                _LOGGER.debug("Loaded entry %s", entry.entry_id)
+                self.config_entry = entry
             self.scanner_list = []
-            scanners: dict[str, str] = {}
+            confdata_scanners: dict[str, dict] = {}
             for device in self.devices.values():
                 if device.is_scanner:
-                    scanners[device.address] = device.to_dict()
+                    confdata_scanners[device.address] = device.to_dict()
                     self.scanner_list.append(device.address)
+
+            if self.config_entry is None:
+                _LOGGER.debug(
+                    "Aborting refresh scanners due to config entry not being ready"
+                )
+                return False
+
             _LOGGER.debug(
                 "Replacing config data scanners was %s now %s",
                 self.config_entry.data.get(CONFDATA_SCANNERS, {}),
-                scanners,
+                confdata_scanners,
             )
             self.hass.config_entries.async_update_entry(
                 self.config_entry,
-                data={**self.config_entry.data, CONFDATA_SCANNERS: scanners},
+                data={**self.config_entry.data, CONFDATA_SCANNERS: confdata_scanners},
             )
+        return True
 
     async def service_dump_devices(self, call):  # pylint: disable=unused-argument;
         """Return a dump of beacon advertisements by receiver"""
@@ -1499,20 +1520,12 @@ async def async_remove_config_entry_device(
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-    unloaded = all(
-        await asyncio.gather(
-            *[
-                hass.config_entries.async_forward_entry_unload(entry, platform)
-                for platform in PLATFORMS
-                if platform in coordinator.platforms
-            ]
-        )
-    )
-    if unloaded:
+    if unload_result := await hass.config_entries.async_unload_platforms(
+        entry, PLATFORMS
+    ):
+        _LOGGER.debug("Unloaded platforms.")
         hass.data[DOMAIN].pop(entry.entry_id)
-
-    return unloaded
+    return unload_result
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
