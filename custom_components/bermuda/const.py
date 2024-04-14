@@ -49,6 +49,12 @@ UPDATE_INTERVAL = 1.05  # Seconds between bluetooth data processing cycles
 # the smoothing algo's easier. But sensor updates should bear in mind how
 # much data it generates for databases and browser traffic.
 
+LOGSPAM_INTERVAL = 22
+# Some warnings, like not having an area assigned to a scanner, are important for
+# users to see and act on, but we don't want to spam them on every update. This
+# value in seconds is how long we wait between emitting a particular error message
+# when encountering it - primarily for our update loop.
+
 # Beacon-handling constants. Source devices are tracked by MAC-address and are the
 # originators of beacon-like data. We then create a "meta-device" for the beacon's
 # uuid. Other non-static-mac protocols should use this method as well, by adding their
