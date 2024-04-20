@@ -39,6 +39,10 @@ from homeassistant.util import slugify
 from homeassistant.util.dt import get_age
 from homeassistant.util.dt import now
 
+from .const import BDADDR_TYPE_NOT_MAC48
+from .const import BDADDR_TYPE_OTHER
+from .const import BDADDR_TYPE_PRIVATE_RESOLVABLE
+from .const import BDADDR_TYPE_UNKNOWN
 from .const import BEACON_IBEACON_DEVICE
 from .const import BEACON_IBEACON_SOURCE
 from .const import BEACON_NOT_A_BEACON
@@ -68,6 +72,10 @@ from .const import DOMAIN_PRIVATE_BLE_DEVICE
 from .const import HIST_KEEP_COUNT
 from .const import LOGSPAM_INTERVAL
 from .const import PLATFORMS
+from .const import PRUNE_MAX_COUNT
+from .const import PRUNE_TIME_DEFAULT
+from .const import PRUNE_TIME_INTERVAL
+from .const import PRUNE_TIME_IRK
 from .const import SIGNAL_DEVICE_NEW
 from .const import STARTUP_MESSAGE
 from .const import UPDATE_INTERVAL
@@ -583,7 +591,7 @@ class BermudaDevice(dict):
         self.address: str = address
         self.options = options
         self.unique_id: str | None = None  # mac address formatted.
-        self.mac_is_random: bool = False
+        self.address_type = BDADDR_TYPE_UNKNOWN
         self.area_id: str | None = None
         self.area_name: str | None = None
         self.area_distance: float | None = None  # how far this dev is from that area
@@ -727,6 +735,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.sensor_interval = entry.options.get(
             CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
         )
+
+        self.stamp_last_prune: float = 0  # When we last pruned device list
 
         super().__init__(
             hass,
@@ -926,10 +936,34 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # Get/Create a device entry
             device = self._get_or_create_device(service_info.address)
 
-            # random mac addresses have 0b11000000 in the MSB. Endianness shenanigans
-            # ensue. I think if we & match on 0x0C in the first _byte_ of the address, that's
-            # what we want. I think. PR welcome!
-            device.mac_is_random = int(device.address[1:2], 16) & 0x0C == 0x0C
+            # BLE MAC addresses (https://www.bluetooth.com/specifications/core54-html/) can
+            # be differentiated by the top two MSBs of the 48bit MAC address. At our end at
+            # least, this means the first character of the MAC address in aa:bb:cc:dd:ee:ff
+            # I have no idea what the distinction between public and random is by bitwise ident,
+            # because the random addresstypes cover the entire address-space.
+            #
+            # - ?? Public
+            # - 0b00 (0x00 - 0x3F) Random Private Non-resolvable
+            # - 0b01 (0x40 - 0x7F) Random Private Resolvable (ie, IRK devices)
+            # - 0x10 (0x80 - 0xBF) ~* Reserved *~ (Is this where ALL Publics live?)
+            # - 0x11 (0xC0 - 0xFF) Random Static (may change on power cycle only)
+            #
+            # What we are really interested in tracking is IRK devices, since they rotate
+            # so rapidly (typically )
+            #
+            # A given device entry (ie, address) won't change, so we only update
+            # it once, and also only if it looks like a MAC address
+            if device.address_type is BDADDR_TYPE_UNKNOWN:
+                if device.address.count(":") != 5:
+                    # Doesn't look like an actual MAC address
+                    # Mark it as such so we don't spend time testing it again.
+                    # TODO: Maybe implement ibeacon-src, irk-source etc.
+                    device.address_type = BDADDR_TYPE_NOT_MAC48
+                elif device.address[0:1] in "4567":
+                    _LOGGER.debug("Identified IRK address on %s", device.address)
+                    device.address_type = BDADDR_TYPE_PRIVATE_RESOLVABLE
+                else:
+                    device.address_type = BDADDR_TYPE_OTHER
 
             # Check if it's broadcasting an Apple Inc manufacturing data (ID: 0x004C)
             for (
@@ -1111,8 +1145,82 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         self.hass, SIGNAL_DEVICE_NEW, address, self.scanner_list
                     )
 
+        if self.stamp_last_prune < MONOTONIC_TIME() - PRUNE_TIME_INTERVAL:
+            # (periodically) prune any stale device entries...
+            self.prune_devices()
+            self.stamp_last_prune = MONOTONIC_TIME()
+
         # end of async update
         self.last_update_success = True
+
+    def prune_devices(self):
+        """Scan through all collected devices, and remove those that meet Pruning criteria"""
+        prune_list = []
+        prunable_stamps = {}
+        for device_address, device in self.devices.items():
+
+            # Prune any devices that haven't been heard from for too long, but only
+            # if we aren't actively tracking them and it's a traditional MAC address.
+            # We just collect the addresses first, and do the pruning after exiting this iterator
+            if (
+                (not device.create_sensor)  # Not if we track the device
+                and (not device.is_scanner)
+                and (
+                    device.beacon_type
+                    not in [BEACON_IBEACON_DEVICE, BEACON_PRIVATE_BLE_DEVICE]
+                )
+                and (device.last_seen > 0)  # Don't prune if we haven't initialised yet!
+                and device.address_type != BDADDR_TYPE_NOT_MAC48
+            ):
+                if device.address_type == BDADDR_TYPE_PRIVATE_RESOLVABLE:
+                    # This is an IRK source address. We'll *only* want to keep
+                    # if if belongs to one of our known Private BLE devices *and*
+                    # it's the latest address we have for it.
+                    if (
+                        device.beacon_unique_id is not None
+                        and device.beacon_unique_id in self.devices
+                        and len(self.devices[device.beacon_unique_id].beacon_sources)
+                        > 0
+                        and self.devices[device.beacon_unique_id].beacon_sources[0]
+                        == device_address
+                    ):
+                        # We never prune last-known IRK sources
+                        continue
+                    elif device.last_seen < MONOTONIC_TIME() - PRUNE_TIME_IRK:
+                        _LOGGER.debug(
+                            "Marking stale IRK address for pruning: %s",
+                            device.name or device_address,
+                        )
+                        prune_list.append(device_address)
+                    else:
+                        # It's not stale, but we will prune it if we have to later to fit
+                        # into PRUNE_MAX_COUNT
+                        prunable_stamps[device_address] = device.last_seen
+
+                elif device.last_seen < MONOTONIC_TIME() - PRUNE_TIME_DEFAULT:
+                    _LOGGER.debug(
+                        "Marking old device entry for pruning: %s",
+                        device.name or device_address,
+                    )
+                    prune_list.append(device_address)
+                else:
+                    # Device is not so old, but we might have to prune it anyway
+                    prunable_stamps[device_address] = device.last_seen
+
+        prune_quota = len(self.devices) - len(prune_list) - PRUNE_MAX_COUNT
+        if prune_quota > 0:
+            # We need to find more addresses to prune. Perhaps we live
+            # in a busy train station, or are under some sort of BLE-MAC
+            # DOS-attack.
+            sorted_addresses = sorted([(v, k) for k, v in prunable_stamps.items()])
+            _LOGGER.info("Having to prune %s extra devices to make quota.", prune_quota)
+            for stamp, address in sorted_addresses[:prune_quota]:
+                prune_list.append(address)
+
+        # Perform any pruning we found to do
+        for device_address in prune_list:
+            _LOGGER.debug("Acting on prune list for %s", device_address)
+            del self.devices[device_address]
 
     def configure_beacons(self):
         """Create iBeacon, Private_BLE and other meta-devices from the received advertisements
@@ -1261,7 +1369,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 "beacon_unique_id",
                 "beacon_uuid",
                 "connectable",
-                "mac_is_random",
+                "address_type",
                 "zone",
             ]:
                 if hasattr(metadev, attribute):

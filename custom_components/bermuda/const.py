@@ -73,6 +73,27 @@ BEACON_PRIVATE_BLE_DEVICE: Final = (
     "private_ble_device"  # meta-device create to track private ble device
 )
 
+# Bluetooth Device Address Type - classify MAC addresses
+BDADDR_TYPE_UNKNOWN: Final = "bd_addr_type_unknown"  # uninitialised
+BDADDR_TYPE_OTHER: Final = "bd_addr_other"  # Default 48bit MAC
+BDADDR_TYPE_PRIVATE_RESOLVABLE: Final = "bd_addr_private_resolvable"
+BDADDR_TYPE_NOT_MAC48: Final = "bd_addr_not_mac48"
+
+
+# Device entry pruning. Letting the gathered list of devices grow forever makes the
+# processing loop slower. It doesn't seem to have as much impact on memory, but it
+# would certainly use up more, and gets worse in high "traffic" areas.
+#
+# Pruning ignores tracked devices (ie, ones we keep sensors for) and scanners. It also
+# avoids pruning the most recent IRK for a known private device.
+#
+# IRK devices typically change their MAC every 15 minutes, so 96 addresses/day.
+#
+PRUNE_MAX_COUNT = 1000  # How many device entries to allow at maximum
+PRUNE_TIME_INTERVAL = 310  # Every 5m10s, prune stale devices
+PRUNE_TIME_DEFAULT = 259200  # Max age of regular device entries (3days)
+PRUNE_TIME_IRK = 3600  # Resolvable Private addresses change often, prune regularly (1h)
+
 DOCS = {}
 
 
