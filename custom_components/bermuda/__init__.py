@@ -296,7 +296,7 @@ class BermudaDeviceScanner(dict):
             # In this dict all MAC address keys are upper-cased
             uppermac = device_address.upper()
             if uppermac in stamps:
-                if stamps[uppermac] > self.stamp:
+                if self.stamp is None or stamps[uppermac] > self.stamp:
                     new_stamp = stamps[uppermac]
                 else:
                     # We have no updated advert in this run.
