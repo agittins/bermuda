@@ -3,12 +3,13 @@
   "version": "0.2.0",
   "configurations": [
     {
-      // Example of attaching to local debug server
-      "name": "Python: Attach Local",
-      "type": "python",
+      "name": "Python Debugger: Remote Attach",
+      "type": "debugpy",
       "request": "attach",
-      "port": 5678,
-      "host": "localhost",
+      "connect": {
+        "host": "localhost",
+        "port": 5678
+      },
       "justMyCode": false,
       "pathMappings": [
         {
