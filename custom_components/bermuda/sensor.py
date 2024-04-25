@@ -19,8 +19,8 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BermudaDataUpdateCoordinator
-from .const import BEACON_IBEACON_DEVICE
-from .const import BEACON_PRIVATE_BLE_DEVICE
+from .const import ADDR_TYPE_IBEACON
+from .const import ADDR_TYPE_PRIVATE_BLE_DEVICE
 from .const import DOMAIN
 from .const import SIGNAL_DEVICE_NEW
 from .entity import BermudaEntity
@@ -122,10 +122,12 @@ class BermudaSensor(BermudaEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
+        # By default, it's the device's MAC
         current_mac = self._device.address
-        if self._device.beacon_type in [
-            BEACON_IBEACON_DEVICE,
-            BEACON_PRIVATE_BLE_DEVICE,
+        # But metadevices have source_devices
+        if self._device.address_type in [
+            ADDR_TYPE_IBEACON,
+            ADDR_TYPE_PRIVATE_BLE_DEVICE,
         ]:
             if len(self._device.beacon_sources) > 0:
                 current_mac = self._device.beacon_sources[0]
@@ -149,7 +151,7 @@ class BermudaSensorScanner(BermudaSensor):
 
     @property
     def unique_id(self):
-        return self._device.unique_id + "_scanner"
+        return f"{self._device.unique_id}_scanner"
 
     @property
     def name(self):
@@ -166,7 +168,7 @@ class BermudaSensorRssi(BermudaSensor):
     @property
     def unique_id(self):
         """Return unique id for the entity"""
-        return self._device.unique_id + "_rssi"
+        return f"{self._device.unique_id}_rssi"
 
     @property
     def name(self):
@@ -199,7 +201,7 @@ class BermudaSensorRange(BermudaSensor):
     def unique_id(self):
         """ "Uniquely identify this sensor so that it gets stored in the entity_registry,
         and can be maintained / renamed etc by the user"""
-        return self._device.unique_id + "_range"
+        return f"{self._device.unique_id}_range"
 
     @property
     def name(self):
@@ -246,11 +248,11 @@ class BermudaSensorScannerRange(BermudaSensorRange):
 
     @property
     def unique_id(self):
-        return self._device.unique_id + "_" + self._scanner.address + "_range"
+        return f"{self._device.unique_id}_{self._scanner.address}_range"
 
     @property
     def name(self):
-        return "Distance to " + self._scanner.name
+        return f"Distance to {self._scanner.name}"
 
     @property
     def native_value(self):
@@ -283,11 +285,11 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
 
     @property
     def unique_id(self):
-        return self._device.unique_id + "_" + self._scanner.address + "_range_raw"
+        return f"{self._device.unique_id}_{self._scanner.address}_range_raw"
 
     @property
     def name(self):
-        return "Unfiltered Distance to " + self._scanner.name
+        return f"Unfiltered Distance to {self._scanner.name}"
 
     @property
     def native_value(self):

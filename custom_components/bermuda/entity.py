@@ -12,9 +12,9 @@ from homeassistant.helpers import area_registry
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .const import ADDR_TYPE_IBEACON
+from .const import ADDR_TYPE_PRIVATE_BLE_DEVICE
 from .const import ATTRIBUTION
-from .const import BEACON_IBEACON_DEVICE
-from .const import BEACON_PRIVATE_BLE_DEVICE
 from .const import CONF_UPDATE_INTERVAL
 from .const import DEFAULT_UPDATE_INTERVAL
 from .const import DOMAIN
@@ -50,7 +50,7 @@ class BermudaEntity(CoordinatorEntity):
             CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
         )
         self.bermuda_last_state: Any = 0
-        self.bermuda_last_stamp: int = 0
+        self.bermuda_last_stamp: float = 0
 
     def _cached_ratelimit(self, statevalue: Any, fast_falling=True, fast_rising=False):
         """Uses the CONF_UPDATE_INTERVAL and other logic to return either the given statevalue
@@ -94,7 +94,10 @@ class BermudaEntity(CoordinatorEntity):
 
     @property
     def device_info(self):
-        """Implementing this creates an entry in the device registry."""
+        """Implementing this creates an entry in the device registry.
+
+        This is responsible for linking Bermuda entities to devices,
+        and also for matching up to device entries for other integrations."""
 
         # Match up our entity with any existing device entries.
         # For scanners we use ethernet MAC, which looks like they are
@@ -105,13 +108,13 @@ class BermudaEntity(CoordinatorEntity):
 
         if self._device.is_scanner:
             connection = {(dr.CONNECTION_NETWORK_MAC, self._device.address.lower())}
-        elif self._device.beacon_type == BEACON_IBEACON_DEVICE:
-            # ibeacon doesn't (yet) actually set a connection, but
+        elif self._device.address_type == ADDR_TYPE_IBEACON:
+            # ibeacon doesn't (yet) actually set a "connection", but
             # this "matches" what it stores for identifier.
             connection = {("ibeacon", self._device.address.lower())}
-        elif self._device.beacon_type == BEACON_PRIVATE_BLE_DEVICE:
+        elif self._device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
             # Private BLE Device integration doesn't specify "connection" tuples,
-            # so we use what it defines for the "connection" instead.
+            # so we use what it defines for the "identifier" instead.
             connection = {("private_ble_device", self._device.address.lower())}
             # We look up and use the device from the registry so we get
             # the private_ble_device device congealment!

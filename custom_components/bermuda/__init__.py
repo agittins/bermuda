@@ -39,13 +39,14 @@ from homeassistant.util import slugify
 from homeassistant.util.dt import get_age
 from homeassistant.util.dt import now
 
+from .const import ADDR_TYPE_IBEACON
+from .const import ADDR_TYPE_PRIVATE_BLE_DEVICE
 from .const import BDADDR_TYPE_NOT_MAC48
 from .const import BDADDR_TYPE_OTHER
 from .const import BDADDR_TYPE_PRIVATE_RESOLVABLE
 from .const import BDADDR_TYPE_UNKNOWN
 from .const import BEACON_IBEACON_DEVICE
 from .const import BEACON_IBEACON_SOURCE
-from .const import BEACON_NOT_A_BEACON
 from .const import BEACON_PRIVATE_BLE_DEVICE
 from .const import BEACON_PRIVATE_BLE_SOURCE
 from .const import CONF_ATTENUATION
@@ -603,7 +604,7 @@ class BermudaDevice(dict):
         self.manufacturer: str | None = None
         self.connectable: bool = False
         self.is_scanner: bool = False
-        self.beacon_type = BEACON_NOT_A_BEACON
+        self.beacon_type: set = set()
         self.beacon_sources = (
             []
         )  # list of MAC addresses that have advertised this beacon
@@ -751,13 +752,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # and current "last address".
         self.pb_state_sources: dict[str, str | None] = {}
 
+        self.metadevices: dict[str, BermudaDevice] = {}
+
         @callback
         def handle_state_changes(ev: Event):
             """Watch for new mac addresses on private ble devices and act."""
             if ev.event_type == EVENT_STATE_CHANGED:
                 event_entity = ev.data.get("entity_id", "invalid_event_entity")
                 if event_entity in self.pb_state_sources:
-                    # It's a state change of entity we are tracking.
+                    # It's a state change of an entity we are tracking.
                     new_state = ev.data.get("new_state")
                     if new_state:
                         # _LOGGER.debug("New state change! %s", new_state)
@@ -779,7 +782,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                 )
                                 # Flag that we need new pb checks, and work them out:
                                 self._do_private_device_init = True
-                                self.configure_beacons()
+                                self.update_metadevices()
                                 # If no sensors have yet been configured, the coordinator
                                 # won't be getting polled for fresh data. Since we have
                                 # found something, we should get it to do that.
@@ -804,8 +807,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             This catches area changes (on scanners) and any new/changed
             Private BLE Devices."""
             # We could try filtering on "updates" and "area" but I doubt
-            # this will fire all that often, and even when it does the difference
-            # in cycle time appears to be less than 1ms.
+            # this will fire all that often, and even when it does fire
+            # the difference in cycle time appears to be less than 1ms.
             _LOGGER.debug(
                 "Device registry has changed, we will reload scanners and Private BLE Devs. ev: %s",
                 ev,
@@ -817,7 +820,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             # Let's kick off a scanner and private_ble_device scan/refresh/init
             self._refresh_scanners([], self._do_full_scanner_init)
-            self.configure_beacons()
+            self.update_metadevices()
 
             # If there are no `CONFIGURED_DEVICES` and the user only has private_ble_devices
             # in their setup, then we might have done our init runs before that integration
@@ -827,7 +830,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             self.hass.add_job(self._async_update_data())
 
         # Listen for changes to the device registry and handle them.
-        # Primarily for when scanners get moved to a different area.
+        # Primarily for when scanners get moved to a different area,
+        # or when Private BLE Device entries are created/loaded.
         hass.bus.async_listen(EVENT_DEVICE_REGISTRY_UPDATED, handle_devreg_changes)
 
         self.options = {}
@@ -923,7 +927,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         return device
 
     async def _async_update_data(self):
-        """Update data on known devices.
+        """Update data for known devices by scanning bluetooth advert cache.
 
         This works only with local data, so should be cheap to run
         (no network requests made etc).
@@ -959,9 +963,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 if device.address.count(":") != 5:
                     # Doesn't look like an actual MAC address
                     # Mark it as such so we don't spend time testing it again.
-                    # TODO: Maybe implement ibeacon-src, irk-source etc.
                     device.address_type = BDADDR_TYPE_NOT_MAC48
                 elif device.address[0:1] in "4567":
+                    # We're checking if the first char in the address
+                    # is one of 4, 5, 6, 7. Python is fun :-)
                     _LOGGER.debug("Identified IRK address on %s", device.address)
                     device.address_type = BDADDR_TYPE_PRIVATE_RESOLVABLE
                 else:
@@ -1011,7 +1016,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         # alter our approach.
                         #
 
-                        device.beacon_type = BEACON_IBEACON_SOURCE
+                        device.beacon_type.add(BEACON_IBEACON_SOURCE)
                         device.beacon_uuid = man_data[2:18].hex().lower()
                         device.beacon_major = str(
                             int.from_bytes(man_data[18:20], byteorder="big")
@@ -1034,21 +1039,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         # possibility for now. Given we re-process completely
                         # each cycle it should *just work*, for the most part.
 
-                        # _LOGGER.debug(
-                        #     "Device %s is iBeacon with UUID %s %s %s %sdB",
-                        #     device.address,
-                        #     device.beacon_uuid,
-                        #     device.beacon_major,
-                        #     device.beacon_minor,
-                        #     device.beacon_power,
-                        # )
-
-                        # NOTE: The processing of the BEACON_IBEACON_DEVICE
-                        # meta-device is done later, after the rest of this
-                        # source device is set up.
-
                         # expose the full id in prefname
                         device.prefname = device.beacon_unique_id
+
+                        # Create a metadevice for this beacon. Metadevices get updated
+                        # after all adverts are processed and distances etc are calculated
+                        # for the sources.
+                        self.register_ibeacon_source(device)
+
                     else:
                         # apple but not an iBeacon, expose the data in case it's useful.
                         device.prefname = man_data.hex()
@@ -1098,7 +1096,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # maybe it's from an integration that's not yet loaded, or
                     # perhaps it's an unexpected type that we don't know how to
                     # find.
-                    _LOGGER.error(
+                    _LOGGER_SPAM_LESS.error(
+                        f"missing_scanner_entry_{discovered.scanner.source}",
                         "Failed to find config for scanner %s, this is probably a bug.",
                         discovered.scanner.source,
                     )
@@ -1117,7 +1116,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         self._refresh_areas_by_min_distance()
 
-        # We might need to freshen deliberately on first start this if no new scanners
+        # We might need to freshen deliberately on first start if no new scanners
         # were discovered in the first scan update. This is likely if nothing has changed
         # since the last time we booted.
         if self._do_full_scanner_init:
@@ -1133,7 +1132,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # set up any beacons and update their data. We do this after all the devices
         # have had their updates done since any beacon inherits data from its source
         # device(s). We do this *before* sensor creation, though.
-        self.configure_beacons()
+        self.update_metadevices()
 
         # The devices are all updated now (and any new scanners and beacons seen have been added),
         # so let's ensure any devices that we create sensors for are set up ready to go.
@@ -1159,18 +1158,29 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         """Scan through all collected devices, and remove those that meet Pruning criteria"""
         prune_list = []
         prunable_stamps = {}
+
+        # build a set of source devices that are still beacon_sources[0]
+        metadevice_source_primos = set()
+        for metadevice in self.metadevices.values():
+            if len(metadevice.beacon_sources) > 0:
+                metadevice_source_primos.add(metadevice.beacon_sources[0])
+
         for device_address, device in self.devices.items():
 
             # Prune any devices that haven't been heard from for too long, but only
             # if we aren't actively tracking them and it's a traditional MAC address.
             # We just collect the addresses first, and do the pruning after exiting this iterator
+            #
+            # Reduced selection criteria - basically if if's not:
+            # - a scanner (beacuse we need those!)
+            # - a private_ble device (because they will re-create anyway, plus we auto-sensor them
+            # - create_sensor
+            # then it should be up for pruning. A stale iBeacon that we don't actually track
+            # should totally be pruned if it's no longer around.
             if (
-                (not device.create_sensor)  # Not if we track the device
+                device_address not in metadevice_source_primos
+                and (not device.create_sensor)  # Not if we track the device
                 and (not device.is_scanner)
-                and (
-                    device.beacon_type
-                    not in [BEACON_IBEACON_DEVICE, BEACON_PRIVATE_BLE_DEVICE]
-                )
                 and (device.last_seen > 0)  # Don't prune if we haven't initialised yet!
                 and device.address_type != BDADDR_TYPE_NOT_MAC48
             ):
@@ -1178,17 +1188,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # This is an IRK source address. We'll *only* want to keep
                     # if if belongs to one of our known Private BLE devices *and*
                     # it's the latest address we have for it.
-                    if (
-                        device.beacon_unique_id is not None
-                        and device.beacon_unique_id in self.devices
-                        and len(self.devices[device.beacon_unique_id].beacon_sources)
-                        > 0
-                        and self.devices[device.beacon_unique_id].beacon_sources[0]
-                        == device_address
-                    ):
-                        # We never prune last-known IRK sources
-                        continue
-                    elif device.last_seen < MONOTONIC_TIME() - PRUNE_TIME_IRK:
+
+                    if device.last_seen < MONOTONIC_TIME() - PRUNE_TIME_IRK:
                         _LOGGER.debug(
                             "Marking stale IRK address for pruning: %s",
                             device.name or device_address,
@@ -1200,13 +1201,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         prunable_stamps[device_address] = device.last_seen
 
                 elif device.last_seen < MONOTONIC_TIME() - PRUNE_TIME_DEFAULT:
+                    # It's a static address, and stale.
                     _LOGGER.debug(
                         "Marking old device entry for pruning: %s",
                         device.name or device_address,
                     )
                     prune_list.append(device_address)
                 else:
-                    # Device is not so old, but we might have to prune it anyway
+                    # Device is static, not so old, but we might have to prune it anyway
                     prunable_stamps[device_address] = device.last_seen
 
         prune_quota = len(self.devices) - len(prune_list) - PRUNE_MAX_COUNT
@@ -1225,24 +1227,23 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("Acting on prune list for %s", device_address)
             del self.devices[device_address]
 
-    def configure_beacons(self):
-        """Create iBeacon, Private_BLE and other meta-devices from the received advertisements
+    def discover_private_ble_metadevices(self):
+        """Access the Private BLE Device integration to find metadevices to track
 
-        Note that at this point all the distances etc should be fresh for
-        the source devices, so we can just copy values from them to the beacon metadevice.
+        This function sets up the skeleton metadevice entry for Private BLE (IRK)
+        devices, ready for update_metadevices to manage.
         """
 
         entreg = er.async_get(self.hass)
         devreg = dr.async_get(self.hass)
 
-        # ### Seed the Private BLE Device entries from the other integration
         if self._do_private_device_init:
-            # Iterate through the Private BLE Device integration's entities,
-            # and ensure for each "device" we create a source device.
             self._do_private_device_init = False
             _LOGGER.debug("Refreshing Private BLE Device list")
-            # We dig through the state engine because we need the temporary mac
-            # address in `current_address`.
+
+            # Iterate through the Private BLE Device integration's entities,
+            # and ensure for each "device" we create a source device.
+            # pb here means "private ble device"
             pb_entries = self.hass.config_entries.async_entries(
                 DOMAIN_PRIVATE_BLE_DEVICE
             )
@@ -1250,180 +1251,251 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 pb_entities = entreg.entities.get_entries_for_config_entry_id(
                     pb_entry.entry_id
                 )
-                # This will be a list of entities for a given device, let's pull out the
-                # device_tracker one, since it has the state info we need.
+                # This will be a list of entities for a given private ble device,
+                # let's pull out the device_tracker one, since it has the state
+                # info we need.
                 for pb_entity in pb_entities:
+
                     if pb_entity.domain == DEVICE_TRACKER:
-                        # We found a *device_tracker* entity for the private_ble integration.
+                        # We found a *device_tracker* entity for the private_ble device.
                         _LOGGER.debug(
                             "Found a Private BLE Device Tracker! %s",
                             pb_entity.entity_id,
                         )
 
+                        # Grab the device entry (for the name, mostly)
                         if pb_entity.device_id is not None:
                             pb_device = devreg.async_get(pb_entity.device_id)
                         else:
                             pb_device = None
+
+                        # Grab the current state (so we can access the source address attrib)
                         pb_state = self.hass.states.get(pb_entity.entity_id)
-                        pb_address = None
+
                         if pb_state:  # in case it's not there yet
-                            pb_address = pb_state.attributes.get(
-                                "current_address", "invalid_address"
-                            ).lower()
-                        if pb_address is not None and pb_address != "invalid_address":
-                            # We've got a MAC address, let's tag up our current source "device"
-                            # so that we'll later create the meta-device based on it.
-                            source_device = self._get_or_create_device(pb_address)
-                            # Override name and prefname, as the user will (hopefully)
-                            # chosen something nice for their private ble device name.
-                            source_device.name = getattr(
-                                pb_device, "name_by_user", getattr(pb_device, "name")
+                            pb_source_address = pb_state.attributes.get(
+                                "current_address", None
                             )
-                            source_device.prefname = source_device.name
-                            source_device.beacon_type = BEACON_PRIVATE_BLE_SOURCE
-
-                            # As of 2024.4.0b4 Private_ble appends _device_tracker to the
-                            # unique_id of the entity, while we really want to know
-                            # the actual IRK, so handle either case:
-                            source_device.beacon_unique_id = pb_entity.unique_id.split(
-                                "_"
-                            )[0]
-
-                            # Store the entity_id in beacon_uuid. We use that to query
-                            # and get notified by the state engine of when the source
-                            # mac address changes. will be something like
-                            # `device_tracker.my_ipad`
-                            source_device.beacon_uuid = pb_entity.entity_id
-
-                            self.pb_state_sources[pb_entity.entity_id] = pb_address
                         else:
-                            _LOGGER.debug(
-                                "No address available yet for PB Device %s",
-                                pb_entity.entity_id,
-                            )
-                            # create the empty record though so we know to keep watching
-                            # for it in a state change
+                            # Private BLE Device hasn't yet found a source device
+                            pb_source_address = None
+
+                        # Get the IRK of the device, which we will use as the address
+                        # for the metadevice.
+                        # As of 2024.4.0b4 Private_ble appends _device_tracker to the
+                        # unique_id of the entity, while we really want to know
+                        # the actual IRK, so handle either case by splitting it:
+                        _irk = pb_entity.unique_id.split("_")[0]
+
+                        # Create our Meta-Device and tag it up...
+                        metadevice = self._get_or_create_device(_irk)
+                        # Since user has already configured the Private BLE Device, we
+                        # always create sensors for them.
+                        metadevice.create_sensor = True
+                        metadevice.beacon_type.add(BEACON_PRIVATE_BLE_DEVICE)
+                        metadevice.address_type = ADDR_TYPE_PRIVATE_BLE_DEVICE
+
+                        # Set a nice name
+                        metadevice.name = getattr(
+                            pb_device, "name_by_user", getattr(pb_device, "name")
+                        )
+                        metadevice.prefname = metadevice.name
+
+                        # Ensure we track this PB entity so we get source address updates.
+                        if pb_entity.entity_id not in self.pb_state_sources:
                             self.pb_state_sources[pb_entity.entity_id] = None
 
-        # First let's find the freshest device advert for each Beacon unique_id
-        # Start keeping a winners-list by beacon/pb id
-        freshest_beacon_sources: dict[str, BermudaDevice] = {}
+                        metadevice.beacon_unique_id = _irk
 
-        # Iterate through each device to see if it has an advert for our target id
-        for device in self.devices.values():
-            if (
-                device.beacon_type in [BEACON_IBEACON_SOURCE, BEACON_PRIVATE_BLE_SOURCE]
-                and device.beacon_unique_id is not None
-            ):
-                # We found an advert for our beacon of interest...
-                if (
-                    device.beacon_unique_id not in freshest_beacon_sources  # first-find
-                    or device.last_seen
-                    > freshest_beacon_sources[
-                        device.beacon_unique_id
-                    ].last_seen  # fresher find
+                        # Add metadevice to list so it gets included in update_metadevices
+                        if metadevice.address not in self.metadevices:
+                            self.metadevices[metadevice.address] = metadevice
+
+                        if pb_source_address is not None:
+                            # We've got a source MAC address!
+                            pb_source_address = pb_source_address.lower()
+
+                            # Set up and tag the source device entry
+                            source_device = self._get_or_create_device(
+                                pb_source_address
+                            )
+                            source_device.beacon_type.add(BEACON_PRIVATE_BLE_SOURCE)
+
+                            # This should always be the latest known source address,
+                            # since private ble device tells us so.
+                            # So ensure it's listed, and listed first.
+                            if (
+                                len(metadevice.beacon_sources) == 0
+                                or metadevice.beacon_sources[0] != pb_source_address
+                            ):
+                                metadevice.beacon_sources.insert(0, pb_source_address)
+
+                            # Update state_sources so we can track when it changes
+                            self.pb_state_sources[pb_entity.entity_id] = (
+                                pb_source_address
+                            )
+
+                        else:
+                            _LOGGER.debug(
+                                "No address available for PB Device %s",
+                                pb_entity.entity_id,
+                            )
+
+    def register_ibeacon_source(self, source_device: BermudaDevice):
+        """Create or update the meta-device for tracking an iBeacon.
+
+        This should be called each time we discover a new address advertising
+        an iBeacon. This might happen only once at startup, but will also
+        happen each time a new MAC address is used by a given iBeacon.
+
+        This does not update the beacon's details (distance etc), that is done
+        in the update_metadevices function after all data has been gathered."""
+
+        if BEACON_IBEACON_SOURCE not in source_device.beacon_type:
+            _LOGGER.error(
+                "Only IBEACON_SOURCE devices can be used to see a beacon metadevice. %s is not.",
+                source_device.name,
+            )
+        if source_device.beacon_unique_id is None:
+            _LOGGER.error(
+                "Source device %s is not a valid iBeacon!", source_device.name
+            )
+        else:
+
+            metadevice = self._get_device(source_device.beacon_unique_id)
+            if metadevice is None:
+
+                # #### NEW METADEVICE #####
+                # (do one-off init stuff here)
+
+                metadevice = self._get_or_create_device(source_device.beacon_unique_id)
+                if metadevice.address not in self.metadevices:
+                    self.metadevices[metadevice.address] = metadevice
+                else:
+                    _LOGGER.warning(
+                        "Metadevice already tracked despite not existing yet. %s",
+                        metadevice.address,
+                    )
+
+                metadevice.address_type = ADDR_TYPE_IBEACON
+                metadevice.beacon_type.add(BEACON_IBEACON_DEVICE)
+                # Copy over the beacon attributes
+                for attribute in (
+                    "beacon_unique_id",
+                    "beacon_uuid",
+                    "beacon_major",
+                    "beacon_minor",
+                    "beacon_power",
                 ):
-                    # then we are the freshest!
-                    freshest_beacon_sources[device.beacon_unique_id] = device
-
-        # We now have a dict of the freshest device for each beacon/pb id.
-        # Now let's go through the freshest adverts and set up those beacons.
-        for beacon_unique_id, device in freshest_beacon_sources.items():
-            # Copy this device's info to the meta-device for tracking the beacon
-
-            metadev = self._get_or_create_device(beacon_unique_id)
-            if device.beacon_type == BEACON_IBEACON_SOURCE:
-                metadev.beacon_type = BEACON_IBEACON_DEVICE
-            elif device.beacon_type == BEACON_PRIVATE_BLE_SOURCE:
-                metadev.beacon_type = BEACON_PRIVATE_BLE_DEVICE
-            else:
-                _LOGGER.warning(
-                    "Invalid beacon type for freshest beacon: %s", device.beacon_type
-                )
-
-            # anything that isn't already set to something interesting, overwrite
-            # it with the new device's data.
-            # Defaults:
-            for attribute in [
-                # "create_sensor",  # don't copy this, we might track the device but not the beacon.
-                "local_name",  # name's we copy if there isn't one already.
-                "manufacturer",
-                "name",
-                "options",
-                "prefname",
-            ]:
-                if hasattr(metadev, attribute):
-                    if getattr(metadev, attribute) in [None, False]:
-                        setattr(metadev, attribute, getattr(device, attribute))
-                else:
-                    _LOGGER.error(
-                        "Devices don't have a '%s' attribute, this is a bug.", attribute
-                    )
-            # Anything that's VERY interesting, overwrite it regardless of what's already there:
-            # INTERESTING:
-            for attribute in [
-                "area_distance",
-                "area_id",
-                "area_name",
-                "area_rssi",
-                "area_scanner",
-                "beacon_major",
-                "beacon_minor",
-                "beacon_power",
-                "beacon_unique_id",
-                "beacon_uuid",
-                "connectable",
-                "address_type",
-                "zone",
-            ]:
-                if hasattr(metadev, attribute):
-                    setattr(metadev, attribute, getattr(device, attribute))
-                else:
-                    _LOGGER.error(
-                        "Devices don't have a '%s' attribute, this is a bug.", attribute
+                    setattr(
+                        metadevice, attribute, getattr(source_device, attribute, None)
                     )
 
-            # copy (well, link, I guess) the scanner data.
-            metadev.scanners = device.scanners
+                # Check if we should set up sensors for this beacon
+                if metadevice.address.upper() in self.options.get(CONF_DEVICES, []):
+                    # This is a meta-device we track. Flag it for set-up:
+                    metadevice.create_sensor = True
 
-            if device.last_seen > metadev.last_seen:
-                metadev.last_seen = device.last_seen
-            elif device.last_seen < metadev.last_seen:
-                # FIXME: This is showing up for some people
-                # (see https://github.com/agittins/bermuda/issues/138)
-                # but I can't see why. Downgrading to debug since it
-                # doesn't seem to affect ops, and adding
-                # params so I can perhaps get more info later.
-                _LOGGER.debug(
-                    "Using freshest advert from %s for %s but it's still too old!",
-                    device.name,
-                    metadev.name,
-                )
-            # else there's no newer advert
+            # #### EXISTING METADEVICE ####
+            # (only do things that might have to change when MAC address cycles etc)
 
-            if device.address not in metadev.beacon_sources:
-                # add this device as a known source
-                metadev.beacon_sources.insert(0, device.address)
+            if source_device.address not in metadevice.beacon_sources:
+                # We have a *new* source device.
+                # insert this device as a known source
+                metadevice.beacon_sources.insert(0, source_device.address)
                 # and trim the list of sources
-                del metadev.beacon_sources[HIST_KEEP_COUNT:]
+                del metadevice.beacon_sources[HIST_KEEP_COUNT:]
 
-            # Check if we should set up sensors for this beacon
-            if (
-                # iBeacons need to be specifically enabled:
-                metadev.address.upper() in self.options.get(CONF_DEVICES, [])
-                # But Private BLE Devices have already been deliberately configured
-                # by the user, so we always just enable them
-                or metadev.beacon_type == BEACON_PRIVATE_BLE_DEVICE
-            ):
-                # This is a meta-device we track. Flag it for set-up:
-                metadev.create_sensor = True
+    def update_metadevices(self):
+        """Create or update iBeacon, Private_BLE and other meta-devices from
+        the received advertisements.
 
-            # BEWARE: Currently we just copy the entire scanners dict from
-            # the freshest device's info. This means the history on the beacon device
-            # doesn't have scanner history etc from other devices, which might be
-            # relevant. If you need this, it's recommended to instead look up the
-            # metadev.beacon_sources list, and iterate through those to put together
-            # the history etc you need.
+        Note that at this point all the distances etc should be fresh for
+        the source devices, so we can just copy values from them to the metadevice.
+        """
+
+        # First seed the metadevice skeletons and set their latest beacon_source entries
+        # Private BLE Devices:
+        self.discover_private_ble_metadevices()
+
+        # iBeacon devices should already have their metadevices created.
+
+        for metadev in self.metadevices.values():
+
+            # We Expect the first beacon source to be the current one.
+            # This is maintained by ibeacon or private_ble metadevice creation/update
+            latest_source: str | None = None
+            source_device: BermudaDevice | None = None
+            if len(metadev.beacon_sources) > 0:
+                latest_source = metadev.beacon_sources[0]
+                if latest_source is not None:
+                    source_device = self._get_device(latest_source)
+
+            if latest_source is not None and source_device is not None:
+                # Map the source device's scanner list into ours
+                metadev.scanners = source_device.scanners
+
+                # anything that isn't already set to something interesting, overwrite
+                # it with the new device's data.
+                # Defaults:
+                for attribute in [
+                    # "create_sensor",  # don't copy this, maybe we're tracking the device alone
+                    "local_name",  # names we copy if there isn't one already.
+                    "manufacturer",
+                    "name",
+                    # "options",
+                    "prefname",
+                ]:
+                    if hasattr(metadev, attribute):
+                        if getattr(metadev, attribute) in [None, False]:
+                            setattr(
+                                metadev, attribute, getattr(source_device, attribute)
+                            )
+                    else:
+                        _LOGGER.error(
+                            "Devices don't have a '%s' attribute, this is a bug.",
+                            attribute,
+                        )
+                # Anything that's VERY interesting, overwrite it regardless of what's already there:
+                # INTERESTING:
+                for attribute in [
+                    "area_distance",
+                    "area_id",
+                    "area_name",
+                    "area_rssi",
+                    "area_scanner",
+                    "beacon_major",
+                    "beacon_minor",
+                    "beacon_power",
+                    "beacon_unique_id",
+                    "beacon_uuid",
+                    "connectable",
+                    "zone",
+                ]:
+                    if hasattr(metadev, attribute):
+                        setattr(metadev, attribute, getattr(source_device, attribute))
+                    else:
+                        _LOGGER.error(
+                            "Devices don't have a '%s' attribute, this is a bug.",
+                            attribute,
+                        )
+
+                if source_device.last_seen > metadev.last_seen:
+                    # Source is newer than the latest recorded, update last_seen
+                    metadev.last_seen = source_device.last_seen
+
+                elif source_device.last_seen < metadev.last_seen:
+                    # We should not have a source device that is older than the
+                    # current metadevice, so flag this if it occurs.
+                    # This caught bug #138, not that I realised it at the time!
+                    # (https://github.com/agittins/bermuda/issues/138)
+                    _LOGGER.warning(
+                        "Using freshest advert from %s for %s but it's still %s seconds too old!",
+                        source_device.address,
+                        metadev.name,
+                        metadev.last_seen - source_device.last_seen,
+                    )
+                # else the stamps are equal, which is perfectly OK.
 
     def dt_mono_to_datetime(self, stamp) -> datetime:
         """Given a monotonic timestamp, convert to datetime object"""
@@ -1460,8 +1532,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     closest_scanner = scanner
                 else:
                     if (
-                        closest_scanner.rssi_distance is not None
-                        and scanner.rssi_distance < closest_scanner.rssi_distance
+                        closest_scanner.rssi_distance is None
+                        or scanner.rssi_distance < closest_scanner.rssi_distance
                     ):
                         # We're closer than the last-closest, we win!
                         closest_scanner = scanner
@@ -1478,7 +1550,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 _LOGGER_SPAM_LESS.warning(
                     f"scanner_no_area_{closest_scanner.name}",
                     "Could not discern area from scanner %s: %s."
-                    "Please assign an area then reload this integration",
+                    "Please assign an area then reload this integration"
+                    "- Bermuda can't really work without it.",
                     closest_scanner.name,
                     areas,
                 )
@@ -1486,8 +1559,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             device.area_distance = closest_scanner.rssi_distance
             device.area_rssi = closest_scanner.rssi
             device.area_scanner = closest_scanner.name
-            if old_area != device.area_name and device.create_sensor:
-                _LOGGER.debug("Device %s now in %s", device.name, device.area_name)
+            if (old_area != device.area_name) and device.create_sensor:
+                # We check against area_name so we can know if the
+                # device's area changed names.
+                _LOGGER.debug(
+                    "Device %s was in '%s', now in '%s'",
+                    device.name,
+                    old_area,
+                    device.area_name,
+                )
         else:
             # Not close to any scanners!
             device.area_id = None
