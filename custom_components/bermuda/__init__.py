@@ -926,6 +926,20 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             device.unique_id = mac
         return device
 
+    def _clean_charbuf(self, instring: str | None) -> str:
+        """Some people writing C on bluetooth devices seem to
+        get confused between char arrays, strings and such. This
+        function takes a potentially dodgy charbuf from a bluetooth
+        device and cleans it of leading/trailing cruft
+        and returns what's left, up to the first null, if any.
+
+        If given None it returns an empty string.
+        Characters trimmed are space, tab, CR, LF, NUL.
+        """
+        if instring is not None:
+            return instring.strip(" \t\r\n\x00").split("\0")[0]
+        return ""
+
     async def _async_update_data(self):
         """Update data for known devices by scanning bluetooth advert cache.
 
@@ -1049,7 +1063,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                     else:
                         # apple but not an iBeacon, expose the data in case it's useful.
-                        device.prefname = man_data.hex()
+                        device.prefname = self._clean_charbuf(man_data.hex())
                 # else:
                 #     _LOGGER.debug(
                 #         "Found unknown manufacturer %d data: %s %s",
@@ -1061,10 +1075,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # We probably don't need to do all of this every time, but we
             # want to catch any changes, eg when the system learns the local
             # name etc.
-            device.name = device.name or service_info.device.name
-            device.local_name = (
-                device.local_name or service_info.advertisement.local_name
-            )
+            # Clean up names because it seems plenty of bluetooth device creators
+            # don't seem to know that buffers !== strings.
+            if device.name is None and service_info.device.name:
+                device.name = self._clean_charbuf(service_info.device.name)
+            if device.local_name is None and service_info.advertisement.local_name:
+                device.local_name = self._clean_charbuf(
+                    service_info.advertisement.local_name
+                )
+
             device.manufacturer = device.manufacturer or service_info.manufacturer
             device.connectable = service_info.connectable
 
