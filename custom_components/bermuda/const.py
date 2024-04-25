@@ -59,7 +59,6 @@ LOGSPAM_INTERVAL = 22
 # originators of beacon-like data. We then create a "meta-device" for the beacon's
 # uuid. Other non-static-mac protocols should use this method as well, by adding their
 # own BEACON_ types.
-BEACON_NOT_A_BEACON: Final = "not a beacon"  # This device is not any sort of beacon.
 BEACON_IBEACON_SOURCE: Final = (
     "beacon source"  # The source-device sending a beacon packet (MAC-tracked)
 )
@@ -78,7 +77,9 @@ BDADDR_TYPE_UNKNOWN: Final = "bd_addr_type_unknown"  # uninitialised
 BDADDR_TYPE_OTHER: Final = "bd_addr_other"  # Default 48bit MAC
 BDADDR_TYPE_PRIVATE_RESOLVABLE: Final = "bd_addr_private_resolvable"
 BDADDR_TYPE_NOT_MAC48: Final = "bd_addr_not_mac48"
-
+# Non-bluetooth address types - for our metadevice entries
+ADDR_TYPE_IBEACON: Final = "addr_type_ibeacon"
+ADDR_TYPE_PRIVATE_BLE_DEVICE: Final = "addr_type_private_ble_device"
 
 # Device entry pruning. Letting the gathered list of devices grow forever makes the
 # processing loop slower. It doesn't seem to have as much impact on memory, but it
