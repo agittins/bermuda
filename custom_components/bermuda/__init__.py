@@ -1509,12 +1509,20 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # Source is newer than the latest recorded, update last_seen
                     metadev.last_seen = source_device.last_seen
 
+                elif source_device.last_seen == 0:
+                    # _LOGGER.debug(
+                    #     "New source %s for %s has no stamp yet. This is"
+                    #     " expected if it's a fresh Private BLE source.",
+                    #     source_device.address,
+                    #     metadev.name
+                    # )
+                    pass
                 elif source_device.last_seen < metadev.last_seen:
                     # We should not have a source device that is older than the
                     # current metadevice, so flag this if it occurs.
                     # This caught bug #138, not that I realised it at the time!
                     # (https://github.com/agittins/bermuda/issues/138)
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "Using freshest advert from %s for %s but it's still %s seconds too old!",
                         source_device.address,
                         metadev.name,
