@@ -476,8 +476,14 @@ class BermudaDeviceScanner(dict):
                         # (skip the first entry since it's what we're comparing with)
                         continue
 
+                    if self.hist_stamp[i] is None:
+                        continue  # Skip this iteration if hist_stamp[i] is None
+
                     delta_t = velo_newstamp - self.hist_stamp[i]
                     delta_d = velo_newdistance - old_distance
+                    if delta_t <= 0:
+                        continue  # Additionally, skip if delta_t is zero or negative to avoid division by zero
+
                     velocity = delta_d / delta_t
 
                     # Approach velocities are only interesting vs the previous
