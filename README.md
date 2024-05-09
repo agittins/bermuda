@@ -77,7 +77,7 @@ for any person/user.
 
 ## FAQ
 
-See [The FAQ](wiki/FAQ) in the Wiki!
+See [The FAQ](https://github.com/agittins/bermuda/wiki/FAQ) in the Wiki!
 
 ## TODO / Ideas
 
