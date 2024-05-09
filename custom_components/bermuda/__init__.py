@@ -305,7 +305,9 @@ class BermudaDeviceScanner(dict):
             # In this dict all MAC address keys are upper-cased
             uppermac = device_address.upper()
             if uppermac in stamps:
-                if self.stamp is None or stamps[uppermac] > self.stamp:
+                if self.stamp is None or (
+                    stamps[uppermac] is not None and stamps[uppermac] > self.stamp
+                ):
                     new_stamp = stamps[uppermac]
                 else:
                     # We have no updated advert in this run.
@@ -984,7 +986,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # Doesn't look like an actual MAC address
                     # Mark it as such so we don't spend time testing it again.
                     device.address_type = BDADDR_TYPE_NOT_MAC48
-                elif device.address[0:1] in "4567":
+                elif len(device.address) > 0 and device.address[0:1] in "4567":
                     # We're checking if the first char in the address
                     # is one of 4, 5, 6, 7. Python is fun :-)
                     _LOGGER.debug("Identified IRK address on %s", device.address)
