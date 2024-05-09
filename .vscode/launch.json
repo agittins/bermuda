@@ -3,21 +3,31 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python Debugger: Remote Attach",
+      "name": "HomeAssistant(debug)",
       "type": "debugpy",
-      "request": "attach",
-      "connect": {
-        "host": "localhost",
-        "port": 5678
-      },
+      "request": "launch",
       "justMyCode": false,
-      "pathMappings": [
-        {
-          "localRoot": "${workspaceFolder}",
-          "remoteRoot": "."
-        }
-      ]
+      "module": "homeassistant",
+      "args": ["--debug", "-c", "config"]
     },
+    // This is the old (attempted) config of attaching to an already-running
+    // instance, but I couldn't get breakpoints to work in the custom_component.
+    // {
+    //   "name": "Python Debugger: Remote Attach",
+    //   "type": "debugpy",
+    //   "request": "attach",
+    //   "connect": {
+    //     "host": "localhost",
+    //     "port": 5678
+    //   },
+    //   "justMyCode": false,
+    //   "pathMappings": [
+    //     {
+    //       "localRoot": "${workspaceFolder}",
+    //       "remoteRoot": "."
+    //     }
+    //   ]
+    // },
     {
       // Example of attaching to my production server
       "name": "Python: Attach Remote",

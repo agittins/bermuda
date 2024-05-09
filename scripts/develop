@@ -2,6 +2,12 @@
 
 set -e
 
+# #### Oh, hey...
+# If you're using vscode, rather than using this I'd
+# suggest running the debugger directly. As of now there's
+# a working(!) debugpy entry in launch.json (just hit F5)
+
+
 cd "$(dirname "$0")/.."
 
 #if [[ ! -f venv/bin/activate ]]; then
@@ -22,6 +28,10 @@ fi
 ## This let's us have the structure we want <root>/custom_components/integration_blueprint
 ## while at the same time have Home Assistant configuration inside <root>/config
 ## without resulting to symlinks.
+#
+# Meh.. this used to work with the python extensions built-in debugger,
+# but that's deprecated and the below didn't seem to work with the
+# debugpy extension. Instead don't use this script and just hit F5.
 export PYTHONPATH="${PYTHONPATH}:${PWD}/custom_components"
 
 # Start Home Assistant
