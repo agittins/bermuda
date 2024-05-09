@@ -22,6 +22,7 @@ from homeassistant.const import STATE_NOT_HOME
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import Config
 from homeassistant.core import Event
+from homeassistant.core import EventStateChangedData
 from homeassistant.core import HomeAssistant
 from homeassistant.core import SupportsResponse
 from homeassistant.core import callback
@@ -32,6 +33,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import EVENT_DEVICE_REGISTRY_UPDATED
 from homeassistant.helpers.device_registry import DeviceEntry
+from homeassistant.helpers.device_registry import EventDeviceRegistryUpdatedData
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -763,7 +765,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.metadevices: dict[str, BermudaDevice] = {}
 
         @callback
-        def handle_state_changes(ev: Event):
+        def handle_state_changes(ev: Event[EventStateChangedData]):
             """Watch for new mac addresses on private ble devices and act."""
             if ev.event_type == EVENT_STATE_CHANGED:
                 event_entity = ev.data.get("entity_id", "invalid_event_entity")
@@ -809,7 +811,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self._do_private_device_init = True
 
         @callback
-        def handle_devreg_changes(ev: Event):
+        def handle_devreg_changes(ev: Event[EventDeviceRegistryUpdatedData]):
             """Update our scanner list if the device registry is changed.
 
             This catches area changes (on scanners) and any new/changed
