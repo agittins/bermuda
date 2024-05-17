@@ -1631,10 +1631,23 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 self.config_entry.data.get(CONFDATA_SCANNERS, {}),
                 confdata_scanners,
             )
-            self.hass.config_entries.async_update_entry(
-                self.config_entry,
-                data={**self.config_entry.data, CONFDATA_SCANNERS: confdata_scanners},
-            )
+
+            @callback
+            def async_call_update_entry() -> None:
+                """Called in the event loop to update the scanner entries in our config
+
+                We do this via add_job to ensure it runs in the event loop.
+                """
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry,
+                    data={
+                        **self.config_entry.data,
+                        CONFDATA_SCANNERS: confdata_scanners,
+                    },
+                )
+
+            self.hass.add_job(async_call_update_entry)
+
         return True
 
     async def service_dump_devices(self, call):  # pylint: disable=unused-argument;
