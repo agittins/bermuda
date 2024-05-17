@@ -412,7 +412,9 @@ class BermudaDeviceScanner(dict):
                     delta_t = velo_newstamp - self.hist_stamp[i]
                     delta_d = velo_newdistance - old_distance
                     if delta_t <= 0:
-                        continue  # Additionally, skip if delta_t is zero or negative to avoid division by zero
+                        # Additionally, skip if delta_t is zero or negative
+                        # to avoid division by zero
+                        continue
 
                     velocity = delta_d / delta_t
 
@@ -1097,6 +1099,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             if device.create_sensor:
                 if not device.create_sensor_done or not device.create_tracker_done:
                     _LOGGER.debug("Firing device_new for %s (%s)", device.name, address)
+                    # TODO: Confirm that this call is safe. I think we are always in the event loop
+                    # here, so using the async form should be OK. Otherwise use dispatcher_send.
                     async_dispatcher_send(
                         self.hass, SIGNAL_DEVICE_NEW, address, self.scanner_list
                     )
