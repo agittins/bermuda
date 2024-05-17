@@ -17,11 +17,11 @@ from homeassistant.const import STATE_NOT_HOME
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.helpers.device_registry import format_mac
 
-from custom_components.bermuda.bermuda_device_scanner import BermudaDeviceScanner
-from custom_components.bermuda.const import BDADDR_TYPE_UNKNOWN
-from custom_components.bermuda.const import CONF_DEVICES
-from custom_components.bermuda.const import CONF_DEVTRACK_TIMEOUT
-from custom_components.bermuda.const import DEFAULT_DEVTRACK_TIMEOUT
+from .bermuda_device_scanner import BermudaDeviceScanner
+from .const import BDADDR_TYPE_UNKNOWN
+from .const import CONF_DEVICES
+from .const import CONF_DEVTRACK_TIMEOUT
+from .const import DEFAULT_DEVTRACK_TIMEOUT
 
 
 class BermudaDevice(dict):

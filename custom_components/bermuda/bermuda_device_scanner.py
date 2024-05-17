@@ -11,16 +11,18 @@ from __future__ import annotations
 from homeassistant.components.bluetooth import MONOTONIC_TIME
 from homeassistant.components.bluetooth import BluetoothScannerDevice
 
-from custom_components.bermuda import _LOGGER
-from custom_components.bermuda.const import CONF_ATTENUATION
-from custom_components.bermuda.const import CONF_DEVICES
-from custom_components.bermuda.const import CONF_MAX_VELOCITY
-from custom_components.bermuda.const import CONF_REF_POWER
-from custom_components.bermuda.const import CONF_SMOOTHING_SAMPLES
-from custom_components.bermuda.const import DISTANCE_INFINITE
-from custom_components.bermuda.const import DISTANCE_TIMEOUT
-from custom_components.bermuda.const import HIST_KEEP_COUNT
-from custom_components.bermuda.util import rssi_to_metres
+from .const import _LOGGER
+from .const import CONF_ATTENUATION
+from .const import CONF_DEVICES
+from .const import CONF_MAX_VELOCITY
+from .const import CONF_REF_POWER
+from .const import CONF_SMOOTHING_SAMPLES
+from .const import DISTANCE_INFINITE
+from .const import DISTANCE_TIMEOUT
+from .const import HIST_KEEP_COUNT
+
+# from .const import _LOGGER_SPAM_LESS
+from .util import rssi_to_metres
 
 
 class BermudaDeviceScanner(dict):
