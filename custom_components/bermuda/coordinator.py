@@ -71,6 +71,7 @@ from .const import PRUNE_TIME_INTERVAL
 from .const import PRUNE_TIME_IRK
 from .const import SIGNAL_DEVICE_NEW
 from .const import UPDATE_INTERVAL
+from .util import clean_charbuf
 
 
 class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
@@ -164,6 +165,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                 )
                                 # Flag that we need new pb checks, and work them out:
                                 self._do_private_device_init = True
+                                # TODO: Check that this is thread-safe, since we're in a callback.
                                 self.update_metadevices()
                                 # If no sensors have yet been configured, the coordinator
                                 # won't be getting polled for fresh data. Since we have
@@ -188,6 +190,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             This catches area changes (on scanners) and any new/changed
             Private BLE Devices."""
+            # TODO: Ignore the below, and implement filtering. This gets
+            # called a "fair number" of times each time we get reloaded.
+            #
             # We could try filtering on "updates" and "area" but I doubt
             # this will fire all that often, and even when it does fire
             # the difference in cycle time appears to be less than 1ms.
@@ -201,6 +206,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             self._do_private_device_init = True
 
             # Let's kick off a scanner and private_ble_device scan/refresh/init
+            # TODO: We should probably just flag these and let them happen, rather
+            # than calling them from this, since we're in a callback.
             self._refresh_scanners([], self._do_full_scanner_init)
             self.update_metadevices()
 
@@ -307,20 +314,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             device.address = mac
             device.unique_id = mac
         return device
-
-    def _clean_charbuf(self, instring: str | None) -> str:
-        """Some people writing C on bluetooth devices seem to
-        get confused between char arrays, strings and such. This
-        function takes a potentially dodgy charbuf from a bluetooth
-        device and cleans it of leading/trailing cruft
-        and returns what's left, up to the first null, if any.
-
-        If given None it returns an empty string.
-        Characters trimmed are space, tab, CR, LF, NUL.
-        """
-        if instring is not None:
-            return instring.strip(" \t\r\n\x00").split("\0")[0]
-        return ""
 
     async def _async_update_data(self):
         """Update data for known devices by scanning bluetooth advert cache.
@@ -445,7 +438,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                     else:
                         # apple but not an iBeacon, expose the data in case it's useful.
-                        device.prefname = self._clean_charbuf(man_data.hex())
+                        device.prefname = clean_charbuf(man_data.hex())
                 # else:
                 #     _LOGGER.debug(
                 #         "Found unknown manufacturer %d data: %s %s",
@@ -460,11 +453,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # Clean up names because it seems plenty of bluetooth device creators
             # don't seem to know that buffers !== strings.
             if device.name is None and service_info.device.name:
-                device.name = self._clean_charbuf(service_info.device.name)
+                device.name = clean_charbuf(service_info.device.name)
             if device.local_name is None and service_info.advertisement.local_name:
-                device.local_name = self._clean_charbuf(
-                    service_info.advertisement.local_name
-                )
+                device.local_name = clean_charbuf(service_info.advertisement.local_name)
 
             device.manufacturer = device.manufacturer or service_info.manufacturer
             device.connectable = service_info.connectable

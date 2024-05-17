@@ -29,3 +29,18 @@ def rssi_to_metres(rssi, ref_power=None, attenuation=None):
 
     distance = 10 ** ((ref_power - rssi) / (10 * attenuation))
     return distance
+
+
+def clean_charbuf(instring: str | None) -> str:
+    """Some people writing C on bluetooth devices seem to
+    get confused between char arrays, strings and such. This
+    function takes a potentially dodgy charbuf from a bluetooth
+    device and cleans it of leading/trailing cruft
+    and returns what's left, up to the first null, if any.
+
+    If given None it returns an empty string.
+    Characters trimmed are space, tab, CR, LF, NUL.
+    """
+    if instring is not None:
+        return instring.strip(" \t\r\n\x00").split("\0")[0]
+    return ""
