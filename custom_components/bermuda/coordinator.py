@@ -509,8 +509,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 )
                 # don't fail the update, just try again next time.
                 # self.last_update_success = False
-            else:
-                self._do_full_scanner_init = False
 
         # set up any beacons and update their data. We do this after all the devices
         # have had their updates done since any beacon inherits data from its source
