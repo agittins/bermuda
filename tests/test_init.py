@@ -5,11 +5,11 @@ from __future__ import annotations
 # from homeassistant.exceptions import ConfigEntryNotReady
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.bermuda import BermudaDataUpdateCoordinator
 from custom_components.bermuda import async_reload_entry
 from custom_components.bermuda import async_setup_entry
 from custom_components.bermuda import async_unload_entry
 from custom_components.bermuda.const import DOMAIN
+from custom_components.bermuda.coordinator import BermudaDataUpdateCoordinator
 
 from .const import MOCK_CONFIG
 

@@ -21,7 +21,7 @@ from .const import DOMAIN
 from .const import DOMAIN_PRIVATE_BLE_DEVICE
 
 if TYPE_CHECKING:
-    from . import BermudaDataUpdateCoordinator
+    from .coordinator import BermudaDataUpdateCoordinator
 
     # from . import BermudaDevice
 

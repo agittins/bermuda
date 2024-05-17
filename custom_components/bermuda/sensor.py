@@ -18,11 +18,11 @@ from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import BermudaDataUpdateCoordinator
 from .const import ADDR_TYPE_IBEACON
 from .const import ADDR_TYPE_PRIVATE_BLE_DEVICE
 from .const import DOMAIN
 from .const import SIGNAL_DEVICE_NEW
+from .coordinator import BermudaDataUpdateCoordinator
 from .entity import BermudaEntity
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
