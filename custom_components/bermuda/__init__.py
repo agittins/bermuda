@@ -7,8 +7,6 @@ https://github.com/agittins/bermuda
 
 from __future__ import annotations
 
-import logging
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Config
 from homeassistant.core import HomeAssistant
@@ -19,13 +17,13 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.device_registry import format_mac
 
-from custom_components.bermuda.coordinator import BermudaDataUpdateCoordinator
-from custom_components.bermuda.log_spam_less import BermudaLogSpamLess
-
+from .const import _LOGGER
 from .const import DOMAIN
-from .const import LOGSPAM_INTERVAL
 from .const import PLATFORMS
 from .const import STARTUP_MESSAGE
+from .coordinator import BermudaDataUpdateCoordinator
+
+# from .const import _LOGGER_SPAM_LESS
 
 # from typing import TYPE_CHECKING
 
@@ -35,11 +33,6 @@ from .const import STARTUP_MESSAGE
 #     from bleak.backends.device import BLEDevice
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
-
-_LOGGER: logging.Logger = logging.getLogger(__package__)
-
-
-_LOGGER_SPAM_LESS = BermudaLogSpamLess(_LOGGER, LOGSPAM_INTERVAL)
 
 
 async def async_setup(

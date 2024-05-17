@@ -3,7 +3,10 @@
 # Base component constants
 from __future__ import annotations
 
+import logging
 from typing import Final
+
+from .log_spam_less import BermudaLogSpamLess
 
 NAME = "Bermuda BLE Trilateration"
 DOMAIN = "bermuda"
@@ -145,6 +148,9 @@ DOCS[CONF_SMOOTHING_SAMPLES] = (
 
 # Defaults
 DEFAULT_NAME = DOMAIN
+
+_LOGGER: logging.Logger = logging.getLogger(__package__)
+_LOGGER_SPAM_LESS = BermudaLogSpamLess(_LOGGER, LOGSPAM_INTERVAL)
 
 
 STARTUP_MESSAGE = f"""

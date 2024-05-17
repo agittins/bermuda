@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Mapping
+from typing import Any
 
-from homeassistant.components.device_tracker import SourceType
 from homeassistant.components.device_tracker.config_entry import BaseTrackerEntity
+from homeassistant.components.device_tracker.const import SourceType
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_HOME
 from homeassistant.core import HomeAssistant
@@ -14,12 +14,11 @@ from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .const import _LOGGER
 from .const import DOMAIN
 from .const import SIGNAL_DEVICE_NEW
 from .coordinator import BermudaDataUpdateCoordinator
 from .entity import BermudaEntity
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -33,7 +32,7 @@ async def async_setup_entry(
     created_devices = []  # list of devices we've already created entities for
 
     @callback
-    def device_new(address: str, scanners: [str]) -> None:
+    def device_new(address: str, scanners: list[str]) -> None:
         """Create entities for newly-found device
 
         Called from the data co-ordinator when it finds a new device that needs
@@ -76,7 +75,7 @@ class BermudaDeviceTracker(BermudaEntity, BaseTrackerEntity):
         return self._device.unique_id
 
     @property
-    def extra_state_attributes(self) -> Mapping[str, str]:
+    def extra_state_attributes(self) -> Mapping[str, Any]:
         """Return extra state attributes for this device."""
         return {"scanner": self._device.area_scanner, "area": self._device.area_name}
 
