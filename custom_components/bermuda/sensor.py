@@ -7,9 +7,9 @@ from collections.abc import Mapping
 from typing import Any
 
 from homeassistant import config_entries
-from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.components.sensor import SensorStateClass
+from homeassistant.components.sensor.const import SensorDeviceClass
+from homeassistant.components.sensor.const import SensorStateClass
 from homeassistant.const import SIGNAL_STRENGTH_DECIBELS_MILLIWATT
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.const import UnitOfLength
