@@ -165,8 +165,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                 )
                                 # Flag that we need new pb checks, and work them out:
                                 self._do_private_device_init = True
-                                # TODO: Check that this is thread-safe, since we're in a callback.
-                                self.update_metadevices()
                                 # If no sensors have yet been configured, the coordinator
                                 # won't be getting polled for fresh data. Since we have
                                 # found something, we should get it to do that.
@@ -204,12 +202,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             self._do_full_scanner_init = True
             # Same with Private BLE Device entities
             self._do_private_device_init = True
-
-            # Let's kick off a scanner and private_ble_device scan/refresh/init
-            # TODO: We should probably just flag these and let them happen, rather
-            # than calling them from this, since we're in a callback.
-            self._refresh_scanners([], self._do_full_scanner_init)
-            self.update_metadevices()
 
             # If there are no `CONFIGURED_DEVICES` and the user only has private_ble_devices
             # in their setup, then we might have done our init runs before that integration
@@ -477,10 +469,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 if scanner_device is None:
                     # The receiver doesn't have a device entry yet, let's refresh
                     # all of them in this batch...
-                    self._do_full_scanner_init = True
+                    self._do_full_scanner_init = True  # Flag that we need a full init
                     self._do_private_device_init = True
-                    self._refresh_scanners(matched_scanners, self._do_full_scanner_init)
-                    self._do_full_scanner_init = False
+                    self._refresh_scanners(matched_scanners)
                     scanner_device = self._get_device(discovered.scanner.source)
 
                 if scanner_device is None:
@@ -512,7 +503,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # were discovered in the first scan update. This is likely if nothing has changed
         # since the last time we booted.
         if self._do_full_scanner_init:
-            if not self._refresh_scanners([], self._do_full_scanner_init):
+            if not self._refresh_scanners():
                 _LOGGER.debug(
                     "Failed to refresh scanners, likely config entry not ready."
                 )
@@ -534,8 +525,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             if device.create_sensor:
                 if not device.create_sensor_done or not device.create_tracker_done:
                     _LOGGER.debug("Firing device_new for %s (%s)", device.name, address)
-                    # TODO: Confirm that this call is safe. I think we are always in the event loop
-                    # here, so using the async form should be OK. Otherwise use dispatcher_send.
+                    # Note that the below should be OK thread-wise, debugger indicates this is being
+                    # called by _run in events.py, so pretty sure we are "in the event loop".
                     async_dispatcher_send(
                         self.hass, SIGNAL_DEVICE_NEW, address, self.scanner_list
                     )
@@ -978,23 +969,27 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             device.area_rssi = None
             device.area_scanner = None
 
-    def _refresh_scanners(
-        self, scanners: list[BluetoothScannerDevice], do_full_scan=False
-    ):
-        """Refresh our local (and saved) list of scanners (BLE Proxies)"""
+    def _refresh_scanners(self, scanners: list[BluetoothScannerDevice] | None = None):
+        """Refresh our local (and saved) list of scanners (BLE Proxies)
+
+        If self._do_full_scanner_init is true a full scan will be done.
+        Otherwise, you need to supply a list of scanners that you wish
+        to refresh."""
         addresses = set()
         update_scannerlist = False
 
-        for scanner in scanners:
-            addresses.add(scanner.scanner.source.lower())
+        if scanners is not None:
+            for scanner in scanners:
+                addresses.add(scanner.scanner.source.lower())
 
         # If we are doing a full scan, add all the known
         # scanner addresses to the list, since that will cover
         # the scanners that have been restored from config.data
-        if do_full_scan:
+        if self._do_full_scanner_init:
             update_scannerlist = True
             for address in self.scanner_list:
                 addresses.add(address.lower())
+            self._do_full_scanner_init = False
 
         if len(addresses) > 0:
             # FIXME: Really? This can't possibly be a sensible nesting of loops.
