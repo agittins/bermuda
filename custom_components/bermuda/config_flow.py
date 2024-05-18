@@ -114,9 +114,61 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):  # pylint: disable=unused-argument
         """Manage the options."""
-        return await self.async_step_globalopts()
+        # return await self.async_step_globalopts()
+        return self.async_show_menu(
+            step_id="init",
+            menu_options={
+                "globalopts": "Global Options",
+                "selectdevices": "Select Devices",
+            },
+        )
 
     async def async_step_globalopts(self, user_input=None):
+        """Handle global options flow"""
+        if user_input is not None:
+            self.options.update(user_input)
+            return await self._update_options()
+
+        data_schema = {
+            vol.Required(
+                CONF_MAX_RADIUS,
+                default=self.options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_MAX_VELOCITY,
+                default=self.options.get(CONF_MAX_VELOCITY, DEFAULT_MAX_VELOCITY),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_DEVTRACK_TIMEOUT,
+                default=self.options.get(
+                    CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT
+                ),
+            ): vol.Coerce(int),
+            vol.Required(
+                CONF_UPDATE_INTERVAL,
+                default=self.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SMOOTHING_SAMPLES,
+                default=self.options.get(
+                    CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES
+                ),
+            ): vol.Coerce(int),
+            vol.Required(
+                CONF_ATTENUATION,
+                default=self.options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_REF_POWER,
+                default=self.options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
+            ): vol.Coerce(float),
+        }
+
+        return self.async_show_form(
+            step_id="globalopts", data_schema=vol.Schema(data_schema)
+        )
+
+    async def async_step_selectdevices(self, user_input=None):
         """Handle a flow initialized by the user."""
         if user_input is not None:
             self.options.update(user_input)
@@ -194,38 +246,6 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
                 )
 
         data_schema = {
-            vol.Required(
-                CONF_MAX_RADIUS,
-                default=self.options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_MAX_VELOCITY,
-                default=self.options.get(CONF_MAX_VELOCITY, DEFAULT_MAX_VELOCITY),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_DEVTRACK_TIMEOUT,
-                default=self.options.get(
-                    CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT
-                ),
-            ): vol.Coerce(int),
-            vol.Required(
-                CONF_UPDATE_INTERVAL,
-                default=self.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_SMOOTHING_SAMPLES,
-                default=self.options.get(
-                    CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES
-                ),
-            ): vol.Coerce(int),
-            vol.Required(
-                CONF_ATTENUATION,
-                default=self.options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_REF_POWER,
-                default=self.options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
-            ): vol.Coerce(float),
             vol.Optional(
                 CONF_DEVICES,
                 default=self.options.get(CONF_DEVICES, []),
@@ -240,7 +260,7 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
         }
 
         return self.async_show_form(
-            step_id="globalopts", data_schema=vol.Schema(data_schema)
+            step_id="selectdevices", data_schema=vol.Schema(data_schema)
         )
 
     async def _update_options(self):
