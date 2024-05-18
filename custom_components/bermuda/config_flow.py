@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.components import bluetooth
+from homeassistant.components.bluetooth import MONOTONIC_TIME
 from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.selector import selector
 
+from .bermuda_device import BermudaDevice
+from .const import ADDR_TYPE_IBEACON
+from .const import ADDR_TYPE_PRIVATE_BLE_DEVICE
+from .const import BDADDR_TYPE_PRIVATE_RESOLVABLE
 from .const import CONF_ATTENUATION
 from .const import CONF_DEVICES
 from .const import CONF_DEVTRACK_TIMEOUT
@@ -101,10 +106,11 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
     """Config flow options handler for bermuda."""
 
-    def __init__(self, config_entry):
+    def __init__(self, config_entry: ConfigEntry):
         """Initialize HACS options flow."""
         self.config_entry = config_entry
         self.options = dict(config_entry.options)
+        self.devices: dict[str, BermudaDevice]
 
     async def async_step_init(self, user_input=None):  # pylint: disable=unused-argument
         """Manage the options."""
@@ -116,51 +122,74 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
             self.options.update(user_input)
             return await self._update_options()
 
-        options = []
-        for service_info in bluetooth.async_discovered_service_info(self.hass, False):
-            # Add each discovered MAC address to the options list for selecting
-            devname = (
-                service_info.name
-                or service_info.advertisement.local_name
-                or service_info.device.name
-                or service_info.address
-            )
-            options.append(
+        # Grab the co-ordinator's device list so we can build a selector from it.
+        self.devices = self.hass.data[DOMAIN][self.config_entry.entry_id].devices
+
+        # Where we store the options before building the selector
+        options_list = []
+        options_metadevices = []  # These will be first in the list
+        options_otherdevices = []  # These will be last.
+        options_randoms = []  # Random MAC addresses - very last!
+
+        for address, device in self.devices.items():
+            # Iterate through all the discovered devices to build the options list
+
+            name = device.prefname or device.name or ""
+
+            if device.is_scanner:
+                # We don't "track" scanner devices, per se
+                continue
+            if device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
+                # Private BLE Devices get configured automagically, skip
+                continue
+            if device.address_type == ADDR_TYPE_IBEACON:
+                # This is an iBeacon meta-device
+                options_metadevices.append(
+                    {
+                        "value": device.address.upper(),
+                        "label": f"iBeacon: {device.address.upper()} {name if device.address.upper() != name.upper() else ""}",
+                    }
+                )
+                continue
+
+            if device.address_type == BDADDR_TYPE_PRIVATE_RESOLVABLE:
+                # This is a random MAC, we should tag it as such
+
+                if device.last_seen < MONOTONIC_TIME() - (60 * 60 * 2):  # two hours
+                    # A random MAC we haven't seen for a while is not much use, skip
+                    continue
+
+                options_randoms.append(
+                    {
+                        "value": device.address.upper(),
+                        "label": f"[{device.address.upper()}] {name} (Random MAC)",
+                    }
+                )
+                continue
+
+            # Default, unremarkable devices, just pop them in the list.
+            options_otherdevices.append(
                 {
-                    "value": service_info.address.upper(),
-                    "label": f"[{service_info.address}] {devname}",
+                    "value": device.address.upper(),
+                    "label": f"[{device.address.upper()}] {name}",
                 }
             )
 
-            # If the device is advertising an iBeacon UUID, add that too
-            for (
-                company,
-                man_data,
-            ) in service_info.advertisement.manufacturer_data.items():
-                if (
-                    company == 0x004C  # company is 76 Apple Inc
-                    and man_data[:2] == b"\x02\x15"  # 0x0215:  # iBeacon packet
-                ):
-                    beacon_uuid = man_data[2:18].hex().upper()
-                    beacon_major = int.from_bytes(man_data[18:20], byteorder="big")
-                    beacon_minor = int.from_bytes(man_data[20:22], byteorder="big")
-
-                    # So, the irony of having major/minor is that the UniversallyUniqueIDentifier
-                    # is not even unique locally, so we need to make one :-)
-                    beacon_unique_id = f"{beacon_uuid}_{beacon_major}_{beacon_minor}"
-
-                    options.append(
-                        {
-                            "value": beacon_unique_id.upper(),
-                            "label": f"iBeacon: {beacon_unique_id}",
-                        }
-                    )
+        # build the final list with "preferred" devices first.
+        options_metadevices.sort(key=lambda item: item["label"])
+        options_otherdevices.sort(key=lambda item: item["label"])
+        options_randoms.sort(key=lambda item: item["label"])
+        options_list.extend(options_metadevices)
+        options_list.extend(options_otherdevices)
+        options_list.extend(options_randoms)
 
         for address in self.options.get(CONF_DEVICES, []):
+            # Now check for any configured devices that weren't discovered, and add them
             if not next(
-                (item for item in options if item["value"] == address.upper()), False
+                (item for item in options_list if item["value"] == address.upper()),
+                False,
             ):
-                options.append(
+                options_list.append(
                     {"value": address.upper(), "label": f"[{address}] (saved)"}
                 )
 
@@ -203,7 +232,7 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
             ): selector(
                 {
                     "select": {
-                        "options": options,
+                        "options": options_list,
                         "multiple": True,
                     }
                 }
