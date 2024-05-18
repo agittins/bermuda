@@ -6,8 +6,6 @@ from unittest.mock import patch
 
 import pytest
 
-from .const import SERVICE_INFOS
-
 # from custom_components.bermuda import BermudaDataUpdateCoordinator
 
 
@@ -65,10 +63,12 @@ def error_get_data_fixture():
         yield
 
 
-# This fixture ensures that the config flow gets service info for the anticipated address
-# to go into configured_devices
-@pytest.fixture(autouse=True)
-def mock_service_info():
-    """Simulate a discovered advertisement for config_flow"""
-    with patch("custom_components.bermuda.bluetooth.async_discovered_service_info"):
-        return SERVICE_INFOS
+# 2024-05-18: No longer required as config_flow no longer accesses the bluetooth platform,
+# instead pulling data from the dataupdatecoordinator.
+# # This fixture ensures that the config flow gets service info for the anticipated address
+# # to go into configured_devices
+# @pytest.fixture(autouse=True)
+# def mock_service_info():
+#     """Simulate a discovered advertisement for config_flow"""
+#     with patch("custom_components.bermuda.bluetooth.async_discovered_service_info"):
+#         return SERVICE_INFOS
