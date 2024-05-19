@@ -75,7 +75,9 @@ async def async_setup_entry(
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, device_new))
 
     # Now we must tell the co-ord to do initial refresh, so that it will call our callback.
-    await coordinator.async_config_entry_first_refresh()
+    # This runs inside the event loop so should be fine as-is.
+    # Disabling as it seems to work ok without, and it might be cause of async race.
+    # await coordinator.async_config_entry_first_refresh()
 
 
 class BermudaSensor(BermudaEntity, SensorEntity):
