@@ -628,7 +628,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # and ensure for each "device" we create a source device.
             # pb here means "private ble device"
             pb_entries = self.hass.config_entries.async_entries(
-                DOMAIN_PRIVATE_BLE_DEVICE
+                DOMAIN_PRIVATE_BLE_DEVICE, include_disabled=False
             )
             for pb_entry in pb_entries:
                 pb_entities = entreg.entities.get_entries_for_config_entry_id(
