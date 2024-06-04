@@ -105,5 +105,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload config entry."""
-    await async_unload_entry(hass, entry)
+    try:
+        await async_unload_entry(hass, entry)
+    except ValueError:
+        _LOGGER.warning(
+            "Exception trying to unload entry, but will continue with setup anyway"
+        )
+
     await async_setup_entry(hass, entry)
