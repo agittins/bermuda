@@ -196,10 +196,15 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
                 continue
             if device.address_type == ADDR_TYPE_IBEACON:
                 # This is an iBeacon meta-device
+                if len(device.beacon_sources) > 0:
+                    source_mac = f"[{device.beacon_sources[0].upper()}]"
+                else:
+                    source_mac = ""
+
                 options_metadevices.append(
                     {
                         "value": device.address.upper(),
-                        "label": f"iBeacon: {device.address.upper()} {name if device.address.upper() != name.upper() else ""}",
+                        "label": f"iBeacon: {device.address.upper()} {source_mac} {name if device.address.upper() != name.upper() else ""}",
                     }
                 )
                 continue
