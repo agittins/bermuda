@@ -59,14 +59,15 @@ async def async_setup_entry(
                 entities.append(
                     BermudaSensorScannerRangeRaw(coordinator, entry, address, scanner)
                 )
-            _LOGGER.debug("Sensor received new_device signal for %s", address)
+            # _LOGGER.debug("Sensor received new_device signal for %s", address)
             # We set update before add to False because we are being
             # call(back(ed)) from the update, so causing it to call another would be... bad.
             async_add_devices(entities, False)
             created_devices.append(address)
         else:
             # We've already created this one.
-            _LOGGER.debug("Ignoring duplicate creation request for %s", address)
+            # _LOGGER.debug("Ignoring duplicate creation request for %s", address)
+            pass
         # tell the co-ord we've done it.
         coordinator.sensor_created(address)
 
