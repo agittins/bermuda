@@ -4,12 +4,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 from datetime import timedelta
 
 import voluptuous as vol
+from habluetooth import BluetoothServiceInfoBleak
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import MONOTONIC_TIME
+from homeassistant.components.bluetooth import BluetoothChange
 from homeassistant.components.bluetooth import BluetoothScannerDevice
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_STATE_CHANGED
@@ -72,6 +75,8 @@ from .const import PRUNE_TIME_IRK
 from .const import SIGNAL_DEVICE_NEW
 from .const import UPDATE_INTERVAL
 from .util import clean_charbuf
+
+Cancellable = Callable[[], None]
 
 
 class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
@@ -137,6 +142,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         self.metadevices: dict[str, BermudaDevice] = {}
 
+        self._ad_listener_cancel: Cancellable | None = None
+
         @callback
         def handle_state_changes(ev: Event[EventStateChangedData]):
             """Watch for new mac addresses on private ble devices and act."""
@@ -172,7 +179,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                     self.async_config_entry_first_refresh()
                                 )
 
-        hass.bus.async_listen(EVENT_STATE_CHANGED, handle_state_changes)
+        self.hass.bus.async_listen(EVENT_STATE_CHANGED, handle_state_changes)
 
         # First time around we freshen the restored scanner info by
         # forcing a scan of the captured info.
@@ -271,6 +278,42 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             vol.Schema({vol.Optional("addresses"): cv.string}),
             SupportsResponse.ONLY,
         )
+
+        # Register to get callbacks on every bluetooth advert received!
+        if self.config_entry is not None:
+            self.config_entry.async_on_unload(
+                bluetooth.async_register_callback(
+                    self.hass,
+                    self.async_handle_advert,
+                    bluetooth.BluetoothCallbackMatcher(connectable=False),
+                    bluetooth.BluetoothScanningMode.ACTIVE,
+                )
+            )
+
+    @callback
+    def async_handle_advert(
+        self,
+        service_info: BluetoothServiceInfoBleak,
+        change: BluetoothChange,
+    ) -> None:
+        """Handle an incoming advert callback from the bluetooth integration
+
+        These should come in as adverts are received, rather than on our update schedule.
+        The data should be as fresh as can be."""
+        _LOGGER.debug(
+            "New Advert! change: %s, scanner: %s mac: %s name: %s serviceinfo: %s",
+            change,
+            service_info.source,
+            service_info.address,
+            service_info.name,
+            service_info,
+        )
+        # Note that we don't actually process these, this implementation
+        # is mainly for testing and to see if there's a benefit to using
+        # the listener. Initial testing indicates that this only gets called
+        # periodically so it doesn't seem useful as far as getting timely updates
+        # goes. It may prove useful for devices that have left if we have a long
+        # update interval or something.
 
     def sensor_created(self, address):
         """Allows sensor platform to report back that sensors have been set up"""
