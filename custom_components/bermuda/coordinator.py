@@ -320,7 +320,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         dev = self._get_device(address)
         if dev is not None:
             dev.create_sensor_done = True
-            _LOGGER.debug("Sensor confirmed created for %s", address)
+            # _LOGGER.debug("Sensor confirmed created for %s", address)
         else:
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
 
@@ -329,7 +329,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         dev = self._get_device(address)
         if dev is not None:
             dev.create_tracker_done = True
-            _LOGGER.debug("Device_tracker confirmed created for %s", address)
+            # _LOGGER.debug("Device_tracker confirmed created for %s", address)
         else:
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
 

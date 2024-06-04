@@ -14,7 +14,6 @@ from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import _LOGGER
 from .const import DOMAIN
 from .const import SIGNAL_DEVICE_NEW
 from .coordinator import BermudaDataUpdateCoordinator
@@ -50,9 +49,10 @@ async def async_setup_entry(
             async_add_devices(entities, False)
             created_devices.append(address)
         else:
-            _LOGGER.debug(
-                "Ignoring create request for existing dev_tracker %s", address
-            )
+            # _LOGGER.debug(
+            #     "Ignoring create request for existing dev_tracker %s", address
+            # )
+            pass
         # tell the co-ord we've done it.
         coordinator.device_tracker_created(address)
 
