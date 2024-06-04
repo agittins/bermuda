@@ -258,7 +258,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             for address, saved in entry.data.get(CONFDATA_SCANNERS, {}).items():
                 scanner = self._get_or_create_device(address)
                 for key, value in saved.items():
-                    setattr(scanner, key, value)
+                    if key != "options":
+                        # We don't restore the options, since they may have changed.
+                        # the get_or_create will have grabbed the current ones.
+                        setattr(scanner, key, value)
                 self.scanner_list.append(address)
 
         hass.services.async_register(
