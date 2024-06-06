@@ -1,5 +1,7 @@
 ![Bermuda Logo](img/logo@2x.png)
 
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=agittins&repository=bermuda&category=Bluetooth)
+
 # Bermuda BLE Trilateration
 
 - Track bluetooth devices by Area (Room) in [HomeAssistant](https://home-assistant.io/), using [ESPHome](https://esphome.io/) [bluetooth_proxy](https://esphome.io/components/bluetooth_proxy.html) devices.
@@ -44,6 +46,8 @@ Bermuda aims to let you track any bluetooth device, and have Homeassistant tell 
   However it can be used for simple "Home/Not Home" tracking, and Area distance support is enabled currently.
 
 - Some bluetooth BLE devices you want to track. Smart watches, beacon tiles, thermometers etc
+
+- Install Bermuda via HACS: [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=agittins&repository=bermuda&category=Bluetooth)
 
 ## Documentation and help - the Wiki
 
