@@ -1,6 +1,6 @@
 ![Bermuda Logo](img/logo@2x.png)
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=agittins&repository=bermuda&category=Bluetooth)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=agittins&repository=bermuda&category=Integration)
 
 # Bermuda BLE Trilateration
 
@@ -47,7 +47,7 @@ Bermuda aims to let you track any bluetooth device, and have Homeassistant tell 
 
 - Some bluetooth BLE devices you want to track. Smart watches, beacon tiles, thermometers etc
 
-- Install Bermuda via HACS: [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=agittins&repository=bermuda&category=Bluetooth)
+- Install Bermuda via HACS: [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=agittins&repository=bermuda&category=Integration)
 
 ## Documentation and help - the Wiki
 
