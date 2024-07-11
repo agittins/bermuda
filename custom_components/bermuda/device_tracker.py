@@ -43,6 +43,17 @@ async def async_setup_entry(
         """
         if address not in created_devices:
             entities = []
+
+            # Retrieve the device details from the coordinator
+            device = coordinator.devices.get(address)
+            if not device:
+                return
+
+            # Additional property checks specific to the device type
+            if device.device_type == "iBeacon":
+                if not (device.uuid and device.major and device.minor):
+                    return
+
             entities.append(BermudaDeviceTracker(coordinator, entry, address))
             # We set update before add to False because we are being
             # call(back(ed)) from the update, so causing it to call another would be... bad.
