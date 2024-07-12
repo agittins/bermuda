@@ -343,6 +343,32 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         else:
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
 
+    def count_active_devices(self) -> int:
+        """Returns the number of bluetooth devices that have recent timestamps.
+
+        Useful as a general indicator of health"""
+        stamp = MONOTONIC_TIME() - 10  # seconds
+        fresh_count = 0
+        for address, device in self.devices.items():
+            if device.last_seen > stamp:
+                fresh_count += 1
+        return fresh_count
+
+    def count_active_scanners(self) -> int:
+        """Returns count of scanners that have recently sent updates."""
+        stamp = MONOTONIC_TIME() - 10  # seconds
+        fresh_count = 0
+        for scanner in self.scanner_list:
+            last_stamp: float = 0
+            for address, device in self.devices.items():
+                record = device.scanners.get(scanner, None)
+                if record is not None and record.stamp is not None:
+                    if record.stamp > last_stamp:
+                        last_stamp = record.stamp
+            if last_stamp > stamp:
+                fresh_count += 1
+        return fresh_count
+
     def _get_device(self, address: str) -> BermudaDevice | None:
         """Search for a device entry based on mac address"""
         mac = format_mac(address).lower()

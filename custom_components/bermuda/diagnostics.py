@@ -22,6 +22,8 @@ async def async_get_config_entry_diagnostics(
     call = ServiceCall(DOMAIN, "dump_devices", {"redact": True})
 
     data: dict[str, Any] = {
+        "active_devices": f"{coordinator.count_active_devices()}/{len(coordinator.devices)}",
+        "active_scanners": f"{coordinator.count_active_scanners()}/{len(coordinator.scanner_list)}",
         "devices": await coordinator.service_dump_devices(call),
     }
     return data
