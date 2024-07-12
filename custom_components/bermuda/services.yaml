@@ -5,3 +5,11 @@ dump_devices:
       required: false
       example: "EE:E8:37:9F:6B:54 C7:B8:C6:B0:27:11 AA:AA:AA:AA:AA:AA"
       default: ""
+    configured_devices:
+      required: false
+      example: "False"
+      default: true
+    redact:
+      required: false
+      example: "False"
+      default: false

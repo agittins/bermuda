@@ -60,6 +60,14 @@
         "addresses": {
           "name": "Addresses",
           "description": "An optional space-separated list of MAC addresses to return info on. If blank get all addresses."
+        },
+        "configured_devices": {
+          "name": "Configured Devices",
+          "description": "Select to include only scanners and configured devices in the output."
+        },
+        "redact": {
+          "name": "Redact",
+          "description": "Set to TRUE to ensure MAC addresses are redacted in output for privacy."
         }
       }
     }

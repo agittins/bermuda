@@ -4,9 +4,11 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from datetime import datetime
 from datetime import timedelta
+from typing import cast
 
 import voluptuous as vol
 from habluetooth import BluetoothServiceInfoBleak
@@ -19,6 +21,8 @@ from homeassistant.const import EVENT_STATE_CHANGED
 from homeassistant.core import Event
 from homeassistant.core import EventStateChangedData
 from homeassistant.core import HomeAssistant
+from homeassistant.core import ServiceCall
+from homeassistant.core import ServiceResponse
 from homeassistant.core import SupportsResponse
 from homeassistant.core import callback
 from homeassistant.helpers import area_registry
@@ -275,7 +279,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             DOMAIN,
             "dump_devices",
             self.service_dump_devices,
-            vol.Schema({vol.Optional("addresses"): cv.string}),
+            vol.Schema(
+                {
+                    vol.Optional("addresses"): cv.string,
+                    vol.Optional("configured_devices"): cv.boolean,
+                    vol.Optional("redact"): cv.boolean,
+                }
+            ),
             SupportsResponse.ONLY,
         )
 
@@ -1124,15 +1134,93 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         return True
 
-    async def service_dump_devices(self, call):  # pylint: disable=unused-argument;
+    async def service_dump_devices(
+        self, call: ServiceCall
+    ) -> ServiceResponse:  # pylint: disable=unused-argument;
         """Return a dump of beacon advertisements by receiver"""
         out = {}
         addresses_input = call.data.get("addresses", "")
+        redact = call.data.get("redact", False)
+        configured_devices = call.data.get("configured_devices", False)
+
+        # Choose filter for device/address selection
+        addresses = []
         if addresses_input != "":
-            addresses = addresses_input.upper().split()
-        else:
-            addresses = []
+            # Specific devices
+            addresses += addresses_input.upper().split()
+        if configured_devices:
+            # configured and scanners
+            addresses += self.scanner_list
+            addresses += self.options.get(CONF_DEVICES, [])
+
+        # lowercase all the addresses for matching
+        addresses = list(map(str.lower, addresses))
+
+        # set up redaction lookups. To make troubleshooting easier, we assign
+        # labels and identifiers to each unique MAC/address.
+        redactions = {}
+        if redact:
+            i = 0
+            for address in self.scanner_list:
+                i += 1
+                redactions[address.upper()] = (
+                    f"{address[:2]}::SCANNER_{i}::{address[-2:]}"
+                )
+            i = 0
+            for address in self.options.get(CONF_DEVICES, []):
+                if address.upper() not in redactions:
+                    i += 1
+                    if address.count("_") == 2:
+                        redactions[address] = (
+                            f"{address[:4]}::CFG_iBea_{i}::{address[32:]}"
+                        )
+                    elif len(address) == 17:
+                        redactions[address] = (
+                            f"{address[:2]}::CFG_MAC_{i}::{address[-2:]}"
+                        )
+                    else:
+                        # Don't know what it is, but not a mac.
+                        redactions[address] = f"CFG_OTHER_{1}_{address}"
+
+            # don't reset i, just continue on for all the other devices.
+            for address, device in self.devices.items():
+                if address.upper() not in redactions:
+                    # Only add if they are not already there.
+                    i += 1
+                    if device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
+                        redactions[address] = f"{address[:2]}::IRK_DEV_{i}"
+                    elif address.count("_") == 2:
+                        redactions[address] = (
+                            f"{address[:4]}::OTHER_iBea_{i}::{address[32:]}"
+                        )
+                    elif len(address) == 17:  # a MAC
+                        redactions[address] = (
+                            f"{address[:2]}::OTHER_MAC_{i}::{address[-2:]}"
+                        )
+                    else:
+                        # Don't know what it is.
+                        redactions[address] = f"OTHER_{1}_{address}"
+
+        # Build the dict of devices
         for address, device in self.devices.items():
-            if len(addresses) == 0 or address.upper() in addresses:
+            if len(addresses) == 0 or address.lower() in addresses:
                 out[address] = device.to_dict()
+
+        def redact_data(data, redactions):
+            if isinstance(data, str):
+                for find, fix in redactions.items():
+                    data = re.sub(find, fix, data, flags=re.I)
+                return data
+            elif isinstance(data, dict):
+                return {
+                    redact_data(k, redactions): redact_data(v, redactions)
+                    for k, v in data.items()
+                }
+            elif isinstance(data, list):
+                return [redact_data(v, redactions) for v in data]
+            else:
+                return data
+
+        if redact:
+            out = cast(ServiceResponse, redact_data(out, redactions))
         return out
