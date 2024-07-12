@@ -11,6 +11,8 @@ from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.selector import selector
 
+from custom_components.bermuda.coordinator import BermudaDataUpdateCoordinator
+
 from .bermuda_device import BermudaDevice
 from .const import ADDR_TYPE_IBEACON
 from .const import ADDR_TYPE_PRIVATE_BLE_DEVICE
@@ -108,12 +110,36 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: ConfigEntry):
         """Initialize HACS options flow."""
+        super().__init__()
         self.config_entry = config_entry
         self.options = dict(config_entry.options)
+        self.coordinator: BermudaDataUpdateCoordinator
         self.devices: dict[str, BermudaDevice]
 
     async def async_step_init(self, user_input=None):  # pylint: disable=unused-argument
         """Manage the options."""
+
+        self.coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id]
+        self.devices = self.coordinator.devices
+
+        messages = {}
+        active_devices = self.coordinator.count_active_devices()
+        active_scanners = self.coordinator.count_active_scanners()
+        messages["device_count"] = f"{active_devices} active of {len(self.devices)}"
+        messages["scanner_count"] = (
+            f"{active_scanners} active of {len(self.coordinator.scanner_list)}"
+        )
+        if len(self.coordinator.scanner_list) == 0:
+            messages["status"] = (
+                "You need to configure some bluetooth scanners before Bermuda will have anything to work with. Any one of esphome bluetooth_proxy, Shelly bluetooth proxy or local bluetooth adaptor should get you started."
+            )
+        elif active_devices == 0:
+            messages["status"] = (
+                "No bluetooth devices are actively being reported from your scanners. You will need to solve this before Bermuda can be of much help."
+            )
+        else:
+            messages["status"] = "Life looks good."
+
         # return await self.async_step_globalopts()
         return self.async_show_menu(
             step_id="init",
@@ -121,6 +147,7 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
                 "globalopts": "Global Options",
                 "selectdevices": "Select Devices",
             },
+            description_placeholders=messages,
         )
 
     async def async_step_globalopts(self, user_input=None):

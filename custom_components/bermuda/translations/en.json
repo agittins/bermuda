@@ -19,6 +19,9 @@
   },
   "options": {
     "step": {
+      "init": {
+        "description": "Bermuda can currently see {device_count} bluetooth devices, reported across {scanner_count} bluetooth scanner devices. {status}"
+      },
       "globalopts": {
         "data": {
           "max_area_radius": "Max radius in metres for simple AREA detection",
@@ -39,6 +42,10 @@
           "attenuation": "After setting ref_power at 1 metre, adjust attenuation so that other distances read correctly - more or less.",
           "ref_power": "Put your most-common beacon 1 metre (3.28') away from your most-common proxy / scanner. Adjust ref_power until the distance sensor shows a lowest (not average) distance of 1 metre."
         }
+      },
+      "selectdevices": {
+        "title": "Select Devices",
+        "description": "Choose which devices you wish to track. If no devices appear below, then Bermuda is not seeing any data coming from Bluetooth scanners. Ensure you have an esphome ble_proxy device, Shelly devices with bluetooth proxy configured or a local bluetooth adaptor."
       }
     }
   },
