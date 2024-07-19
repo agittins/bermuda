@@ -231,7 +231,7 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
                 options_metadevices.append(
                     {
                         "value": device.address.upper(),
-                        "label": f"iBeacon: {device.address.upper()} {source_mac} {name if device.address.upper() != name.upper() else ""}",
+                        "label": f"iBeacon: {device.address.upper()} {source_mac} {name if device.address.upper() != name.upper() else ''}",
                     }
                 )
                 continue
