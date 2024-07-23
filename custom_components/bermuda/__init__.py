@@ -7,21 +7,20 @@ https://github.com/agittins/bermuda
 
 from __future__ import annotations
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Config
-from homeassistant.core import HomeAssistant
+from typing import TYPE_CHECKING
+
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 
 # from homeassistant.helpers.device_registry import EventDeviceRegistryUpdatedData
-from homeassistant.helpers.device_registry import DeviceEntry
-from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.device_registry import DeviceEntry, format_mac
 
-from .const import _LOGGER
-from .const import DOMAIN
-from .const import PLATFORMS
-from .const import STARTUP_MESSAGE
+from .const import _LOGGER, DOMAIN, PLATFORMS, STARTUP_MESSAGE
 from .coordinator import BermudaDataUpdateCoordinator
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import Config, HomeAssistant
 
 # from .const import _LOGGER_SPAM_LESS
 
@@ -35,9 +34,7 @@ from .coordinator import BermudaDataUpdateCoordinator
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
-async def async_setup(
-    hass: HomeAssistant, config: Config
-):  # pylint: disable=unused-argument;
+async def async_setup(hass: HomeAssistant, config: Config):  # pylint: disable=unused-argument;
     """Setting up this integration using YAML is not supported."""
     return True
 
@@ -47,9 +44,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     if hass.data.get(DOMAIN) is None:
         _LOGGER.info(STARTUP_MESSAGE)
 
-    coordinator = hass.data.setdefault(DOMAIN, {})[entry.entry_id] = (
-        BermudaDataUpdateCoordinator(hass, entry)
-    )
+    coordinator = hass.data.setdefault(DOMAIN, {})[entry.entry_id] = BermudaDataUpdateCoordinator(hass, entry)
 
     await coordinator.async_refresh()
 
@@ -95,9 +90,7 @@ async def async_remove_config_entry_device(
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
-    if unload_result := await hass.config_entries.async_unload_platforms(
-        entry, PLATFORMS
-    ):
+    if unload_result := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         _LOGGER.debug("Unloaded platforms.")
         hass.data[DOMAIN].pop(entry.entry_id)
     return unload_result

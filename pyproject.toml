@@ -1,0 +1,121 @@
+# Adapted from https://github.com/ludeeus/integration_blueprint/blob/main/.ruff.toml
+[tool.ruff]
+target-version = "py312"
+line-length=120 # This is all me and not HA - I will die on the hill that 80 is too short
+
+[tool.ruff.lint]
+select = [
+    "ALL",
+]
+
+ignore = [
+    "ANN101", # Missing type annotation for `self` in method
+    "ANN401", # Dynamically typed expressions (typing.Any) are disallowed
+    "D203", # no-blank-line-before-class (incompatible with formatter)
+    "D212", # multi-line-summary-first-line (incompatible with formatter)
+    "COM812", # incompatible with formatter
+    "ISC001", # incompatible with formatter
+    "ERA001", # commented out code
+    "D401", # First line should be in imperative - let's skip for now
+    "D205", # 1 blank line required between summary line and description
+    "ANN001", # Return type annoations - should be done later as lot of manual changes
+    "ANN003", # Type annotation for **kwargs
+    "PGH004", # Use specific rule codes for noqa
+    "D102", # Docstring in public method - should be done later
+    "D107", # Dosctring in init
+    "ANN002", # Missing type annotations for *args
+    "ANN202", #Missing return type annotation for private function
+    "RUF012", #Mutable class attributes should be annotated with `typing.ClassVar`
+    "ANN201", #Missing return type annotation for public function should be done later
+    "FBT002", #Boolean default positional argument in function definition
+    "FBT003", # Boolean positional value in function call
+    "ARG001", # Unused function argument
+    "RET505", # Unnecessary elif
+    "PLR2004", # Magic value
+    "PLR0912", # Too many branches
+    "FIX001", # Line contains fixme
+    "TD003", # Missing issue link on the line following this TODO
+    "TD002", # Missing author in TODO
+    "TD001", # Invalid TODO tag in FIXME
+    "SIM108", #Use ternary operator
+    "PLR0915", # Too many statements
+    "FIX002", # Resolve TODO
+    "SIM102", # Use a single if instead of nested if
+    "ANN205", # missing return type annotation for staticmethod
+    "ARG002", # Unused method argument
+    "PGH003", # Use specific rule codes when ignore type issues
+    "D404", # First word of the dosctring should not be "This"
+]
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
+
+[tool.ruff.lint.mccabe]
+max-complexity = 25
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/**/*.py" = [
+    "S101", # asserts allowed in tests...
+    "ARG", # Unused function args -> fixtures nevertheless are functionally relevant...
+    "FBT", # Don't care about booleans as positional arguments in tests, e.g. via @pytest.mark.parametrize()
+    "PT004", # Add leading underscore to pytest fixture
+    "ALL" # To keep things easy let's just skip all for now - can be changed later :)
+]
+
+# Grabbed from HA core 2024.7
+[tool.ruff.lint.flake8-import-conventions.extend-aliases]
+voluptuous = "vol"
+"homeassistant.components.air_quality.PLATFORM_SCHEMA" = "AIR_QUALITY_PLATFORM_SCHEMA"
+"homeassistant.components.alarm_control_panel.PLATFORM_SCHEMA" = "ALARM_CONTROL_PANEL_PLATFORM_SCHEMA"
+"homeassistant.components.binary_sensor.PLATFORM_SCHEMA" = "BINARY_SENSOR_PLATFORM_SCHEMA"
+"homeassistant.components.button.PLATFORM_SCHEMA" = "BUTTON_PLATFORM_SCHEMA"
+"homeassistant.components.calendar.PLATFORM_SCHEMA" = "CALENDAR_PLATFORM_SCHEMA"
+"homeassistant.components.camera.PLATFORM_SCHEMA" = "CAMERA_PLATFORM_SCHEMA"
+"homeassistant.components.climate.PLATFORM_SCHEMA" = "CLIMATE_PLATFORM_SCHEMA"
+"homeassistant.components.conversation.PLATFORM_SCHEMA" = "CONVERSATION_PLATFORM_SCHEMA"
+"homeassistant.components.cover.PLATFORM_SCHEMA" = "COVER_PLATFORM_SCHEMA"
+"homeassistant.components.date.PLATFORM_SCHEMA" = "DATE_PLATFORM_SCHEMA"
+"homeassistant.components.datetime.PLATFORM_SCHEMA" = "DATETIME_PLATFORM_SCHEMA"
+"homeassistant.components.device_tracker.PLATFORM_SCHEMA" = "DEVICE_TRACKER_PLATFORM_SCHEMA"
+"homeassistant.components.event.PLATFORM_SCHEMA" = "EVENT_PLATFORM_SCHEMA"
+"homeassistant.components.fan.PLATFORM_SCHEMA" = "FAN_PLATFORM_SCHEMA"
+"homeassistant.components.geo_location.PLATFORM_SCHEMA" = "GEO_LOCATION_PLATFORM_SCHEMA"
+"homeassistant.components.humidifier.PLATFORM_SCHEMA" = "HUMIDIFIER_PLATFORM_SCHEMA"
+"homeassistant.components.image.PLATFORM_SCHEMA" = "IMAGE_PLATFORM_SCHEMA"
+"homeassistant.components.image_processing.PLATFORM_SCHEMA" = "IMAGE_PROCESSING_PLATFORM_SCHEMA"
+"homeassistant.components.lawn_mower.PLATFORM_SCHEMA" = "LAWN_MOWER_PLATFORM_SCHEMA"
+"homeassistant.components.light.PLATFORM_SCHEMA" = "LIGHT_PLATFORM_SCHEMA"
+"homeassistant.components.lock.PLATFORM_SCHEMA" = "LOCK_PLATFORM_SCHEMA"
+"homeassistant.components.mailbox.PLATFORM_SCHEMA" = "MAILBOX_PLATFORM_SCHEMA"
+"homeassistant.components.media_player.PLATFORM_SCHEMA" = "MEDIA_PLAYER_PLATFORM_SCHEMA"
+"homeassistant.components.notify.PLATFORM_SCHEMA" = "NOTIFY_PLATFORM_SCHEMA"
+"homeassistant.components.number.PLATFORM_SCHEMA" = "NUMBER_PLATFORM_SCHEMA"
+"homeassistant.components.remote.PLATFORM_SCHEMA" = "REMOTE_PLATFORM_SCHEMA"
+"homeassistant.components.scene.PLATFORM_SCHEMA" = "SCENE_PLATFORM_SCHEMA"
+"homeassistant.components.select.PLATFORM_SCHEMA" = "SELECT_PLATFORM_SCHEMA"
+"homeassistant.components.sensor.PLATFORM_SCHEMA" = "SENSOR_PLATFORM_SCHEMA"
+"homeassistant.components.siren.PLATFORM_SCHEMA" = "SIREN_PLATFORM_SCHEMA"
+"homeassistant.components.stt.PLATFORM_SCHEMA" = "STT_PLATFORM_SCHEMA"
+"homeassistant.components.switch.PLATFORM_SCHEMA" = "SWITCH_PLATFORM_SCHEMA"
+"homeassistant.components.text.PLATFORM_SCHEMA" = "TEXT_PLATFORM_SCHEMA"
+"homeassistant.components.time.PLATFORM_SCHEMA" = "TIME_PLATFORM_SCHEMA"
+"homeassistant.components.todo.PLATFORM_SCHEMA" = "TODO_PLATFORM_SCHEMA"
+"homeassistant.components.tts.PLATFORM_SCHEMA" = "TTS_PLATFORM_SCHEMA"
+"homeassistant.components.vacuum.PLATFORM_SCHEMA" = "VACUUM_PLATFORM_SCHEMA"
+"homeassistant.components.valve.PLATFORM_SCHEMA" = "VALVE_PLATFORM_SCHEMA"
+"homeassistant.components.update.PLATFORM_SCHEMA" = "UPDATE_PLATFORM_SCHEMA"
+"homeassistant.components.wake_word.PLATFORM_SCHEMA" = "WAKE_WORD_PLATFORM_SCHEMA"
+"homeassistant.components.water_heater.PLATFORM_SCHEMA" = "WATER_HEATER_PLATFORM_SCHEMA"
+"homeassistant.components.weather.PLATFORM_SCHEMA" = "WEATHER_PLATFORM_SCHEMA"
+"homeassistant.helpers.area_registry" = "ar"
+"homeassistant.helpers.category_registry" = "cr"
+"homeassistant.helpers.config_validation" = "cv"
+"homeassistant.helpers.device_registry" = "dr"
+"homeassistant.helpers.entity_registry" = "er"
+"homeassistant.helpers.floor_registry" = "fr"
+"homeassistant.helpers.issue_registry" = "ir"
+"homeassistant.helpers.label_registry" = "lr"
+"homeassistant.util.dt" = "dt_util"

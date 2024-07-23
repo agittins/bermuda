@@ -1,33 +1,36 @@
-"""BermudaEntity class"""
+"""BermudaEntity class."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.bluetooth import MONOTONIC_TIME
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
-from homeassistant.helpers import area_registry
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import ADDR_TYPE_IBEACON
-from .const import ADDR_TYPE_PRIVATE_BLE_DEVICE
-from .const import ATTRIBUTION
-from .const import CONF_UPDATE_INTERVAL
-from .const import DEFAULT_UPDATE_INTERVAL
-from .const import DOMAIN
-from .const import DOMAIN_PRIVATE_BLE_DEVICE
+from .const import (
+    ADDR_TYPE_IBEACON,
+    ADDR_TYPE_PRIVATE_BLE_DEVICE,
+    ATTRIBUTION,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+    DOMAIN_PRIVATE_BLE_DEVICE,
+)
 
 if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+
     from .coordinator import BermudaDataUpdateCoordinator
 
     # from . import BermudaDevice
 
 
 class BermudaEntity(CoordinatorEntity):
-    """Co-ordinator for Bermuda data.
+    """
+    Co-ordinator for Bermuda data.
 
     Gathers the device infor for receivers and transmitters, calculates
     distances etc.
@@ -38,37 +41,31 @@ class BermudaEntity(CoordinatorEntity):
         coordinator: BermudaDataUpdateCoordinator,
         config_entry: ConfigEntry,
         address: str,
-    ):
+    ) -> None:
         super().__init__(coordinator)
         self.coordinator = coordinator
         self.config_entry = config_entry
         self._device = coordinator.devices[address]
-        self.area_reg = area_registry.async_get(coordinator.hass)
+        self.area_reg = ar.async_get(coordinator.hass)
         self.devreg = dr.async_get(coordinator.hass)
 
-        self.bermuda_update_interval = config_entry.options.get(
-            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
-        )
+        self.bermuda_update_interval = config_entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
         self.bermuda_last_state: Any = 0
         self.bermuda_last_stamp: float = 0
 
     def _cached_ratelimit(self, statevalue: Any, fast_falling=True, fast_rising=False):
-        """Uses the CONF_UPDATE_INTERVAL and other logic to return either the given statevalue
+        """
+        Uses the CONF_UPDATE_INTERVAL and other logic to return either the given statevalue
         or an older, cached value. Helps to reduce excess sensor churn without compromising latency.
 
         Only suitable for MEASUREMENTS, as numerical comparison is used.
         """
-
         nowstamp = MONOTONIC_TIME()
         if (
-            (
-                self.bermuda_last_stamp < nowstamp - self.bermuda_update_interval
-            )  # Cache is stale
+            (self.bermuda_last_stamp < nowstamp - self.bermuda_update_interval)  # Cache is stale
             or (self.bermuda_last_state is None)  # Nothing compares to you.
             or (statevalue is None)  # or you.
-            or (
-                fast_falling and statevalue < self.bermuda_last_state
-            )  # (like Distance)
+            or (fast_falling and statevalue < self.bermuda_last_state)  # (like Distance)
             or (fast_rising and statevalue > self.bermuda_last_state)  # (like RSSI)
         ):
             # Publish the new value and update cache
@@ -81,7 +78,8 @@ class BermudaEntity(CoordinatorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the co-ordinator
+        """
+        Handle updated data from the co-ordinator.
 
         (we don't need to implement this, but if we want to do anything special we can)
         """
@@ -94,11 +92,12 @@ class BermudaEntity(CoordinatorEntity):
 
     @property
     def device_info(self):
-        """Implementing this creates an entry in the device registry.
+        """
+        Implementing this creates an entry in the device registry.
 
         This is responsible for linking Bermuda entities to devices,
-        and also for matching up to device entries for other integrations."""
-
+        and also for matching up to device entries for other integrations.
+        """
         # Match up our entity with any existing device entries.
         # For scanners we use ethernet MAC, which looks like they are
         # normally stored lowercased, otherwise we use our btmac, which
@@ -127,15 +126,13 @@ class BermudaEntity(CoordinatorEntity):
         else:
             connection = {(dr.CONNECTION_BLUETOOTH, self._device.address.upper())}
 
-        device_info = {
+        return {
             "identifiers": {(domain_name, self._device.unique_id)},
             "connections": connection,
             "name": self._device.prefname,
         }
         # if existing_device_id is not None:
         #    device_info['id'] = existing_device_id
-
-        return device_info
 
     @property
     def device_state_attributes(self):

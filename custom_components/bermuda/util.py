@@ -1,10 +1,11 @@
-"""General helper utilities for Bermuda"""
+"""General helper utilities for Bermuda."""
 
 from __future__ import annotations
 
 
 def rssi_to_metres(rssi, ref_power=None, attenuation=None):
-    """Convert instant rssi value to a distance in metres
+    """
+    Convert instant rssi value to a distance in metres.
 
     Based on the information from
     https://mdpi-res.com/d_attachment/applsci/applsci-10-02003/article_deploy/applsci-10-02003.pdf?version=1584265508
@@ -27,12 +28,12 @@ def rssi_to_metres(rssi, ref_power=None, attenuation=None):
         return False
         # attenuation= self.attenuation
 
-    distance = 10 ** ((ref_power - rssi) / (10 * attenuation))
-    return distance
+    return 10 ** ((ref_power - rssi) / (10 * attenuation))
 
 
 def clean_charbuf(instring: str | None) -> str:
-    """Some people writing C on bluetooth devices seem to
+    """
+    Some people writing C on bluetooth devices seem to
     get confused between char arrays, strings and such. This
     function takes a potentially dodgy charbuf from a bluetooth
     device and cleans it of leading/trailing cruft

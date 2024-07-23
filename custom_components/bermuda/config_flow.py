@@ -2,38 +2,44 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.components.bluetooth import MONOTONIC_TIME
-from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.bluetooth import MONOTONIC_TIME, BluetoothServiceInfoBleak
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.selector import selector
 
-from custom_components.bermuda.coordinator import BermudaDataUpdateCoordinator
+from .const import (
+    ADDR_TYPE_IBEACON,
+    ADDR_TYPE_PRIVATE_BLE_DEVICE,
+    BDADDR_TYPE_PRIVATE_RESOLVABLE,
+    CONF_ATTENUATION,
+    CONF_DEVICES,
+    CONF_DEVTRACK_TIMEOUT,
+    CONF_MAX_RADIUS,
+    CONF_MAX_VELOCITY,
+    CONF_REF_POWER,
+    CONF_SMOOTHING_SAMPLES,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_ATTENUATION,
+    DEFAULT_DEVTRACK_TIMEOUT,
+    DEFAULT_MAX_RADIUS,
+    DEFAULT_MAX_VELOCITY,
+    DEFAULT_REF_POWER,
+    DEFAULT_SMOOTHING_SAMPLES,
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+    NAME,
+)
 
-from .bermuda_device import BermudaDevice
-from .const import ADDR_TYPE_IBEACON
-from .const import ADDR_TYPE_PRIVATE_BLE_DEVICE
-from .const import BDADDR_TYPE_PRIVATE_RESOLVABLE
-from .const import CONF_ATTENUATION
-from .const import CONF_DEVICES
-from .const import CONF_DEVTRACK_TIMEOUT
-from .const import CONF_MAX_RADIUS
-from .const import CONF_MAX_VELOCITY
-from .const import CONF_REF_POWER
-from .const import CONF_SMOOTHING_SAMPLES
-from .const import CONF_UPDATE_INTERVAL
-from .const import DEFAULT_ATTENUATION
-from .const import DEFAULT_DEVTRACK_TIMEOUT
-from .const import DEFAULT_MAX_RADIUS
-from .const import DEFAULT_MAX_VELOCITY
-from .const import DEFAULT_REF_POWER
-from .const import DEFAULT_SMOOTHING_SAMPLES
-from .const import DEFAULT_UPDATE_INTERVAL
-from .const import DOMAIN
-from .const import NAME
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.data_entry_flow import FlowResult
+
+    from custom_components.bermuda.coordinator import BermudaDataUpdateCoordinator
+
+    from .bermuda_device import BermudaDevice
 
 # from homeassistant import data_entry_flow
 
@@ -46,14 +52,13 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     # CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize."""
         self._errors = {}
 
-    async def async_step_bluetooth(
-        self, discovery_info: BluetoothServiceInfoBleak
-    ) -> FlowResult:
-        """Support automatic initiation of setup through bluetooth discovery.
+    async def async_step_bluetooth(self, discovery_info: BluetoothServiceInfoBleak) -> FlowResult:
+        """
+        Support automatic initiation of setup through bluetooth discovery.
         (we still show a confirmation form to the user, though)
         This is triggered by discovery matchers set in manifest.json,
         and since we track any BLE advert, we're being a little cheeky by listing any.
@@ -65,29 +70,23 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()
 
-        return self.async_show_form(
-            step_id="user", description_placeholders={"name": NAME}
-        )
+        return self.async_show_form(step_id="user", description_placeholders={"name": NAME})
 
     async def async_step_user(self, user_input=None):
-        """Handle a flow initialized by the user.
+        """
+        Handle a flow initialized by the user.
 
         We don't need any config for base setup, so we just activate
         (but only for one instance)
         """
-
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
 
         if user_input is not None:
             # create the integration!
-            return self.async_create_entry(
-                title=NAME, data={"source": "user"}, description=NAME
-            )
+            return self.async_create_entry(title=NAME, data={"source": "user"}, description=NAME)
 
-        return self.async_show_form(
-            step_id="user", description_placeholders={"name": NAME}
-        )
+        return self.async_show_form(step_id="user", description_placeholders={"name": NAME})
 
     @staticmethod
     @callback
@@ -108,7 +107,7 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
     """Config flow options handler for bermuda."""
 
-    def __init__(self, config_entry: ConfigEntry):
+    def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize HACS options flow."""
         super().__init__()
         self.config_entry = config_entry
@@ -118,7 +117,6 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):  # pylint: disable=unused-argument
         """Manage the options."""
-
         self.coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id]
         self.devices = self.coordinator.devices
 
@@ -126,16 +124,17 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
         active_devices = self.coordinator.count_active_devices()
         active_scanners = self.coordinator.count_active_scanners()
         messages["device_count"] = f"{active_devices} active of {len(self.devices)}"
-        messages["scanner_count"] = (
-            f"{active_scanners} active of {len(self.coordinator.scanner_list)}"
-        )
+        messages["scanner_count"] = f"{active_scanners} active of {len(self.coordinator.scanner_list)}"
         if len(self.coordinator.scanner_list) == 0:
             messages["status"] = (
-                "You need to configure some bluetooth scanners before Bermuda will have anything to work with. Any one of esphome bluetooth_proxy, Shelly bluetooth proxy or local bluetooth adaptor should get you started."
+                "You need to configure some bluetooth scanners before Bermuda will have anything to work with. "
+                "Any one of esphome bluetooth_proxy, Shelly bluetooth proxy or local bluetooth adaptor should get "
+                "you started."
             )
         elif active_devices == 0:
             messages["status"] = (
-                "No bluetooth devices are actively being reported from your scanners. You will need to solve this before Bermuda can be of much help."
+                "No bluetooth devices are actively being reported from your scanners. "
+                "You will need to solve this before Bermuda can be of much help."
             )
         else:
             messages["status"] = "Life looks good."
@@ -151,7 +150,7 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
     async def async_step_globalopts(self, user_input=None):
-        """Handle global options flow"""
+        """Handle global options flow."""
         if user_input is not None:
             self.options.update(user_input)
             return await self._update_options()
@@ -167,9 +166,7 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
             ): vol.Coerce(float),
             vol.Required(
                 CONF_DEVTRACK_TIMEOUT,
-                default=self.options.get(
-                    CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT
-                ),
+                default=self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT),
             ): vol.Coerce(int),
             vol.Required(
                 CONF_UPDATE_INTERVAL,
@@ -177,9 +174,7 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
             ): vol.Coerce(float),
             vol.Required(
                 CONF_SMOOTHING_SAMPLES,
-                default=self.options.get(
-                    CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES
-                ),
+                default=self.options.get(CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES),
             ): vol.Coerce(int),
             vol.Required(
                 CONF_ATTENUATION,
@@ -191,9 +186,7 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
             ): vol.Coerce(float),
         }
 
-        return self.async_show_form(
-            step_id="globalopts", data_schema=vol.Schema(data_schema)
-        )
+        return self.async_show_form(step_id="globalopts", data_schema=vol.Schema(data_schema))
 
     async def async_step_selectdevices(self, user_input=None):
         """Handle a flow initialized by the user."""
@@ -210,7 +203,7 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
         options_otherdevices = []  # These will be last.
         options_randoms = []  # Random MAC addresses - very last!
 
-        for address, device in self.devices.items():
+        for device in self.devices.values():
             # Iterate through all the discovered devices to build the options list
 
             name = device.prefname or device.name or ""
@@ -231,7 +224,7 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
                 options_metadevices.append(
                     {
                         "value": device.address.upper(),
-                        "label": f"iBeacon: {device.address.upper()} {source_mac} {name if device.address.upper() != name.upper() else ""}",
+                        "label": f"iBeacon: {device.address.upper()} {source_mac} {name if device.address.upper() != name.upper() else ""}",  # noqa
                     }
                 )
                 continue
@@ -273,9 +266,7 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
                 (item for item in options_list if item["value"] == address.upper()),
                 False,
             ):
-                options_list.append(
-                    {"value": address.upper(), "label": f"[{address}] (saved)"}
-                )
+                options_list.append({"value": address.upper(), "label": f"[{address}] (saved)"})
 
         data_schema = {
             vol.Optional(
@@ -291,9 +282,7 @@ class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
             ),
         }
 
-        return self.async_show_form(
-            step_id="selectdevices", data_schema=vol.Schema(data_schema)
-        )
+        return self.async_show_form(step_id="selectdevices", data_schema=vol.Schema(data_schema))
 
     async def _update_options(self):
         """Update config entry options."""
