@@ -1,4 +1,5 @@
-"""Bermuda's internal representation of a bluetooth device.
+"""
+Bermuda's internal representation of a bluetooth device.
 
 Each discovered bluetooth device (ie, every found transmitter) will
 have one of these entries created for it. These are not HA 'devices' but
@@ -6,26 +7,22 @@ our own internal thing. They directly correspond to the entries you will
 see when calling the dump_devices service call.
 
 Even devices which are not configured/tracked will get entries created
-for them, so we can use them to contribute towards measurements."""
+for them, so we can use them to contribute towards measurements.
+"""
 
 from __future__ import annotations
 
-from homeassistant.components.bluetooth import MONOTONIC_TIME
-from homeassistant.components.bluetooth import BluetoothScannerDevice
-from homeassistant.const import STATE_HOME
-from homeassistant.const import STATE_NOT_HOME
-from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.components.bluetooth import MONOTONIC_TIME, BluetoothScannerDevice
+from homeassistant.const import STATE_HOME, STATE_NOT_HOME, STATE_UNAVAILABLE
 from homeassistant.helpers.device_registry import format_mac
 
 from .bermuda_device_scanner import BermudaDeviceScanner
-from .const import BDADDR_TYPE_UNKNOWN
-from .const import CONF_DEVICES
-from .const import CONF_DEVTRACK_TIMEOUT
-from .const import DEFAULT_DEVTRACK_TIMEOUT
+from .const import BDADDR_TYPE_UNKNOWN, CONF_DEVICES, CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT
 
 
 class BermudaDevice(dict):
-    """This class is to represent a single bluetooth "device" tracked by Bermuda.
+    """
+    This class is to represent a single bluetooth "device" tracked by Bermuda.
 
     "device" in this context means a bluetooth receiver like an ESPHome
     running bluetooth_proxy or a bluetooth transmitter such as a beacon,
@@ -35,8 +32,8 @@ class BermudaDevice(dict):
     become entities in homeassistant, since there might be a _lot_ of them.
     """
 
-    def __init__(self, address, options):
-        """Initial (empty) data"""
+    def __init__(self, address, options) -> None:
+        """Initial (empty) data."""
         self.name: str | None = None
         self.local_name: str | None = None
         self.prefname: str | None = None  # "preferred" name - ideally local_name
@@ -54,12 +51,8 @@ class BermudaDevice(dict):
         self.connectable: bool = False
         self.is_scanner: bool = False
         self.beacon_type: set = set()
-        self.beacon_sources = (
-            []
-        )  # list of MAC addresses that have advertised this beacon
-        self.beacon_unique_id: str | None = (
-            None  # combined uuid_major_minor for *really* unique id
-        )
+        self.beacon_sources = []  # list of MAC addresses that have advertised this beacon
+        self.beacon_unique_id: str | None = None  # combined uuid_major_minor for *really* unique id
         self.beacon_uuid: str | None = None
         self.beacon_major: str | None = None
         self.beacon_minor: str | None = None
@@ -69,13 +62,12 @@ class BermudaDevice(dict):
         self.create_sensor: bool = False  # Create/update a sensor for this device
         self.create_sensor_done: bool = False  # Sensor should now exist
         self.create_tracker_done: bool = False  # device_tracker should now exist
-        self.last_seen: float = (
-            0  # stamp from most recent scanner spotting. MONOTONIC_TIME
-        )
+        self.last_seen: float = 0  # stamp from most recent scanner spotting. MONOTONIC_TIME
         self.scanners: dict[str, BermudaDeviceScanner] = {}
 
     def calculate_data(self):
-        """Call after doing update_scanner() calls so that distances
+        """
+        Call after doing update_scanner() calls so that distances
         etc can be freshly smoothed and filtered.
 
         """
@@ -85,9 +77,7 @@ class BermudaDevice(dict):
         # Update whether the device has been seen recently, for device_tracker:
         if (
             self.last_seen is not None
-            and MONOTONIC_TIME()
-            - self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT)
-            < self.last_seen
+            and MONOTONIC_TIME() - self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT) < self.last_seen
         ):
             self.zone = STATE_HOME
         else:
@@ -97,10 +87,9 @@ class BermudaDevice(dict):
             # We are a device we track. Flag for set-up:
             self.create_sensor = True
 
-    def update_scanner(
-        self, scanner_device: BermudaDevice, discoveryinfo: BluetoothScannerDevice
-    ):
-        """Add/Update a scanner entry on this device, indicating a received advertisement
+    def update_scanner(self, scanner_device: BermudaDevice, discoveryinfo: BluetoothScannerDevice):
+        """
+        Add/Update a scanner entry on this device, indicating a received advertisement.
 
         This gets called every time a scanner is deemed to have received an advert for
         this device. It only loads data into the structure, all calculations are done
@@ -128,13 +117,14 @@ class BermudaDevice(dict):
             self.last_seen = device_scanner.stamp
 
     def to_dict(self):
-        """Convert class to serialisable dict for dump_devices"""
+        """Convert class to serialisable dict for dump_devices."""
         out = {}
         for var, val in vars(self).items():
             if var == "scanners":
                 scanout = {}
                 for address, scanner in self.scanners.items():
                     scanout[address] = scanner.to_dict()
-                val = scanout
+                # FIXME: val is overwritten
+                val = scanout  # noqa
             out[var] = val
         return out

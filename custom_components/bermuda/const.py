@@ -62,18 +62,10 @@ LOGSPAM_INTERVAL = 22
 # originators of beacon-like data. We then create a "meta-device" for the beacon's
 # uuid. Other non-static-mac protocols should use this method as well, by adding their
 # own BEACON_ types.
-BEACON_IBEACON_SOURCE: Final = (
-    "beacon source"  # The source-device sending a beacon packet (MAC-tracked)
-)
-BEACON_IBEACON_DEVICE: Final = (
-    "beacon device"  # The meta-device created to track the beacon
-)
-BEACON_PRIVATE_BLE_SOURCE: Final = (
-    "private_ble_src"  # current (random) MAC of a private ble device
-)
-BEACON_PRIVATE_BLE_DEVICE: Final = (
-    "private_ble_device"  # meta-device create to track private ble device
-)
+BEACON_IBEACON_SOURCE: Final = "beacon source"  # The source-device sending a beacon packet (MAC-tracked)
+BEACON_IBEACON_DEVICE: Final = "beacon device"  # The meta-device created to track the beacon
+BEACON_PRIVATE_BLE_SOURCE: Final = "private_ble_src"  # current (random) MAC of a private ble device
+BEACON_PRIVATE_BLE_DEVICE: Final = "private_ble_device"  # meta-device create to track private ble device
 
 # Bluetooth Device Address Type - classify MAC addresses
 BDADDR_TYPE_UNKNOWN: Final = "bd_addr_type_unknown"  # uninitialised
@@ -101,9 +93,7 @@ PRUNE_TIME_IRK = 3600  # Resolvable Private addresses change often, prune regula
 DOCS = {}
 
 
-HIST_KEEP_COUNT = (
-    10  # How many old timestamps, rssi, etc to keep for each device/scanner pairing.
-)
+HIST_KEEP_COUNT = 10  # How many old timestamps, rssi, etc to keep for each device/scanner pairing.
 
 # Config entry DATA entries
 
@@ -121,13 +111,11 @@ DOCS[CONF_MAX_RADIUS] = "For simple area-detection, max radius from receiver"
 CONF_MAX_VELOCITY, DEFAULT_MAX_VELOCITY = "max_velocity", 3
 DOCS[CONF_MAX_VELOCITY] = (
     "In metres per second - ignore readings that imply movement away faster than",
-    "this limit. 3m/s (10km/h) is good."  # fmt: skip
+    "this limit. 3m/s (10km/h) is good.",  # fmt: skip
 )
 
 CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT = "devtracker_nothome_timeout", 30
-DOCS[CONF_DEVTRACK_TIMEOUT] = (
-    "Timeout in seconds for setting devices as `Not Home` / `Away`."  # fmt: skip
-)
+DOCS[CONF_DEVTRACK_TIMEOUT] = "Timeout in seconds for setting devices as `Not Home` / `Away`."  # fmt: skip
 
 CONF_ATTENUATION, DEFAULT_ATTENUATION = "attenuation", 3
 DOCS[CONF_ATTENUATION] = "Factor for environmental signal attenuation."
@@ -137,7 +125,7 @@ DOCS[CONF_REF_POWER] = "Default RSSI for signal at 1 metre."
 CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL = "update_interval", 10
 DOCS[CONF_UPDATE_INTERVAL] = (
     "Maximum time between sensor updates in seconds. Smaller intervals",
-    "means more data, bigger database."  # fmt: skip
+    "means more data, bigger database.",  # fmt: skip
 )
 
 CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES = "smoothing_samples", 20

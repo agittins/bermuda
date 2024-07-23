@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.switch import SwitchEntity
 
-from .const import DEFAULT_NAME
-from .const import ICON
-from .const import SWITCH
+from .const import DEFAULT_NAME, ICON, SWITCH
 from .entity import BermudaEntity
 
 # from .const import DOMAIN

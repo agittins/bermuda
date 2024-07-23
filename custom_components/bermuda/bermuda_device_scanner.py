@@ -1,4 +1,5 @@
-"""Bermuda's internal representation of a device's scanner entry.
+"""
+Bermuda's internal representation of a device's scanner entry.
 
 Every bluetooth scanner gets its own BermudaDevice, but this class
 is the nested entry that gets attached to each device's `scanners`
@@ -8,25 +9,27 @@ to the combination of the scanner and the device it is reporting.
 
 from __future__ import annotations
 
-from homeassistant.components.bluetooth import MONOTONIC_TIME
-from homeassistant.components.bluetooth import BluetoothScannerDevice
+from homeassistant.components.bluetooth import MONOTONIC_TIME, BluetoothScannerDevice
 
-from .const import _LOGGER
-from .const import CONF_ATTENUATION
-from .const import CONF_DEVICES
-from .const import CONF_MAX_VELOCITY
-from .const import CONF_REF_POWER
-from .const import CONF_SMOOTHING_SAMPLES
-from .const import DISTANCE_INFINITE
-from .const import DISTANCE_TIMEOUT
-from .const import HIST_KEEP_COUNT
+from .const import (
+    _LOGGER,
+    CONF_ATTENUATION,
+    CONF_DEVICES,
+    CONF_MAX_VELOCITY,
+    CONF_REF_POWER,
+    CONF_SMOOTHING_SAMPLES,
+    DISTANCE_INFINITE,
+    DISTANCE_TIMEOUT,
+    HIST_KEEP_COUNT,
+)
 
 # from .const import _LOGGER_SPAM_LESS
 from .util import rssi_to_metres
 
 
 class BermudaDeviceScanner(dict):
-    """Represents details from a scanner relevant to a specific device
+    """
+    Represents details from a scanner relevant to a specific device.
 
     A BermudaDevice will contain 0 or more of these depending on whether
     it has been "seen" by that scanner.
@@ -41,7 +44,7 @@ class BermudaDeviceScanner(dict):
         scandata: BluetoothScannerDevice,
         area_id: str,
         options,
-    ):
+    ) -> None:
         # I am declaring these just to control their order in the dump,
         # which is a bit silly, I suspect.
         self.name: str = scandata.scanner.name
@@ -49,9 +52,7 @@ class BermudaDeviceScanner(dict):
         self.parent_device = device_address
 
         self.stamp: float | None = 0
-        self.new_stamp: float | None = (
-            None  # Set when a new advert is loaded from update
-        )
+        self.new_stamp: float | None = None  # Set when a new advert is loaded from update
         self.hist_stamp = []
         self.rssi: float | None = None
         self.hist_rssi = []
@@ -59,9 +60,7 @@ class BermudaDeviceScanner(dict):
         self.hist_distance_by_interval = []  # updated per-interval
         self.hist_interval = []  # WARNING: This is actually "age of ad when we polled"
         self.hist_velocity = []  # Effective velocity versus previous stamped reading
-        self.stale_update_count = (
-            0  # How many times we did an update but no new stamps were found.
-        )
+        self.stale_update_count = 0  # How many times we did an update but no new stamps were found.
         self.tx_power: float | None = None
         self.rssi_distance: float | None = None
         self.rssi_distance_raw: float | None = None
@@ -77,14 +76,14 @@ class BermudaDeviceScanner(dict):
         area_id: str,
         options,
     ):
-        """Update gets called every time we see a new packet or
+        """
+        Update gets called every time we see a new packet or
         every time we do a polled update.
 
         This method needs to update all the history and tracking data for this
         device+scanner combination. This method only gets called when a given scanner
         claims to have data.
         """
-
         # In case the scanner has changed it's details since startup:
         self.name: str = scandata.scanner.name
         self.area_id: str = area_id
@@ -97,14 +96,12 @@ class BermudaDeviceScanner(dict):
             # There's no API for this, so we somewhat sneakily are accessing
             # what is intended to be a protected dict.
             # pylint: disable-next=protected-access
-            stamps = scandata.scanner._discovered_device_timestamps  # type: ignore
+            stamps = scandata.scanner._discovered_device_timestamps  # type: ignore #noqa
 
             # In this dict all MAC address keys are upper-cased
             uppermac = device_address.upper()
             if uppermac in stamps:
-                if self.stamp is None or (
-                    stamps[uppermac] is not None and stamps[uppermac] > self.stamp
-                ):
+                if self.stamp is None or (stamps[uppermac] is not None and stamps[uppermac] > self.stamp):
                     new_stamp = stamps[uppermac]
                 else:
                     # We have no updated advert in this run.
@@ -171,10 +168,7 @@ class BermudaDeviceScanner(dict):
 
         self.adapter: str = scandata.scanner.adapter
         self.source: str = scandata.scanner.source
-        if (
-            self.tx_power is not None
-            and scandata.advertisement.tx_power != self.tx_power
-        ):
+        if self.tx_power is not None and scandata.advertisement.tx_power != self.tx_power:
             # Not really an erorr, we just don't account for this happening -
             # I want to know if it does.
             # AJG 2024-01-11: This does happen. Looks like maybe apple devices?
@@ -192,7 +186,8 @@ class BermudaDeviceScanner(dict):
         self.new_stamp = new_stamp
 
     def calculate_data(self):
-        """Filter and update distance estimates.
+        """
+        Filter and update distance estimates.
 
         All smoothing and noise-management of the distance between a scanner
         and a device should be done in this method, as it is
@@ -232,7 +227,6 @@ class BermudaDeviceScanner(dict):
         is how we decide how long to wait, and should accommodate for dropped
         packets and for temporary occlusion (dogs' bodies etc)
         """
-
         new_stamp = self.new_stamp  # should have been set by update()
         self.new_stamp = None  # Clear so we know if an update is missed next cycle
 
@@ -245,9 +239,7 @@ class BermudaDeviceScanner(dict):
             self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
             del self.hist_distance_by_interval[1:]
 
-        elif new_stamp is None and (
-            self.stamp is None or self.stamp < MONOTONIC_TIME() - DISTANCE_TIMEOUT
-        ):
+        elif new_stamp is None and (self.stamp is None or self.stamp < MONOTONIC_TIME() - DISTANCE_TIMEOUT):
             # DEVICE IS AWAY!
             # Last distance reading is stale, mark device distance as unknown.
             self.rssi_distance = None
@@ -317,17 +309,13 @@ class BermudaDeviceScanner(dict):
                         velocity,
                     )
                 # Discard the bogus reading by duplicating the last.
-                self.hist_distance_by_interval.insert(
-                    0, self.hist_distance_by_interval[0]
-                )
+                self.hist_distance_by_interval.insert(0, self.hist_distance_by_interval[0])
             else:
                 # Looks valid enough, add the current reading to the interval log
                 self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
 
             # trim the log to length
-            del self.hist_distance_by_interval[
-                self.options.get(CONF_SMOOTHING_SAMPLES) :
-            ]
+            del self.hist_distance_by_interval[self.options.get(CONF_SMOOTHING_SAMPLES) :]
 
             # Calculate a moving-window average, that only includes
             # historical values if their "closer" (ie more reliable).
@@ -341,7 +329,7 @@ class BermudaDeviceScanner(dict):
             dist_total: float = 0
             dist_count: int = 0
             local_min: float = self.rssi_distance_raw or DISTANCE_INFINITE
-            for i, distance in enumerate(self.hist_distance_by_interval):
+            for distance in self.hist_distance_by_interval:
                 if distance <= local_min:
                     dist_total += distance
                     local_min = distance
@@ -371,11 +359,12 @@ class BermudaDeviceScanner(dict):
             del histlist[HIST_KEEP_COUNT:]
 
     def to_dict(self):
-        """Convert class to serialisable dict for dump_devices"""
+        """Convert class to serialisable dict for dump_devices."""
         out = {}
         for var, val in vars(self).items():
             if var == "adverts":
-                val = {}
+                # FIXME: val is overwritten in loop
+                val = {}  # noqa
                 for uuid, thebytes in self.adverts.items():
                     val[uuid] = thebytes.hex()
             out[var] = val
