@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
-import pytest
 from homeassistant import config_entries
 from homeassistant import data_entry_flow
+from homeassistant.core import HomeAssistant
 
 # from homeassistant.core import HomeAssistant  # noqa: F401
 from homeassistant.data_entry_flow import FlowResultType
@@ -19,21 +17,9 @@ from custom_components.bermuda.const import NAME
 from .const import MOCK_CONFIG
 from .const import MOCK_OPTIONS_GLOBALS
 
-
 # This fixture bypasses the actual setup of the integration
 # since we only want to test the config flow. We test the
 # actual functionality of the integration in other test modules.
-@pytest.fixture(autouse=True)
-def bypass_setup_fixture():
-    """Prevent setup."""
-    with patch(
-        "custom_components.bermuda.async_setup",
-        return_value=True,
-    ), patch(
-        "custom_components.bermuda.async_setup_entry",
-        return_value=True,
-    ):
-        yield
 
 
 # Here we simiulate a successful config flow from the backend.
@@ -88,16 +74,10 @@ async def test_failed_config_flow(hass, error_on_get_data):
 
 
 # Our config flow also has an options flow, so we must test it as well.
-async def test_options_flow(hass):
+async def test_options_flow(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
     """Test an options flow."""
-    # Create a new MockConfigEntry and add to HASS (we're bypassing config
-    # flow entirely)
-    entry = MockConfigEntry(domain=DOMAIN, data=MOCK_CONFIG, entry_id="test")
-    entry.add_to_hass(hass)
-
-    # Initialize an options flow
-    await hass.config_entries.async_setup(entry.entry_id)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    # Go through options flow
+    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
 
     # Verify that the first options step is a user form
     assert result["type"] == FlowResultType.MENU
@@ -122,4 +102,4 @@ async def test_options_flow(hass):
     assert result["title"] == NAME
 
     # Verify that the options were updated
-    assert entry.options == MOCK_OPTIONS_GLOBALS
+    assert setup_bermuda_entry.options == MOCK_OPTIONS_GLOBALS

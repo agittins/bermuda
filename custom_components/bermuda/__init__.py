@@ -8,7 +8,6 @@ https://github.com/agittins/bermuda
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Config
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
@@ -35,11 +34,11 @@ from .coordinator import BermudaDataUpdateCoordinator
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
-async def async_setup(
-    hass: HomeAssistant, config: Config
-):  # pylint: disable=unused-argument;
-    """Setting up this integration using YAML is not supported."""
-    return True
+# async def async_setup(
+#     hass: HomeAssistant, config: Config
+# ):  # pylint: disable=unused-argument;
+#     """Setting up this integration using YAML is not supported."""
+#     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):

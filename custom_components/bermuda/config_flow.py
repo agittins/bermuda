@@ -7,6 +7,7 @@ from homeassistant import config_entries
 from homeassistant.components.bluetooth import MONOTONIC_TIME
 from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import OptionsFlowWithConfigEntry
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.selector import selector
@@ -105,14 +106,12 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     #     )
 
 
-class BermudaOptionsFlowHandler(config_entries.OptionsFlow):
+class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
     """Config flow options handler for bermuda."""
 
     def __init__(self, config_entry: ConfigEntry):
         """Initialize HACS options flow."""
-        super().__init__()
-        self.config_entry = config_entry
-        self.options = dict(config_entry.options)
+        super().__init__(config_entry)
         self.coordinator: BermudaDataUpdateCoordinator
         self.devices: dict[str, BermudaDevice]
 
