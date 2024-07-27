@@ -1,90 +1,94 @@
-"""DataUpdateCoordinator for Bermuda bluetooth data
-
-"""
+"""DataUpdateCoordinator for Bermuda bluetooth data."""
 
 from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from datetime import datetime
-from datetime import timedelta
-from typing import cast
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, cast
 
 import voluptuous as vol
-from habluetooth import BluetoothServiceInfoBleak
 from homeassistant.components import bluetooth
-from homeassistant.components.bluetooth import MONOTONIC_TIME
-from homeassistant.components.bluetooth import BluetoothChange
-from homeassistant.components.bluetooth import BluetoothScannerDevice
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.bluetooth import MONOTONIC_TIME, BluetoothChange, BluetoothScannerDevice
 from homeassistant.const import EVENT_STATE_CHANGED
-from homeassistant.core import Event
-from homeassistant.core import EventStateChangedData
-from homeassistant.core import HomeAssistant
-from homeassistant.core import ServiceCall
-from homeassistant.core import ServiceResponse
-from homeassistant.core import SupportsResponse
-from homeassistant.core import callback
-from homeassistant.helpers import area_registry
+from homeassistant.core import (
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+    callback,
+)
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.device_registry import EVENT_DEVICE_REGISTRY_UPDATED
-from homeassistant.helpers.device_registry import EventDeviceRegistryUpdatedData
-from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.device_registry import (
+    EVENT_DEVICE_REGISTRY_UPDATED,
+    EventDeviceRegistryUpdatedData,
+    format_mac,
+)
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import slugify
-from homeassistant.util.dt import get_age
-from homeassistant.util.dt import now
+from homeassistant.util.dt import get_age, now
 
 from .bermuda_device import BermudaDevice
-from .bermuda_device_scanner import BermudaDeviceScanner
-from .const import _LOGGER
-from .const import _LOGGER_SPAM_LESS
-from .const import ADDR_TYPE_IBEACON
-from .const import ADDR_TYPE_PRIVATE_BLE_DEVICE
-from .const import BDADDR_TYPE_NOT_MAC48
-from .const import BDADDR_TYPE_OTHER
-from .const import BDADDR_TYPE_PRIVATE_RESOLVABLE
-from .const import BDADDR_TYPE_UNKNOWN
-from .const import BEACON_IBEACON_DEVICE
-from .const import BEACON_IBEACON_SOURCE
-from .const import BEACON_PRIVATE_BLE_DEVICE
-from .const import BEACON_PRIVATE_BLE_SOURCE
-from .const import CONF_ATTENUATION
-from .const import CONF_DEVICES
-from .const import CONF_DEVTRACK_TIMEOUT
-from .const import CONF_MAX_RADIUS
-from .const import CONF_MAX_VELOCITY
-from .const import CONF_REF_POWER
-from .const import CONF_SMOOTHING_SAMPLES
-from .const import CONF_UPDATE_INTERVAL
-from .const import CONFDATA_SCANNERS
-from .const import DEFAULT_ATTENUATION
-from .const import DEFAULT_DEVTRACK_TIMEOUT
-from .const import DEFAULT_MAX_RADIUS
-from .const import DEFAULT_MAX_VELOCITY
-from .const import DEFAULT_REF_POWER
-from .const import DEFAULT_SMOOTHING_SAMPLES
-from .const import DEFAULT_UPDATE_INTERVAL
-from .const import DEVICE_TRACKER
-from .const import DOMAIN
-from .const import DOMAIN_PRIVATE_BLE_DEVICE
-from .const import HIST_KEEP_COUNT
-from .const import PRUNE_MAX_COUNT
-from .const import PRUNE_TIME_DEFAULT
-from .const import PRUNE_TIME_INTERVAL
-from .const import PRUNE_TIME_IRK
-from .const import SIGNAL_DEVICE_NEW
-from .const import UPDATE_INTERVAL
+from .const import (
+    _LOGGER,
+    _LOGGER_SPAM_LESS,
+    ADDR_TYPE_IBEACON,
+    ADDR_TYPE_PRIVATE_BLE_DEVICE,
+    BDADDR_TYPE_NOT_MAC48,
+    BDADDR_TYPE_OTHER,
+    BDADDR_TYPE_PRIVATE_RESOLVABLE,
+    BDADDR_TYPE_UNKNOWN,
+    BEACON_IBEACON_DEVICE,
+    BEACON_IBEACON_SOURCE,
+    BEACON_PRIVATE_BLE_DEVICE,
+    BEACON_PRIVATE_BLE_SOURCE,
+    CONF_ATTENUATION,
+    CONF_DEVICES,
+    CONF_DEVTRACK_TIMEOUT,
+    CONF_MAX_RADIUS,
+    CONF_MAX_VELOCITY,
+    CONF_REF_POWER,
+    CONF_SMOOTHING_SAMPLES,
+    CONF_UPDATE_INTERVAL,
+    CONFDATA_SCANNERS,
+    DEFAULT_ATTENUATION,
+    DEFAULT_DEVTRACK_TIMEOUT,
+    DEFAULT_MAX_RADIUS,
+    DEFAULT_MAX_VELOCITY,
+    DEFAULT_REF_POWER,
+    DEFAULT_SMOOTHING_SAMPLES,
+    DEFAULT_UPDATE_INTERVAL,
+    DEVICE_TRACKER,
+    DOMAIN,
+    DOMAIN_PRIVATE_BLE_DEVICE,
+    HIST_KEEP_COUNT,
+    PRUNE_MAX_COUNT,
+    PRUNE_TIME_DEFAULT,
+    PRUNE_TIME_INTERVAL,
+    PRUNE_TIME_IRK,
+    SIGNAL_DEVICE_NEW,
+    UPDATE_INTERVAL,
+)
 from .util import clean_charbuf
+
+if TYPE_CHECKING:
+    from habluetooth import BluetoothServiceInfoBleak
+    from homeassistant.config_entries import ConfigEntry
+
+    from .bermuda_device_scanner import BermudaDeviceScanner
 
 Cancellable = Callable[[], None]
 
 
 class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching data from the Bluetooth component.
+    """
+    Class to manage fetching data from the Bluetooth component.
 
     Since we are not actually using an external API and only computing local
     data already gathered by the bluetooth integration, the update process is
@@ -127,17 +131,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         self.config_entry = entry
 
-        self.sensor_interval = entry.options.get(
-            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
-        )
+        self.sensor_interval = entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
 
         # match/replacement pairs for redacting addresses
         self.redactions: dict[str, str] = {}
         # Any remaining MAC addresses will be replaced with this. We define it here
         # so we can compile it once.
-        self._redact_generic_re = re.compile(
-            r"(?P<start>[0-9A-Fa-f]{2}):([0-9A-Fa-f]{2}:){4}(?P<end>[0-9A-Fa-f]{2})"
-        )
+        self._redact_generic_re = re.compile(r"(?P<start>[0-9A-Fa-f]{2}):([0-9A-Fa-f]{2}:){4}(?P<end>[0-9A-Fa-f]{2})")
         self._redact_generic_sub = r"\g<start>:xx:xx:xx:xx:\g<end>"
 
         self.stamp_last_prune: float = 0  # When we last pruned device list
@@ -170,27 +170,19 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         # check new_state.attributes.assumed_state
                         if hasattr(new_state, "attributes"):
                             new_address = new_state.attributes.get("current_address")
-                            if (
-                                new_address is not None
-                                and new_address.lower()
-                                != self.pb_state_sources[event_entity]
-                            ):
+                            if new_address is not None and new_address.lower() != self.pb_state_sources[event_entity]:
                                 _LOGGER.debug(
                                     "Have a new source address for %s, %s",
                                     event_entity,
                                     new_address,
                                 )
-                                self.pb_state_sources[event_entity] = (
-                                    new_address.lower()
-                                )
+                                self.pb_state_sources[event_entity] = new_address.lower()
                                 # Flag that we need new pb checks, and work them out:
                                 self._do_private_device_init = True
                                 # If no sensors have yet been configured, the coordinator
                                 # won't be getting polled for fresh data. Since we have
                                 # found something, we should get it to do that.
-                                self.hass.add_job(
-                                    self.async_config_entry_first_refresh()
-                                )
+                                self.hass.add_job(self.async_config_entry_first_refresh())
 
         self.hass.bus.async_listen(EVENT_STATE_CHANGED, handle_state_changes)
 
@@ -204,10 +196,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         @callback
         def handle_devreg_changes(ev: Event[EventDeviceRegistryUpdatedData]):
-            """Update our scanner list if the device registry is changed.
+            """
+            Update our scanner list if the device registry is changed.
 
             This catches area changes (on scanners) and any new/changed
-            Private BLE Devices."""
+            Private BLE Devices.
+            """
             # TODO: Ignore the below, and implement filtering. This gets
             # called a "fair number" of times each time we get reloaded.
             #
@@ -267,7 +261,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.devices: dict[str, BermudaDevice] = {}
         # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
 
-        self.area_reg = area_registry.async_get(hass)
+        self.area_reg = ar.async_get(hass)
 
         # Restore the scanners saved in config entry data. We maintain
         # a list of known scanners so we can
@@ -315,10 +309,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         service_info: BluetoothServiceInfoBleak,
         change: BluetoothChange,
     ) -> None:
-        """Handle an incoming advert callback from the bluetooth integration
+        """
+        Handle an incoming advert callback from the bluetooth integration.
 
         These should come in as adverts are received, rather than on our update schedule.
-        The data should be as fresh as can be."""
+        The data should be as fresh as can be.
+        """
         _LOGGER.debug(
             "New Advert! change: %s, scanner: %s mac: %s name: %s serviceinfo: %s",
             change,
@@ -335,7 +331,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # update interval or something.
 
     def sensor_created(self, address):
-        """Allows sensor platform to report back that sensors have been set up"""
+        """Allows sensor platform to report back that sensors have been set up."""
         dev = self._get_device(address)
         if dev is not None:
             dev.create_sensor_done = True
@@ -344,7 +340,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
 
     def device_tracker_created(self, address):
-        """Allows device_tracker platform to report back that sensors have been set up"""
+        """Allows device_tracker platform to report back that sensors have been set up."""
         dev = self._get_device(address)
         if dev is not None:
             dev.create_tracker_done = True
@@ -353,12 +349,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
 
     def count_active_devices(self) -> int:
-        """Returns the number of bluetooth devices that have recent timestamps.
+        """
+        Returns the number of bluetooth devices that have recent timestamps.
 
-        Useful as a general indicator of health"""
+        Useful as a general indicator of health
+        """
         stamp = MONOTONIC_TIME() - 10  # seconds
         fresh_count = 0
-        for address, device in self.devices.items():
+        for device in self.devices.values():
             if device.last_seen > stamp:
                 fresh_count += 1
         return fresh_count
@@ -369,7 +367,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         fresh_count = 0
         for scanner in self.scanner_list:
             last_stamp: float = 0
-            for address, device in self.devices.items():
+            for device in self.devices.values():
                 record = device.scanners.get(scanner, None)
                 if record is not None and record.stamp is not None:
                     if record.stamp > last_stamp:
@@ -379,7 +377,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         return fresh_count
 
     def _get_device(self, address: str) -> BermudaDevice | None:
-        """Search for a device entry based on mac address"""
+        """Search for a device entry based on mac address."""
         mac = format_mac(address).lower()
         # format_mac tries to return a lower-cased, colon-separated mac address.
         # failing that, it returns the original unaltered.
@@ -391,21 +389,19 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         device = self._get_device(address)
         if device is None:
             mac = format_mac(address).lower()
-            self.devices[mac] = device = BermudaDevice(
-                address=mac, options=self.options
-            )
+            self.devices[mac] = device = BermudaDevice(address=mac, options=self.options)
             device.address = mac
             device.unique_id = mac
         return device
 
     async def _async_update_data(self):
-        """Update data for known devices by scanning bluetooth advert cache.
+        """
+        Update data for known devices by scanning bluetooth advert cache.
 
         This works only with local data, so should be cheap to run
         (no network requests made etc).
 
         """
-
         for service_info in bluetooth.async_discovered_service_info(self.hass, False):
             # Note that some of these entries are restored from storage,
             # so we won't necessarily find (immediately, or perhaps ever)
@@ -490,15 +486,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                         device.beacon_type.add(BEACON_IBEACON_SOURCE)
                         device.beacon_uuid = man_data[2:18].hex().lower()
-                        device.beacon_major = str(
-                            int.from_bytes(man_data[18:20], byteorder="big")
-                        )
-                        device.beacon_minor = str(
-                            int.from_bytes(man_data[20:22], byteorder="big")
-                        )
-                        device.beacon_power = int.from_bytes(
-                            [man_data[22]], signed=True
-                        )
+                        device.beacon_major = str(int.from_bytes(man_data[18:20], byteorder="big"))
+                        device.beacon_minor = str(int.from_bytes(man_data[20:22], byteorder="big"))
+                        device.beacon_power = int.from_bytes([man_data[22]], signed=True)
 
                         # So, the irony of having major/minor is that the
                         # UniversallyUniqueIDentifier is not even unique
@@ -545,16 +535,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             # Try to make a nice name for prefname.
             if device.prefname is None or device.prefname.startswith(DOMAIN + "_"):
-                device.prefname = (
-                    device.name
-                    or device.local_name
-                    or DOMAIN + "_" + slugify(device.address)
-                )
+                device.prefname = device.name or device.local_name or DOMAIN + "_" + slugify(device.address)
 
             # Work through the scanner entries...
-            matched_scanners = bluetooth.async_scanner_devices_by_address(
-                self.hass, service_info.address, False
-            )
+            matched_scanners = bluetooth.async_scanner_devices_by_address(self.hass, service_info.address, False)
             for discovered in matched_scanners:
                 scanner_device = self._get_device(discovered.scanner.source)
                 if scanner_device is None:
@@ -595,9 +579,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # since the last time we booted.
         if self._do_full_scanner_init:
             if not self._refresh_scanners():
-                _LOGGER.debug(
-                    "Failed to refresh scanners, likely config entry not ready."
-                )
+                _LOGGER.debug("Failed to refresh scanners, likely config entry not ready.")
                 # don't fail the update, just try again next time.
                 # self.last_update_success = False
 
@@ -616,9 +598,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     _LOGGER.debug("Firing device_new for %s (%s)", device.name, address)
                     # Note that the below should be OK thread-wise, debugger indicates this is being
                     # called by _run in events.py, so pretty sure we are "in the event loop".
-                    async_dispatcher_send(
-                        self.hass, SIGNAL_DEVICE_NEW, address, self.scanner_list
-                    )
+                    async_dispatcher_send(self.hass, SIGNAL_DEVICE_NEW, address, self.scanner_list)
 
         if self.stamp_last_prune < MONOTONIC_TIME() - PRUNE_TIME_INTERVAL:
             # (periodically) prune any stale device entries...
@@ -629,7 +609,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.last_update_success = True
 
     def prune_devices(self):
-        """Scan through all collected devices, and remove those that meet Pruning criteria"""
+        """Scan through all collected devices, and remove those that meet Pruning criteria."""
         prune_list = []
         prunable_stamps = {}
 
@@ -640,7 +620,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 metadevice_source_primos.add(metadevice.beacon_sources[0])
 
         for device_address, device in self.devices.items():
-
             # Prune any devices that haven't been heard from for too long, but only
             # if we aren't actively tracking them and it's a traditional MAC address.
             # We just collect the addresses first, and do the pruning after exiting this iterator
@@ -693,7 +672,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             sorted_addresses = sorted([(v, k) for k, v in prunable_stamps.items()])
             _LOGGER.info("Having to prune %s extra devices to make quota.", prune_quota)
             # pylint: disable-next=unused-variable
-            for stamp, address in sorted_addresses[:prune_quota]:
+            for _stamp, address in sorted_addresses[:prune_quota]:
                 prune_list.append(address)
 
         # Perform any pruning we found to do
@@ -702,12 +681,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             del self.devices[device_address]
 
     def discover_private_ble_metadevices(self):
-        """Access the Private BLE Device integration to find metadevices to track
+        """
+        Access the Private BLE Device integration to find metadevices to track.
 
         This function sets up the skeleton metadevice entry for Private BLE (IRK)
         devices, ready for update_metadevices to manage.
         """
-
         entreg = er.async_get(self.hass)
         devreg = dr.async_get(self.hass)
 
@@ -718,18 +697,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # Iterate through the Private BLE Device integration's entities,
             # and ensure for each "device" we create a source device.
             # pb here means "private ble device"
-            pb_entries = self.hass.config_entries.async_entries(
-                DOMAIN_PRIVATE_BLE_DEVICE, include_disabled=False
-            )
+            pb_entries = self.hass.config_entries.async_entries(DOMAIN_PRIVATE_BLE_DEVICE, include_disabled=False)
             for pb_entry in pb_entries:
-                pb_entities = entreg.entities.get_entries_for_config_entry_id(
-                    pb_entry.entry_id
-                )
+                pb_entities = entreg.entities.get_entries_for_config_entry_id(pb_entry.entry_id)
                 # This will be a list of entities for a given private ble device,
                 # let's pull out the device_tracker one, since it has the state
                 # info we need.
                 for pb_entity in pb_entities:
-
                     if pb_entity.domain == DEVICE_TRACKER:
                         # We found a *device_tracker* entity for the private_ble device.
                         _LOGGER.debug(
@@ -747,9 +721,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         pb_state = self.hass.states.get(pb_entity.entity_id)
 
                         if pb_state:  # in case it's not there yet
-                            pb_source_address = pb_state.attributes.get(
-                                "current_address", None
-                            )
+                            pb_source_address = pb_state.attributes.get("current_address", None)
                         else:
                             # Private BLE Device hasn't yet found a source device
                             pb_source_address = None
@@ -770,9 +742,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         metadevice.address_type = ADDR_TYPE_PRIVATE_BLE_DEVICE
 
                         # Set a nice name
-                        metadevice.name = getattr(
-                            pb_device, "name_by_user", getattr(pb_device, "name")
-                        )
+                        metadevice.name = getattr(pb_device, "name_by_user", pb_device.name)
                         metadevice.prefname = metadevice.name
 
                         # Ensure we track this PB entity so we get source address updates.
@@ -790,24 +760,17 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                             pb_source_address = pb_source_address.lower()
 
                             # Set up and tag the source device entry
-                            source_device = self._get_or_create_device(
-                                pb_source_address
-                            )
+                            source_device = self._get_or_create_device(pb_source_address)
                             source_device.beacon_type.add(BEACON_PRIVATE_BLE_SOURCE)
 
                             # This should always be the latest known source address,
                             # since private ble device tells us so.
                             # So ensure it's listed, and listed first.
-                            if (
-                                len(metadevice.beacon_sources) == 0
-                                or metadevice.beacon_sources[0] != pb_source_address
-                            ):
+                            if len(metadevice.beacon_sources) == 0 or metadevice.beacon_sources[0] != pb_source_address:
                                 metadevice.beacon_sources.insert(0, pb_source_address)
 
                             # Update state_sources so we can track when it changes
-                            self.pb_state_sources[pb_entity.entity_id] = (
-                                pb_source_address
-                            )
+                            self.pb_state_sources[pb_entity.entity_id] = pb_source_address
 
                         else:
                             _LOGGER.debug(
@@ -816,29 +779,26 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                             )
 
     def register_ibeacon_source(self, source_device: BermudaDevice):
-        """Create or update the meta-device for tracking an iBeacon.
+        """
+        Create or update the meta-device for tracking an iBeacon.
 
         This should be called each time we discover a new address advertising
         an iBeacon. This might happen only once at startup, but will also
         happen each time a new MAC address is used by a given iBeacon.
 
         This does not update the beacon's details (distance etc), that is done
-        in the update_metadevices function after all data has been gathered."""
-
+        in the update_metadevices function after all data has been gathered.
+        """
         if BEACON_IBEACON_SOURCE not in source_device.beacon_type:
             _LOGGER.error(
                 "Only IBEACON_SOURCE devices can be used to see a beacon metadevice. %s is not.",
                 source_device.name,
             )
         if source_device.beacon_unique_id is None:
-            _LOGGER.error(
-                "Source device %s is not a valid iBeacon!", source_device.name
-            )
+            _LOGGER.error("Source device %s is not a valid iBeacon!", source_device.name)
         else:
-
             metadevice = self._get_device(source_device.beacon_unique_id)
             if metadevice is None:
-
                 # #### NEW METADEVICE #####
                 # (do one-off init stuff here)
 
@@ -861,9 +821,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     "beacon_minor",
                     "beacon_power",
                 ):
-                    setattr(
-                        metadevice, attribute, getattr(source_device, attribute, None)
-                    )
+                    setattr(metadevice, attribute, getattr(source_device, attribute, None))
 
                 # Check if we should set up sensors for this beacon
                 if metadevice.address.upper() in self.options.get(CONF_DEVICES, []):
@@ -881,13 +839,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 del metadevice.beacon_sources[HIST_KEEP_COUNT:]
 
     def update_metadevices(self):
-        """Create or update iBeacon, Private_BLE and other meta-devices from
+        """
+        Create or update iBeacon, Private_BLE and other meta-devices from
         the received advertisements.
 
         Note that at this point all the distances etc should be fresh for
         the source devices, so we can just copy values from them to the metadevice.
         """
-
         # First seed the metadevice skeletons and set their latest beacon_source entries
         # Private BLE Devices:
         self.discover_private_ble_metadevices()
@@ -895,7 +853,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # iBeacon devices should already have their metadevices created.
 
         for metadev in self.metadevices.values():
-
             # We Expect the first beacon source to be the current one.
             # This is maintained by ibeacon or private_ble metadevice creation/update
             latest_source: str | None = None
@@ -922,9 +879,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 ]:
                     if hasattr(metadev, attribute):
                         if getattr(metadev, attribute) in [None, False]:
-                            setattr(
-                                metadev, attribute, getattr(source_device, attribute)
-                            )
+                            setattr(metadev, attribute, getattr(source_device, attribute))
                     else:
                         _LOGGER.error(
                             "Devices don't have a '%s' attribute, this is a bug.",
@@ -980,45 +935,40 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # else the stamps are equal, which is perfectly OK.
 
     def dt_mono_to_datetime(self, stamp) -> datetime:
-        """Given a monotonic timestamp, convert to datetime object"""
+        """Given a monotonic timestamp, convert to datetime object."""
         age = MONOTONIC_TIME() - stamp
         return now() - timedelta(seconds=age)
 
     def dt_mono_to_age(self, stamp) -> str:
-        """Convert monotonic timestamp to age (eg: "6 seconds ago")"""
+        """Convert monotonic timestamp to age (eg: "6 seconds ago")."""
         return get_age(self.dt_mono_to_datetime(stamp))
 
     def _refresh_areas_by_min_distance(self):
-        """Set area for ALL devices based on closest beacon"""
+        """Set area for ALL devices based on closest beacon."""
         for device in self.devices.values():
             if device.is_scanner is not True:
                 self._refresh_area_by_min_distance(device)
 
     def _refresh_area_by_min_distance(self, device: BermudaDevice):
-        """Very basic Area setting by finding closest beacon to a given device"""
-        assert device.is_scanner is not True
+        """Very basic Area setting by finding closest beacon to a given device."""
+        # FIXME: Asserts should be avoided in non-tests as running python in optimized mode will skip them
+        assert device.is_scanner is not True  # noqa
         closest_scanner: BermudaDeviceScanner | None = None
 
         for scanner in device.scanners.values():
             # Check each scanner and keep note of the closest one based on rssi_distance.
             # Note that rssi_distance is smoothed/filtered, and might be None if the last
             # reading was old enough that our algo decides it's "away".
-            if (
-                scanner.rssi_distance is not None
-                and scanner.rssi_distance
-                < self.options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS)
+            if scanner.rssi_distance is not None and scanner.rssi_distance < self.options.get(
+                CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS
             ):
                 # It's inside max_radius...
                 if closest_scanner is None:
                     # no encumbent, we win!
                     closest_scanner = scanner
-                else:
-                    if (
-                        closest_scanner.rssi_distance is None
-                        or scanner.rssi_distance < closest_scanner.rssi_distance
-                    ):
-                        # We're closer than the last-closest, we win!
-                        closest_scanner = scanner
+                elif closest_scanner.rssi_distance is None or scanner.rssi_distance < closest_scanner.rssi_distance:
+                    # We're closer than the last-closest, we win!
+                    closest_scanner = scanner
 
         if closest_scanner is not None:
             # We found a winner
@@ -1059,11 +1009,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             device.area_scanner = None
 
     def _refresh_scanners(self, scanners: list[BluetoothScannerDevice] | None = None):
-        """Refresh our local (and saved) list of scanners (BLE Proxies)
+        """
+        Refresh our local (and saved) list of scanners (BLE Proxies).
 
         If self._do_full_scanner_init is true a full scan will be done.
         Otherwise, you need to supply a list of scanners that you wish
-        to refresh."""
+        to refresh.
+        """
         addresses = set()
         update_scannerlist = False
 
@@ -1127,9 +1079,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         if update_scannerlist:
             # Take the existing list of scanners and save them into config data
             # for our next start-up.
-            for entry in self.hass.config_entries.async_entries(
-                DOMAIN, include_disabled=False, include_ignore=False
-            ):
+            for entry in self.hass.config_entries.async_entries(DOMAIN, include_disabled=False, include_ignore=False):
                 _LOGGER.debug("Loaded entry %s", entry.entry_id)
                 self.config_entry = entry
             self.scanner_list = []
@@ -1140,9 +1090,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     self.scanner_list.append(device.address)
 
             if self.config_entry is None:
-                _LOGGER.debug(
-                    "Aborting refresh scanners due to config entry not being ready"
-                )
+                _LOGGER.debug("Aborting refresh scanners due to config entry not being ready")
                 return False
 
             _LOGGER.debug(
@@ -1153,7 +1101,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             @callback
             def async_call_update_entry() -> None:
-                """Called in the event loop to update the scanner entries in our config
+                """
+                Called in the event loop to update the scanner entries in our config.
 
                 We do this via add_job to ensure it runs in the event loop.
                 """
@@ -1169,10 +1118,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         return True
 
-    async def service_dump_devices(
-        self, call: ServiceCall
-    ) -> ServiceResponse:  # pylint: disable=unused-argument;
-        """Return a dump of beacon advertisements by receiver"""
+    async def service_dump_devices(self, call: ServiceCall) -> ServiceResponse:  # pylint: disable=unused-argument;
+        """Return a dump of beacon advertisements by receiver."""
         out = {}
         addresses_input = call.data.get("addresses", "")
         redact = call.data.get("redact", False)
@@ -1202,31 +1149,27 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         return out
 
     def redaction_list_update(self):
-        """Freshen or create the list of match/replace pairs that we use to
+        """
+        Freshen or create the list of match/replace pairs that we use to
         redact MAC addresses. This gives a set of helpful address replacements
         that still allows identifying device entries without disclosing MAC
-        addresses."""
+        addresses.
+        """
         i = len(self.redactions)  # not entirely accurate but we don't care.
 
         # SCANNERS
         for address in self.scanner_list:
             if address.upper() not in self.redactions:
                 i += 1
-                self.redactions[address.upper()] = (
-                    f"{address[:2]}::SCANNER_{i}::{address[-2:]}"
-                )
+                self.redactions[address.upper()] = f"{address[:2]}::SCANNER_{i}::{address[-2:]}"
         # CONFIGURED DEVICES
         for address in self.options.get(CONF_DEVICES, []):
             if address.upper() not in self.redactions:
                 i += 1
                 if address.count("_") == 2:
-                    self.redactions[address] = (
-                        f"{address[:4]}::CFG_iBea_{i}::{address[32:]}"
-                    )
+                    self.redactions[address] = f"{address[:4]}::CFG_iBea_{i}::{address[32:]}"
                 elif len(address) == 17:
-                    self.redactions[address] = (
-                        f"{address[:2]}::CFG_MAC_{i}::{address[-2:]}"
-                    )
+                    self.redactions[address] = f"{address[:2]}::CFG_MAC_{i}::{address[-2:]}"
                 else:
                     # Don't know what it is, but not a mac.
                     self.redactions[address] = f"CFG_OTHER_{1}_{address}"
@@ -1238,34 +1181,31 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 if device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
                     self.redactions[address] = f"{address[:2]}::IRK_DEV_{i}"
                 elif address.count("_") == 2:
-                    self.redactions[address] = (
-                        f"{address[:4]}::OTHER_iBea_{i}::{address[32:]}"
-                    )
+                    self.redactions[address] = f"{address[:4]}::OTHER_iBea_{i}::{address[32:]}"
                 elif len(address) == 17:  # a MAC
-                    self.redactions[address] = (
-                        f"{address[:2]}::OTHER_MAC_{i}::{address[-2:]}"
-                    )
+                    self.redactions[address] = f"{address[:2]}::OTHER_MAC_{i}::{address[-2:]}"
                 else:
                     # Don't know what it is.
                     self.redactions[address] = f"OTHER_{1}_{address}"
 
     def redact_data(self, data):
-        """Wash any collection of data of any MAC addresses.
+        """
+        Wash any collection of data of any MAC addresses.
 
         Uses the redaction list of substitutions if already created, then
         washes any remaining mac-like addresses. This routine is recursive,
-        so if you're changing it bear that in mind!"""
+        so if you're changing it bear that in mind!
+        """
         if len(self.redactions) == 0:
             # Initialise the list of addresses if not already done.
             self.redaction_list_update()
         if isinstance(data, str):
             # the end of the recursive wormhole, do the actual work:
             for find, fix in self.redactions.items():
-                data = re.sub(find, fix, data, flags=re.I)
+                data = re.sub(find, fix, data, flags=re.IGNORECASE)
             # redactions done, now replace any remaining MAC addresses
             # We are only looking for xx:xx:xx... format.
-            data = self._redact_generic_re.sub(self._redact_generic_sub, data)
-            return data
+            return self._redact_generic_re.sub(self._redact_generic_sub, data)
         elif isinstance(data, dict):
             return {self.redact_data(k): self.redact_data(v) for k, v in data.items()}
         elif isinstance(data, list):

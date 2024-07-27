@@ -24,16 +24,22 @@ async def test_setup_unload_and_reload_entry(
     hass: HomeAssistant, bypass_get_data, setup_bermuda_entry: MockConfigEntry
 ):
     """Test entry setup and unload."""
-    assert isinstance(
-        hass.data[DOMAIN][setup_bermuda_entry.entry_id], BermudaDataUpdateCoordinator
-    )
+    # Create a mock entry so we don't have to go through config flow
+    config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_CONFIG, entry_id="test")
+
+    # Set up the entry and assert that the values
+    # set during setup are where we expect
+    # them to be. Because we have patched
+    # the BermudaDataUpdateCoordinator.async_get_data
+    # call, no code from custom_components/bermuda/api.py actually runs.
+    assert await async_setup_entry(hass, config_entry)
+    assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
+    assert isinstance(hass.data[DOMAIN][config_entry.entry_id], BermudaDataUpdateCoordinator)
 
     # Reload the entry and assert that the data from above is still there
-    assert await hass.config_entries.async_reload(setup_bermuda_entry.entry_id)
-    assert DOMAIN in hass.data and setup_bermuda_entry.entry_id in hass.data[DOMAIN]
-    assert isinstance(
-        hass.data[DOMAIN][setup_bermuda_entry.entry_id], BermudaDataUpdateCoordinator
-    )
+    assert await async_reload_entry(hass, config_entry) is None
+    assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
+    assert isinstance(hass.data[DOMAIN][config_entry.entry_id], BermudaDataUpdateCoordinator)
 
     # Unload the entry and verify that the data has been removed
     assert await hass.config_entries.async_unload(setup_bermuda_entry.entry_id)
