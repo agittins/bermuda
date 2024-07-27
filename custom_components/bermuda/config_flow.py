@@ -6,9 +6,8 @@ from typing import TYPE_CHECKING
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.config_entries import OptionsFlowWithConfigEntry
 from homeassistant.components.bluetooth import MONOTONIC_TIME, BluetoothServiceInfoBleak
+from homeassistant.config_entries import ConfigEntry, OptionsFlowWithConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers.selector import selector
 

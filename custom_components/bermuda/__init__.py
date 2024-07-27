@@ -7,10 +7,10 @@ https://github.com/agittins/bermuda
 
 from __future__ import annotations
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from typing import TYPE_CHECKING
 
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 
@@ -22,7 +22,7 @@ from .coordinator import BermudaDataUpdateCoordinator
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import Config, HomeAssistant
+    from homeassistant.core import HomeAssistant
 
 # from .const import _LOGGER_SPAM_LESS
 

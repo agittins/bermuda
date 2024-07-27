@@ -87,9 +87,7 @@ def error_get_data_fixture():
 @pytest.fixture()
 async def mock_bermuda_entry(hass: HomeAssistant):
     """This creates a mock config entry"""
-    config_entry = MockConfigEntry(
-        domain=DOMAIN, data=MOCK_CONFIG, entry_id="test", title=NAME
-    )
+    config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_CONFIG, entry_id="test", title=NAME)
     config_entry.add_to_hass(hass)
     await hass.async_block_till_done()
     return config_entry
@@ -98,9 +96,7 @@ async def mock_bermuda_entry(hass: HomeAssistant):
 @pytest.fixture()
 async def setup_bermuda_entry(hass: HomeAssistant):
     """This setups a entry so that it can be used."""
-    config_entry = MockConfigEntry(
-        domain=DOMAIN, data=MOCK_CONFIG, entry_id="test", title=NAME
-    )
+    config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_CONFIG, entry_id="test", title=NAME)
     config_entry.add_to_hass(hass)
     await async_setup_component(hass, DOMAIN, {})
     assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
