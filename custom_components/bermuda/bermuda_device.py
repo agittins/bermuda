@@ -12,12 +12,27 @@ for them, so we can use them to contribute towards measurements.
 
 from __future__ import annotations
 
+import re
+
 from homeassistant.components.bluetooth import MONOTONIC_TIME, BluetoothScannerDevice
 from homeassistant.const import STATE_HOME, STATE_NOT_HOME, STATE_UNAVAILABLE
 from homeassistant.helpers.device_registry import format_mac
 
 from .bermuda_device_scanner import BermudaDeviceScanner
-from .const import BDADDR_TYPE_UNKNOWN, CONF_DEVICES, CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT
+from .const import (
+    _LOGGER,
+    ADDR_TYPE_IBEACON,
+    ADDR_TYPE_PRIVATE_BLE_DEVICE,
+    BDADDR_TYPE_NOT_MAC48,
+    BDADDR_TYPE_OTHER,
+    BDADDR_TYPE_PRIVATE_RESOLVABLE,
+    BDADDR_TYPE_UNKNOWN,
+    BEACON_IBEACON_DEVICE,
+    BEACON_PRIVATE_BLE_DEVICE,
+    CONF_DEVICES,
+    CONF_DEVTRACK_TIMEOUT,
+    DEFAULT_DEVTRACK_TIMEOUT,
+)
 
 
 class BermudaDevice(dict):
@@ -64,6 +79,49 @@ class BermudaDevice(dict):
         self.create_tracker_done: bool = False  # device_tracker should now exist
         self.last_seen: float = 0  # stamp from most recent scanner spotting. MONOTONIC_TIME
         self.scanners: dict[str, BermudaDeviceScanner] = {}
+
+        # BLE MAC addresses (https://www.bluetooth.com/specifications/core54-html/) can
+        # be differentiated by the top two MSBs of the 48bit MAC address. At our end at
+        # least, this means the first character of the MAC address in aa:bb:cc:dd:ee:ff
+        # I have no idea what the distinction between public and random is by bitwise ident,
+        # because the random addresstypes cover the entire address-space.
+        #
+        # - ?? Public
+        # - 0b00 (0x00 - 0x3F) Random Private Non-resolvable
+        # - 0b01 (0x40 - 0x7F) Random Private Resolvable (ie, IRK devices)
+        # - 0x10 (0x80 - 0xBF) ~* Reserved *~ (Is this where ALL Publics live?)
+        # - 0x11 (0xC0 - 0xFF) Random Static (may change on power cycle only)
+        #
+        # What we are really interested in tracking is IRK devices, since they rotate
+        # so rapidly (typically )
+        #
+        # A given device entry (ie, address) won't change, so we only update
+        # it once, and also only if it looks like a MAC address
+        #
+        if self.address_type is BDADDR_TYPE_UNKNOWN:
+            if self.address.count(":") != 5:
+                # Doesn't look like an actual MAC address
+                if re.match("^[A-Fa-f0-9]{32}_[A-Fa-f0-9]*_[A-Fa-f0-9]*$", self.address):
+                    # It's an iBeacon uuid_major_minor
+                    self.address_type = ADDR_TYPE_IBEACON
+                    self.beacon_type.add(BEACON_IBEACON_DEVICE)
+                    self.beacon_unique_id = self.address
+                elif re.match("^[A-Fa-f0-9]{32}$", self.address):
+                    # 32-char hex-string is an IRK
+                    self.beacon_type.add(BEACON_PRIVATE_BLE_DEVICE)
+                    self.address_type = ADDR_TYPE_PRIVATE_BLE_DEVICE
+                    self.beacon_unique_id = self.address
+                else:
+                    # We have no idea, currently.
+                    # Mark it as such so we don't spend time testing it again.
+                    self.address_type = BDADDR_TYPE_NOT_MAC48
+            elif len(self.address) == 17 and self.address[0:1] in "4567":
+                # We're checking if the first char in the address
+                # is one of 4, 5, 6, 7. Python is fun :-)
+                _LOGGER.debug("Identified IRK source address on %s", self.address)
+                self.address_type = BDADDR_TYPE_PRIVATE_RESOLVABLE
+            else:
+                self.address_type = BDADDR_TYPE_OTHER
 
     def calculate_data(self):
         """

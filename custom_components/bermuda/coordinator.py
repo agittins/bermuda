@@ -38,15 +38,10 @@ from .bermuda_device import BermudaDevice
 from .const import (
     _LOGGER,
     _LOGGER_SPAM_LESS,
-    ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     BDADDR_TYPE_NOT_MAC48,
-    BDADDR_TYPE_OTHER,
     BDADDR_TYPE_PRIVATE_RESOLVABLE,
-    BDADDR_TYPE_UNKNOWN,
-    BEACON_IBEACON_DEVICE,
     BEACON_IBEACON_SOURCE,
-    BEACON_PRIVATE_BLE_DEVICE,
     BEACON_PRIVATE_BLE_SOURCE,
     CONF_ATTENUATION,
     CONF_DEVICES,
@@ -415,36 +410,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # Get/Create a device entry
             device = self._get_or_create_device(service_info.address)
 
-            # BLE MAC addresses (https://www.bluetooth.com/specifications/core54-html/) can
-            # be differentiated by the top two MSBs of the 48bit MAC address. At our end at
-            # least, this means the first character of the MAC address in aa:bb:cc:dd:ee:ff
-            # I have no idea what the distinction between public and random is by bitwise ident,
-            # because the random addresstypes cover the entire address-space.
-            #
-            # - ?? Public
-            # - 0b00 (0x00 - 0x3F) Random Private Non-resolvable
-            # - 0b01 (0x40 - 0x7F) Random Private Resolvable (ie, IRK devices)
-            # - 0x10 (0x80 - 0xBF) ~* Reserved *~ (Is this where ALL Publics live?)
-            # - 0x11 (0xC0 - 0xFF) Random Static (may change on power cycle only)
-            #
-            # What we are really interested in tracking is IRK devices, since they rotate
-            # so rapidly (typically )
-            #
-            # A given device entry (ie, address) won't change, so we only update
-            # it once, and also only if it looks like a MAC address
-            if device.address_type is BDADDR_TYPE_UNKNOWN:
-                if device.address.count(":") != 5:
-                    # Doesn't look like an actual MAC address
-                    # Mark it as such so we don't spend time testing it again.
-                    device.address_type = BDADDR_TYPE_NOT_MAC48
-                elif len(device.address) > 0 and device.address[0:1] in "4567":
-                    # We're checking if the first char in the address
-                    # is one of 4, 5, 6, 7. Python is fun :-)
-                    _LOGGER.debug("Identified IRK address on %s", device.address)
-                    device.address_type = BDADDR_TYPE_PRIVATE_RESOLVABLE
-                else:
-                    device.address_type = BDADDR_TYPE_OTHER
-
             # Check if it's broadcasting an Apple Inc manufacturing data (ID: 0x004C)
             for (
                 company_code,
@@ -570,6 +535,16 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 device.update_scanner(scanner_device, discovered)
 
             # END of per-advertisement-by-device loop
+
+        # If any *configured* devices have not yet been seen, create device
+        # entries for them so they will claim the restored sensors in HA
+        # (this prevents them from restoring at startup as "Unavailable" if they
+        # are not currently visible, and will instead show as "Unknown" for
+        # sensors and "Away" for device_trackers).
+        if self.stamp_last_update == 0:
+            # First run, let's do it.
+            for _source_address in self.options.get(CONF_DEVICES, []):
+                self._get_or_create_device(_source_address)
 
         # Scanner entries have been loaded up with latest data, now we can
         # process data for all devices over all scanners.
@@ -744,8 +719,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         # Since user has already configured the Private BLE Device, we
                         # always create sensors for them.
                         metadevice.create_sensor = True
-                        metadevice.beacon_type.add(BEACON_PRIVATE_BLE_DEVICE)
-                        metadevice.address_type = ADDR_TYPE_PRIVATE_BLE_DEVICE
 
                         # Set a nice name
                         metadevice.name = getattr(pb_device, "name_by_user", pb_device.name)
@@ -754,8 +727,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         # Ensure we track this PB entity so we get source address updates.
                         if pb_entity.entity_id not in self.pb_state_sources:
                             self.pb_state_sources[pb_entity.entity_id] = None
-
-                        metadevice.beacon_unique_id = _irk
 
                         # Add metadevice to list so it gets included in update_metadevices
                         if metadevice.address not in self.metadevices:
@@ -803,12 +774,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         if source_device.beacon_unique_id is None:
             _LOGGER.error("Source device %s is not a valid iBeacon!", source_device.name)
         else:
-            metadevice = self._get_device(source_device.beacon_unique_id)
-            if metadevice is None:
+            metadevice = self._get_or_create_device(source_device.beacon_unique_id)
+            if len(metadevice.beacon_sources) == 0:
                 # #### NEW METADEVICE #####
                 # (do one-off init stuff here)
-
-                metadevice = self._get_or_create_device(source_device.beacon_unique_id)
                 if metadevice.address not in self.metadevices:
                     self.metadevices[metadevice.address] = metadevice
                 else:
@@ -817,8 +786,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         metadevice.address,
                     )
 
-                metadevice.address_type = ADDR_TYPE_IBEACON
-                metadevice.beacon_type.add(BEACON_IBEACON_DEVICE)
                 # Copy over the beacon attributes
                 for attribute in (
                     "beacon_unique_id",
