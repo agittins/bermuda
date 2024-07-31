@@ -140,6 +140,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self._redact_generic_re = re.compile(r"(?P<start>[0-9A-Fa-f]{2}):([0-9A-Fa-f]{2}:){4}(?P<end>[0-9A-Fa-f]{2})")
         self._redact_generic_sub = r"\g<start>:xx:xx:xx:xx:\g<end>"
 
+        self.stamp_last_update: float = 0  # Last time we ran an update, from MONOTONIC_TIME()
         self.stamp_last_prune: float = 0  # When we last pruned device list
 
         super().__init__(
@@ -313,7 +314,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         Handle an incoming advert callback from the bluetooth integration.
 
         These should come in as adverts are received, rather than on our update schedule.
-        The data should be as fresh as can be.
+        The data *should* be as fresh as can be, but actually the backend only sends
+        these periodically (mainly when the data changes, I think). So it's no good for
+        responding to changing rssi values, but it *is* good for seeding our updates in case
+        there are no defined sensors yet (or the defined ones are away).
         """
         _LOGGER.debug(
             "New Advert! change: %s, scanner: %s mac: %s name: %s serviceinfo: %s",
@@ -323,12 +327,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             service_info.name,
             service_info,
         )
-        # Note that we don't actually process these, this implementation
-        # is mainly for testing and to see if there's a benefit to using
-        # the listener. Initial testing indicates that this only gets called
-        # periodically so it doesn't seem useful as far as getting timely updates
-        # goes. It may prove useful for devices that have left if we have a long
-        # update interval or something.
+        #
+        # If there are no configured_devices already present during Bermuda's
+        # initial setup, then no sensors will be created, and no updates will
+        # be triggered on the co-ordinator. So let's check if we haven't updated
+        # recently, and do so...
+        if self.stamp_last_update < MONOTONIC_TIME() - (UPDATE_INTERVAL * 2):
+            self.hass.add_job(self._async_update_data())
 
     def sensor_created(self, address):
         """Allows sensor platform to report back that sensors have been set up."""
@@ -606,6 +611,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             self.stamp_last_prune = MONOTONIC_TIME()
 
         # end of async update
+        self.stamp_last_update = MONOTONIC_TIME()
         self.last_update_success = True
 
     def prune_devices(self):
