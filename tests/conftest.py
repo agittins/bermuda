@@ -5,6 +5,15 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
+from homeassistant.core import HomeAssistant
+from homeassistant.setup import async_setup_component
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.bermuda.const import DOMAIN
+from custom_components.bermuda.const import NAME
+
+# from .const import MOCK_OPTIONS
+from .const import MOCK_CONFIG
 
 # from custom_components.bermuda import BermudaDataUpdateCoordinator
 
@@ -73,3 +82,22 @@ def error_get_data_fixture():
 #     """Simulate a discovered advertisement for config_flow"""
 #     with patch("custom_components.bermuda.bluetooth.async_discovered_service_info"):
 #         return SERVICE_INFOS
+
+
+@pytest.fixture()
+async def mock_bermuda_entry(hass: HomeAssistant):
+    """This creates a mock config entry"""
+    config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_CONFIG, entry_id="test", title=NAME)
+    config_entry.add_to_hass(hass)
+    await hass.async_block_till_done()
+    return config_entry
+
+
+@pytest.fixture()
+async def setup_bermuda_entry(hass: HomeAssistant):
+    """This setups a entry so that it can be used."""
+    config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_CONFIG, entry_id="test", title=NAME)
+    config_entry.add_to_hass(hass)
+    await async_setup_component(hass, DOMAIN, {})
+    assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
+    return config_entry
