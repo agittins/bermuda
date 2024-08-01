@@ -17,10 +17,6 @@ from custom_components.bermuda.const import NAME
 from .const import MOCK_CONFIG
 from .const import MOCK_OPTIONS_GLOBALS
 
-# This fixture bypasses the actual setup of the integration
-# since we only want to test the config flow. We test the
-# actual functionality of the integration in other test modules.
-
 
 # Here we simiulate a successful config flow from the backend.
 # Note that we use the `bypass_get_data` fixture here because
