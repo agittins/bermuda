@@ -721,7 +721,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         metadevice.create_sensor = True
 
                         # Set a nice name
-                        metadevice.name = getattr(pb_device, "name_by_user", pb_device.name)
+                        metadevice.name = getattr(pb_device, "name_by_user", getattr(pb_device, "name", None))
                         metadevice.prefname = metadevice.name
 
                         # Ensure we track this PB entity so we get source address updates.
