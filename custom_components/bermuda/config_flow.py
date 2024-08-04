@@ -163,7 +163,8 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             menu_options={
                 "globalopts": "Global Options",
                 "selectdevices": "Select Devices",
-                "global_calibration": "Calibration",
+                "calibration1_global": "Calibration 1: Global",
+                "calibration2_scanner": "Calibration 2: Scanner",
             },
             description_placeholders=messages,
         )
@@ -297,7 +298,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
 
         return self.async_show_form(step_id="selectdevices", data_schema=vol.Schema(data_schema))
 
-    async def async_step_global_calibration(self, user_input=None):
+    async def async_step_calibration1_global(self, user_input=None):
         if user_input is not None:
             if user_input[CONF_SAVE_AND_CLOSE]:
                 self.options.update(
@@ -310,7 +311,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                 self.hass.config_entries.async_update_entry(self.config_entry, options=self.options)
                 # Reset last device so that the next step doesn't think it exists.
                 self._last_device = None
-                return await self.async_step_scanner_calibration()
+                return await self.async_step_init()
             self._last_ref_power = user_input[CONF_REF_POWER]
             self._last_attenuation = user_input[CONF_ATTENUATION]
             self._last_device = user_input[CONF_DEVICES]
@@ -355,7 +356,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         }
         if user_input is None:
             return self.async_show_form(
-                step_id="global_calibration",
+                step_id="calibration1_global",
                 data_schema=vol.Schema(data_schema),
                 description_placeholders={"suffix": "After you click Submit, the new distances will be shown here."},
             )
@@ -367,7 +368,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             for historical_rssi in scanner.hist_rssi
         ]
         return self.async_show_form(
-            step_id="global_calibration",
+            step_id="calibration1_global",
             data_schema=vol.Schema(data_schema),
             description_placeholders={
                 "suffix": f"Using reference_power of {self._last_ref_power} "
@@ -375,14 +376,19 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             },
         )
 
-    async def async_step_scanner_calibration(self, user_input=None):
+    async def async_step_calibration2_scanner(self, user_input=None):
         if user_input is not None:
             if user_input[CONF_SAVE_AND_CLOSE]:
                 self.options.update(user_input[CONF_SCANNER_INFO])
-                return await self._update_options()
+                # Let's update the options - but we don't want to call create entry as that will close the flow.
+                self.hass.config_entries.async_update_entry(self.config_entry, options=self.options)
+                # Reset last device so that the next step doesn't think it exists.
+                self._last_device = None
+                self._last_scanner_info = None
+                return await self.async_step_init()
             self._last_scanner_info = user_input[CONF_SCANNER_INFO]
             self._last_device = user_input[CONF_DEVICES]
-        existing_rssi_offsets = self.options.get(CONF_SCANNER_INFO, {}).get(CONF_RSSI_OFFSET, {})
+        existing_rssi_offsets = self.options.get(CONF_RSSI_OFFSET, {})
         rssi_offset_dict = {}
         for scanner in self.coordinator.scanner_list:
             scanner_name = self.coordinator.devices[scanner].name if scanner in self.coordinator.devices else scanner
@@ -402,7 +408,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         }
         if user_input is None:
             return self.async_show_form(
-                step_id="scanner_calibration",
+                step_id="calibration2_scanner",
                 data_schema=vol.Schema(data_schema),
                 description_placeholders={"suffix": "After you click Submit, the new distances will be shown here."},
             )
@@ -410,17 +416,14 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         results = {}
         for scanner in self.coordinator.scanner_list:
             cur_offset = self._last_scanner_info[CONF_RSSI_OFFSET].get(scanner, 0)
-            results[device.scanners[scanner].name] = (
-                rssi_to_metres(
+            if scanner in device.scanners:
+                results[device.scanners[scanner].name] = rssi_to_metres(
                     device.scanners[scanner].rssi + cur_offset,
                     self.options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
                     self.options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
                 )
-                if scanner in device.scanners
-                else "Unknown"
-            )
         return self.async_show_form(
-            step_id="scanner_calibration",
+            step_id="calibration2_scanner",
             data_schema=vol.Schema(data_schema),
             description_placeholders={"suffix": f"Most recent distances are: {results}"},
         )

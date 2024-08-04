@@ -47,7 +47,7 @@
         "title": "Select Devices",
         "description": "Choose which devices you wish to track. If no devices appear below, then Bermuda is not seeing any data coming from Bluetooth scanners. Ensure you have an esphome ble_proxy device, Shelly devices with bluetooth proxy configured or a local bluetooth adaptor."
       },
-      "global_calibration": {
+      "calibration1_global": {
         "title": "Calibration 1: Global",
         "description": "Choose your most common beacon and your most common scanner to use as a 'reference pair' to calibrate to each other and establish global defaults. \n\n{suffix}",
         "data": {
@@ -63,7 +63,7 @@
           "ref_power": "To calibrate this setting, place the device 1 metre from the scanner, and adjust the value until the figures above reflect that 1m distance. Note that values will only recompute after clicking submit, and a more-negative number will result in a lower distance"
         }
       },
-      "scanner_calibration": {
+      "calibration2_scanner": {
         "title": "Calibration 2: Per-Scanner",
         "description": "This step is optional but useful if your scanners have different sensitivities or varying antenna performance. Adjust the offset rssi for each scanner until the calculated distance to the selected device is correct. It is best not to change the offset for the scanner you used as part of the \"reference pair\" in step 1.\n\n{suffix}",
         "data": {

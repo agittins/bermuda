@@ -49,6 +49,7 @@ from .const import (
     CONF_MAX_RADIUS,
     CONF_MAX_VELOCITY,
     CONF_REF_POWER,
+    CONF_RSSI_OFFSET,
     CONF_SMOOTHING_SAMPLES,
     CONF_UPDATE_INTERVAL,
     CONFDATA_SCANNERS,
@@ -236,6 +237,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.options[CONF_REF_POWER] = DEFAULT_REF_POWER
         self.options[CONF_SMOOTHING_SAMPLES] = DEFAULT_SMOOTHING_SAMPLES
         self.options[CONF_UPDATE_INTERVAL] = DEFAULT_UPDATE_INTERVAL
+        self.options[CONF_RSSI_OFFSET] = {}
 
         if hasattr(entry, "options"):
             # Firstly, on some calls (specifically during reload after settings changes)
@@ -251,6 +253,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     CONF_MAX_VELOCITY,
                     CONF_REF_POWER,
                     CONF_SMOOTHING_SAMPLES,
+                    CONF_RSSI_OFFSET,
                 ):
                     self.options[key] = val
 

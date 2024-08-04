@@ -45,10 +45,12 @@ class BermudaDeviceScanner(dict):
         scandata: BluetoothScannerDevice,
         area_id: str,
         options,
+        scanner_device_name: str,
     ) -> None:
         # I am declaring these just to control their order in the dump,
         # which is a bit silly, I suspect.
         self.name: str = scandata.scanner.name
+        self.scanner_device_name = scanner_device_name
         self.area_id: str = area_id
         self.parent_device = device_address
 
@@ -141,7 +143,7 @@ class BermudaDeviceScanner(dict):
             self.rssi = scandata.advertisement.rssi
             self.hist_rssi.insert(0, self.rssi)
             self.rssi_distance_raw = rssi_to_metres(
-                self.rssi + options.get(CONF_RSSI_OFFSET, {}).get(self.name, 0),
+                self.rssi + options.get(CONF_RSSI_OFFSET, {}).get(self.scanner_device_name, 0),
                 options.get(CONF_REF_POWER),
                 options.get(CONF_ATTENUATION),
             )
