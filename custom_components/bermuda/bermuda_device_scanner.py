@@ -21,6 +21,7 @@ from .const import (
     DISTANCE_INFINITE,
     DISTANCE_TIMEOUT,
     HIST_KEEP_COUNT,
+    CONF_RSSI_OFFSET,
 )
 
 # from .const import _LOGGER_SPAM_LESS
@@ -140,7 +141,7 @@ class BermudaDeviceScanner(dict):
             self.rssi = scandata.advertisement.rssi
             self.hist_rssi.insert(0, self.rssi)
             self.rssi_distance_raw = rssi_to_metres(
-                self.rssi,
+                self.rssi + options.get(CONF_RSSI_OFFSET, {}).get(self.name, 0),
                 options.get(CONF_REF_POWER),
                 options.get(CONF_ATTENUATION),
             )
@@ -239,7 +240,9 @@ class BermudaDeviceScanner(dict):
             self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
             del self.hist_distance_by_interval[1:]
 
-        elif new_stamp is None and (self.stamp is None or self.stamp < MONOTONIC_TIME() - DISTANCE_TIMEOUT):
+        elif new_stamp is None and (
+            self.stamp is None or self.stamp < MONOTONIC_TIME() - DISTANCE_TIMEOUT
+        ):
             # DEVICE IS AWAY!
             # Last distance reading is stale, mark device distance as unknown.
             self.rssi_distance = None
@@ -309,13 +312,17 @@ class BermudaDeviceScanner(dict):
                         velocity,
                     )
                 # Discard the bogus reading by duplicating the last.
-                self.hist_distance_by_interval.insert(0, self.hist_distance_by_interval[0])
+                self.hist_distance_by_interval.insert(
+                    0, self.hist_distance_by_interval[0]
+                )
             else:
                 # Looks valid enough, add the current reading to the interval log
                 self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
 
             # trim the log to length
-            del self.hist_distance_by_interval[self.options.get(CONF_SMOOTHING_SAMPLES) :]
+            del self.hist_distance_by_interval[
+                self.options.get(CONF_SMOOTHING_SAMPLES) :
+            ]
 
             # Calculate a moving-window average, that only includes
             # historical values if their "closer" (ie more reliable).
