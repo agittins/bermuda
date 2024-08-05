@@ -46,6 +46,34 @@
       "selectdevices": {
         "title": "Select Devices",
         "description": "Choose which devices you wish to track. If no devices appear below, then Bermuda is not seeing any data coming from Bluetooth scanners. Ensure you have an esphome ble_proxy device, Shelly devices with bluetooth proxy configured or a local bluetooth adaptor."
+      },
+      "calibration1_global": {
+        "title": "Calibration 1: Global",
+        "description": "Choose your most common beacon and your most common scanner to use as a 'reference pair' to calibrate to each other and establish global defaults. \n\n{suffix}",
+        "data": {
+          "configured_devices": "Device",
+          "configured_scanners": "Scanner",
+          "save_and_close": "Save and Close",
+          "attenuation": "Attenuation",
+          "ref_power": "Reference Power"
+        },
+        "data_description": {
+          "save_and_close": "After you are happy with the calibration, check this box and click Submit. Your changes will be saved, and you can proceed to the next calibration step. Leave this box un-checked while you adjust and test the settings.",
+          "attenuation": "After adjusting the above settings for 1m distance readings, move the device further away (for example 5 metres) and adust the attenuation until the calculated distances match the physical distance between the scanner and device. Click submit to see the new distance estimations.",
+          "ref_power": "To calibrate this setting, place the device 1 metre from the scanner, and adjust the value until the figures above reflect that 1m distance. Note that values will only recompute after clicking submit, and a more-negative number will result in a lower distance"
+        }
+      },
+      "calibration2_scanner": {
+        "title": "Calibration 2: Per-Scanner",
+        "description": "This step is optional but useful if your scanners have different sensitivities or varying antenna performance. Adjust the offset rssi for each scanner until the calculated distance to the selected device is correct. It is best not to change the offset for the scanner you used as part of the \"reference pair\" in step 1.\n\n{suffix}",
+        "data": {
+          "configured_devices": "Device",
+          "save_and_close": "Save and Close",
+          "scanner_info": "Scanner info"
+        },
+        "data_description": {
+          "scanner_info": "Enter a non-zero number to offset the rssi reported by that scanner. Adjust until the estimated distance above matches the actual distance between that scanner and the selected transmitting device."
+        }
       }
     }
   },

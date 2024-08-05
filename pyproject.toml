@@ -1,50 +1,49 @@
 # Adapted from https://github.com/ludeeus/integration_blueprint/blob/main/.ruff.toml
 [tool.ruff]
 target-version = "py312"
-line-length=120 # This is all me and not HA - I will die on the hill that 80 is too short
+line-length = 120        # This is all me and not HA - I will die on the hill that 80 is too short
 
 [tool.ruff.lint]
-select = [
-    "ALL",
-]
+select = ["ALL"]
 
 ignore = [
-    "ANN101", # Missing type annotation for `self` in method
-    "ANN401", # Dynamically typed expressions (typing.Any) are disallowed
-    "D203", # no-blank-line-before-class (incompatible with formatter)
-    "D212", # multi-line-summary-first-line (incompatible with formatter)
-    "COM812", # incompatible with formatter
-    "ISC001", # incompatible with formatter
-    "ERA001", # commented out code
-    "D401", # First line should be in imperative - let's skip for now
-    "D205", # 1 blank line required between summary line and description
-    "ANN001", # Return type annoations - should be done later as lot of manual changes
-    "ANN003", # Type annotation for **kwargs
-    "PGH004", # Use specific rule codes for noqa
-    "D102", # Docstring in public method - should be done later
-    "D107", # Dosctring in init
-    "ANN002", # Missing type annotations for *args
-    "ANN202", #Missing return type annotation for private function
-    "RUF012", #Mutable class attributes should be annotated with `typing.ClassVar`
-    "ANN201", #Missing return type annotation for public function should be done later
-    "FBT002", #Boolean default positional argument in function definition
-    "FBT003", # Boolean positional value in function call
-    "ARG001", # Unused function argument
-    "RET505", # Unnecessary elif
+    "ANN101",  # Missing type annotation for `self` in method
+    "ANN401",  # Dynamically typed expressions (typing.Any) are disallowed
+    "D203",    # no-blank-line-before-class (incompatible with formatter)
+    "D212",    # multi-line-summary-first-line (incompatible with formatter)
+    "COM812",  # incompatible with formatter
+    "ISC001",  # incompatible with formatter
+    "ERA001",  # commented out code
+    "D401",    # First line should be in imperative - let's skip for now
+    "D205",    # 1 blank line required between summary line and description
+    "ANN001",  # Return type annoations - should be done later as lot of manual changes
+    "ANN003",  # Type annotation for **kwargs
+    "PGH004",  # Use specific rule codes for noqa
+    "D102",    # Docstring in public method - should be done later
+    "D107",    # Dosctring in init
+    "ANN002",  # Missing type annotations for *args
+    "ANN202",  #Missing return type annotation for private function
+    "RUF012",  #Mutable class attributes should be annotated with `typing.ClassVar`
+    "ANN201",  #Missing return type annotation for public function should be done later
+    "FBT002",  #Boolean default positional argument in function definition
+    "FBT003",  # Boolean positional value in function call
+    "ARG001",  # Unused function argument
+    "RET505",  # Unnecessary elif
     "PLR2004", # Magic value
     "PLR0912", # Too many branches
-    "FIX001", # Line contains fixme
-    "TD003", # Missing issue link on the line following this TODO
-    "TD002", # Missing author in TODO
-    "TD001", # Invalid TODO tag in FIXME
-    "SIM108", #Use ternary operator
+    "FIX001",  # Line contains fixme
+    "TD003",   # Missing issue link on the line following this TODO
+    "TD002",   # Missing author in TODO
+    "TD001",   # Invalid TODO tag in FIXME
+    "SIM108",  #Use ternary operator
     "PLR0915", # Too many statements
-    "FIX002", # Resolve TODO
-    "SIM102", # Use a single if instead of nested if
-    "ANN205", # missing return type annotation for staticmethod
-    "ARG002", # Unused method argument
-    "PGH003", # Use specific rule codes when ignore type issues
-    "D404", # First word of the dosctring should not be "This"
+    "FIX002",  # Resolve TODO
+    "SIM102",  # Use a single if instead of nested if
+    "ANN205",  # missing return type annotation for staticmethod
+    "ARG002",  # Unused method argument
+    "PGH003",  # Use specific rule codes when ignore type issues
+    "D404",    # First word of the dosctring should not be "This"
+    "PLR0913", # Too many arguments
 ]
 
 [tool.ruff.lint.flake8-pytest-style]
@@ -58,11 +57,11 @@ max-complexity = 25
 
 [tool.ruff.lint.extend-per-file-ignores]
 "tests/**/*.py" = [
-    "S101", # asserts allowed in tests...
-    "ARG", # Unused function args -> fixtures nevertheless are functionally relevant...
-    "FBT", # Don't care about booleans as positional arguments in tests, e.g. via @pytest.mark.parametrize()
+    "S101",  # asserts allowed in tests...
+    "ARG",   # Unused function args -> fixtures nevertheless are functionally relevant...
+    "FBT",   # Don't care about booleans as positional arguments in tests, e.g. via @pytest.mark.parametrize()
     "PT004", # Add leading underscore to pytest fixture
-    "ALL" # To keep things easy let's just skip all for now - can be changed later :)
+    "ALL",   # To keep things easy let's just skip all for now - can be changed later :)
 ]
 
 # Grabbed from HA core 2024.7
