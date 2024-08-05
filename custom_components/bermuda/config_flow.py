@@ -442,7 +442,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                 break
         # TODO: IF device_address IS NONE, Something has gone wrong
         return self.coordinator.devices[device_address]
-
+        return self.coordinator.devices[device_address.lower()]
     async def _update_options(self):
         """Update config entry options."""
         return self.async_create_entry(title=NAME, data=self.options)
