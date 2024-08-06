@@ -49,7 +49,7 @@ from .const import (
     CONF_MAX_RADIUS,
     CONF_MAX_VELOCITY,
     CONF_REF_POWER,
-    CONF_RSSI_OFFSET,
+    CONF_RSSI_OFFSETS,
     CONF_SMOOTHING_SAMPLES,
     CONF_UPDATE_INTERVAL,
     CONFDATA_SCANNERS,
@@ -237,7 +237,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.options[CONF_REF_POWER] = DEFAULT_REF_POWER
         self.options[CONF_SMOOTHING_SAMPLES] = DEFAULT_SMOOTHING_SAMPLES
         self.options[CONF_UPDATE_INTERVAL] = DEFAULT_UPDATE_INTERVAL
-        self.options[CONF_RSSI_OFFSET] = {}
+        self.options[CONF_RSSI_OFFSETS] = {}
 
         if hasattr(entry, "options"):
             # Firstly, on some calls (specifically during reload after settings changes)
@@ -253,7 +253,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     CONF_MAX_VELOCITY,
                     CONF_REF_POWER,
                     CONF_SMOOTHING_SAMPLES,
-                    CONF_RSSI_OFFSET,
+                    CONF_RSSI_OFFSETS,
                 ):
                     self.options[key] = val
 
@@ -266,7 +266,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # a list of known scanners so we can
         # restore the sensor states even if we don't have a full set of
         # scanner receipts in the discovery data.
-        self.scanner_list = []
+        self.scanner_list: list[str] = []
         if hasattr(entry, "data"):
             for address, saved in entry.data.get(CONFDATA_SCANNERS, {}).items():
                 scanner = self._get_or_create_device(address)
@@ -364,20 +364,40 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 fresh_count += 1
         return fresh_count
 
-    def count_active_scanners(self) -> int:
+    def count_active_scanners(self, max_age=10) -> int:
         """Returns count of scanners that have recently sent updates."""
-        stamp = MONOTONIC_TIME() - 10  # seconds
+        stamp = MONOTONIC_TIME() - max_age  # seconds
         fresh_count = 0
+        for scanner in self.get_active_scanner_summary():
+            if scanner.get("last_stamp", 0) > stamp:
+                fresh_count += 1
+        return fresh_count
+
+    def get_active_scanner_summary(self) -> list[dict]:
+        """
+        Returns a list of dicts suitable for seeing which scanners
+        are configured in the system and how long it has been since
+        each has returned an advertisement.
+        """
+        stamp = MONOTONIC_TIME()
+        results = []
         for scanner in self.scanner_list:
+            scannerdev = self.devices[scanner]
             last_stamp: float = 0
             for device in self.devices.values():
                 record = device.scanners.get(scanner, None)
                 if record is not None and record.stamp is not None:
                     if record.stamp > last_stamp:
                         last_stamp = record.stamp
-            if last_stamp > stamp:
-                fresh_count += 1
-        return fresh_count
+            results.append(
+                {
+                    "name": scannerdev.name,
+                    "address": scanner,
+                    "last_stamp": last_stamp,
+                    "last_stamp_age": stamp - last_stamp,
+                }
+            )
+        return results
 
     def _get_device(self, address: str) -> BermudaDevice | None:
         """Search for a device entry based on mac address."""
@@ -1058,7 +1078,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             for entry in self.hass.config_entries.async_entries(DOMAIN, include_disabled=False, include_ignore=False):
                 _LOGGER.debug("Loaded entry %s", entry.entry_id)
                 self.config_entry = entry
-            self.scanner_list = []
+            self.scanner_list.clear()
             confdata_scanners: dict[str, dict] = {}
             for device in self.devices.values():
                 if device.is_scanner:

@@ -20,7 +20,7 @@
   "options": {
     "step": {
       "init": {
-        "description": "Bermuda can currently see {device_count} bluetooth devices, reported across {scanner_count} bluetooth scanner devices. {status}"
+        "description": "Bermuda can currently see:\n- {device_count} bluetooth devices.\n- {scanner_count} bluetooth scanner devices.\n\n{status}"
       },
       "globalopts": {
         "data": {
@@ -49,7 +49,7 @@
       },
       "calibration1_global": {
         "title": "Calibration 1: Global",
-        "description": "Choose your most common beacon and your most common scanner to use as a 'reference pair' to calibrate to each other and establish global defaults. \n\n{suffix}",
+        "description": "This step is to establish some global defaults for distance calculations.\n\n{details}\n{summary}\nExpand for instructions!{summary_end}\n\nIn later steps you can set per-device overrides, so it makes sense to choose your most common hardware as a 'reference pair' for this step. For example, if most of your scanners are ESPHome on a particular board, then choose one of those to use as the reference scanner. Likewise if you have a handful of a particular model of beacon, use one of those as your reference device.\n\n- Choose a device and a scanner below to use as your 'reference pair'\n- Physically place your chosen device at 1m (one metre) from the chosen scanner. Ensure they have a clear line of sight to each other, and avoid having them close to any organic life-forms which might interfere with the signal.\n- Click 'SUBMIT' and note the RSSI values in the table that will appear below. You can click 'SUBMIT' again at any time to refresh the values.\n- Once you have a stable signal strength, put that value into the `reference_power` field and click 'SUBMIT'.\n- You should now see the updated values, and the estimated distances should be close to 1 metre. Repeat as required until you are happy with the result.\n- Now move the device so that it is further from the scanner and measure this distance with a tape measure. Around 5 metres might be a good distance - the exact distance doesn't matter, but keeping a clear line of sight is important, and you might find longer distances will give you more accuracy, generally.\n- With the device at the new distance, click 'SUBMIT' again and you should see the most recent measurements will reflect the new distance, but will probably be inaccurate.\n- Experiment with different values for `attenuation` and clicking 'SUBMIT', until you get the estimated measurements to agree with your physical measurement.\n- Once you are happy with the calibration, tick 'Save and Close' and click 'SUBMIT'.\n{details_end}\n{suffix}",
         "data": {
           "configured_devices": "Device",
           "configured_scanners": "Scanner",
@@ -63,7 +63,7 @@
           "ref_power": "To calibrate this setting, place the device 1 metre from the scanner, and adjust the value until the figures above reflect that 1m distance. Note that values will only recompute after clicking submit, and a more-negative number will result in a lower distance"
         }
       },
-      "calibration2_scanner": {
+      "calibration2_scanners": {
         "title": "Calibration 2: Per-Scanner",
         "description": "This step is optional but useful if your scanners have different sensitivities or varying antenna performance. Adjust the offset rssi for each scanner until the calculated distance to the selected device is correct. It is best not to change the offset for the scanner you used as part of the \"reference pair\" in step 1.\n\n{suffix}",
         "data": {
