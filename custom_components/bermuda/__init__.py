@@ -9,12 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
-
-# from homeassistant.helpers.device_registry import EventDeviceRegistryUpdatedData
 from homeassistant.helpers.device_registry import DeviceEntry, format_mac
 
 from .const import _LOGGER, DOMAIN, PLATFORMS, STARTUP_MESSAGE
@@ -24,23 +20,8 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-# from .const import _LOGGER_SPAM_LESS
-
-# from typing import TYPE_CHECKING
-
-# from bthome_ble import BTHomeBluetoothDeviceData
-
-# if TYPE_CHECKING:
-#     from bleak.backends.device import BLEDevice
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
-
-
-# async def async_setup(
-#     hass: HomeAssistant, config: Config
-# ):  # pylint: disable=unused-argument;
-#     """Setting up this integration using YAML is not supported."""
-#     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
