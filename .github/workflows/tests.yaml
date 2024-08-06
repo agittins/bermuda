@@ -27,6 +27,11 @@ jobs:
           python-version: ${{ env.DEFAULT_PYTHON }}
           cache: "pip"
 
+      - name: Install Python modules
+        run: |
+          pip install --constraint=.github/workflows/constraints.txt pre-commit black
+          # flake8 isort
+
       - name: "Install requirements"
         run: python3 -m pip install -r requirements.txt
 
