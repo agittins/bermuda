@@ -17,7 +17,7 @@ from .const import (
     CONF_DEVICES,
     CONF_MAX_VELOCITY,
     CONF_REF_POWER,
-    CONF_RSSI_OFFSET,
+    CONF_RSSI_OFFSETS,
     CONF_SMOOTHING_SAMPLES,
     DISTANCE_INFINITE,
     DISTANCE_TIMEOUT,
@@ -143,7 +143,7 @@ class BermudaDeviceScanner(dict):
             self.rssi = scandata.advertisement.rssi
             self.hist_rssi.insert(0, self.rssi)
             self.rssi_distance_raw = rssi_to_metres(
-                self.rssi + options.get(CONF_RSSI_OFFSET, {}).get(self.scanner_device_name, 0),
+                self.rssi + options.get(CONF_RSSI_OFFSETS, {}).get(self.scanner_device_name, 0),
                 options.get(CONF_REF_POWER),
                 options.get(CONF_ATTENUATION),
             )
