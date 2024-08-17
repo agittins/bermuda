@@ -9,6 +9,8 @@ to the combination of the scanner and the device it is reporting.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from homeassistant.components.bluetooth import MONOTONIC_TIME, BluetoothScannerDevice
 
 from .const import (
@@ -26,6 +28,9 @@ from .const import (
 
 # from .const import _LOGGER_SPAM_LESS
 from .util import rssi_to_metres
+
+if TYPE_CHECKING:
+    from .bermuda_device import BermudaDevice
 
 
 class BermudaDeviceScanner(dict):
@@ -45,15 +50,18 @@ class BermudaDeviceScanner(dict):
         scandata: BluetoothScannerDevice,
         area_id: str,
         options,
-        scanner_device_name: str,
+        scanner_device: BermudaDevice,
     ) -> None:
         # I am declaring these just to control their order in the dump,
         # which is a bit silly, I suspect.
         self.name: str = scandata.scanner.name
-        self.scanner_device_name = scanner_device_name
+        self.scanner_device_name = scanner_device.name
+        self.adapter: str = scandata.scanner.adapter
+        self.address = scanner_device.address
+        self.source: str = scandata.scanner.source
         self.area_id: str = area_id
         self.parent_device = device_address
-
+        self.options = options
         self.stamp: float | None = 0
         self.new_stamp: float | None = None  # Set when a new advert is loaded from update
         self.hist_stamp = []
@@ -70,15 +78,9 @@ class BermudaDeviceScanner(dict):
         self.adverts: dict[str, bytes] = {}
 
         # Just pass the rest on to update...
-        self.update_advertisement(device_address, scandata, area_id, options)
+        self.update_advertisement(device_address, scandata, area_id)
 
-    def update_advertisement(
-        self,
-        device_address: str,
-        scandata: BluetoothScannerDevice,
-        area_id: str,
-        options,
-    ):
+    def update_advertisement(self, device_address: str, scandata: BluetoothScannerDevice, area_id: str):
         """
         Update gets called every time we see a new packet or
         every time we do a polled update.
@@ -143,9 +145,9 @@ class BermudaDeviceScanner(dict):
             self.rssi = scandata.advertisement.rssi
             self.hist_rssi.insert(0, self.rssi)
             self.rssi_distance_raw = rssi_to_metres(
-                self.rssi + options.get(CONF_RSSI_OFFSETS, {}).get(self.scanner_device_name, 0),
-                options.get(CONF_REF_POWER),
-                options.get(CONF_ATTENUATION),
+                self.rssi + self.options.get(CONF_RSSI_OFFSETS, {}).get(self.address, 0),
+                self.options.get(CONF_REF_POWER),
+                self.options.get(CONF_ATTENUATION),
             )
             self.hist_distance.insert(0, self.rssi_distance_raw)
 
@@ -184,7 +186,6 @@ class BermudaDeviceScanner(dict):
         self.tx_power = scandata.advertisement.tx_power
         for ad_str, ad_bytes in scandata.advertisement.service_data.items():
             self.adverts[ad_str] = ad_bytes
-        self.options = options
 
         self.new_stamp = new_stamp
 
@@ -248,7 +249,7 @@ class BermudaDeviceScanner(dict):
             self.rssi_distance = None
             # Clear the smoothing history
             if len(self.hist_distance_by_interval) > 0:
-                self.hist_distance_by_interval = []
+                self.hist_distance_by_interval.clear()
 
         else:
             # Add the current reading (whether new or old) to

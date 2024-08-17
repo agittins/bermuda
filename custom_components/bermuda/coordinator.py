@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, cast
 import voluptuous as vol
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import MONOTONIC_TIME, BluetoothChange, BluetoothScannerDevice
+from homeassistant.components.bluetooth.api import _get_manager
 from homeassistant.const import EVENT_STATE_CHANGED
 from homeassistant.core import (
     Event,
@@ -75,6 +76,7 @@ from .util import clean_charbuf
 
 if TYPE_CHECKING:
     from habluetooth import BluetoothServiceInfoBleak
+    from homeassistant.components.bluetooth import HomeAssistantBluetoothManager
     from homeassistant.config_entries import ConfigEntry
 
     from .bermuda_device_scanner import BermudaDeviceScanner
@@ -89,22 +91,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     Since we are not actually using an external API and only computing local
     data already gathered by the bluetooth integration, the update process is
     very cheap, and the processing process (currently) rather cheap.
-
-    Future work / algo's etc to keep in mind:
-
-    https://en.wikipedia.org/wiki/Triangle_inequality
-    - with distance to two rx nodes, we can apply min and max bounds
-      on the distance between them (less than the sum, more than the
-      difference). This could allow us to iterively approximate toward
-      the rx layout, esp as devices move between (and right up to) rx.
-      - bear in mind that rssi errors are typically attenuation-only.
-        This means that we should favour *minimum* distances as being
-        more accurate, both when weighting measurements from distant
-        receivers, and when whittling down a max distance between
-        receivers (but beware of the min since that uses differences)
-
-    https://mdpi-res.com/d_attachment/applsci/applsci-10-02003/article_deploy/applsci-10-02003.pdf?version=1584265508
-    - lots of good info and ideas.
 
     TODO / IDEAS:
     - when we get to establishing a fix, we can apply a path-loss factor to
@@ -145,6 +131,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             name=DOMAIN,
             update_interval=timedelta(seconds=UPDATE_INTERVAL),
         )
+
+        self._manager: HomeAssistantBluetoothManager = _get_manager(hass)
 
         # Track the list of Private BLE devices, noting their entity id
         # and current "last address".

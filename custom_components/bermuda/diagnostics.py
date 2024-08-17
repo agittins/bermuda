@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.bluetooth.api import _get_manager
 from homeassistant.core import HomeAssistant, ServiceCall
 
 from .const import DOMAIN
@@ -22,8 +21,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
     # We can call this with our own config_entry because the diags step doesn't
     # actually use it.
 
-    bt_manager = _get_manager(hass)
-    bt_diags = await bt_manager.async_diagnostics()
+    bt_diags = await coordinator._manager.async_diagnostics()  # noqa
 
     # Param structure for service call
     call = ServiceCall(DOMAIN, "dump_devices", {"redact": True})

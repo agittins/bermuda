@@ -156,10 +156,10 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                 "You will need to solve this before Bermuda can be of much help."
             )
         else:
-            messages["status"] = "Life looks good."
+            messages["status"] = "You have at least some active devices, this is good."
 
         # Build a markdown table of scanners so the user can see what's up.
-        scanner_table = "\n|Scanner|Address|Last advertisement|\n|---|---|---:|\n"
+        scanner_table = "\nStatus of scanners:\n\n|Scanner|Address|Last advertisement|\n|---|---|---:|\n"
         # Use emoji to indicate if age is "good"
         for scanner in self.coordinator.get_active_scanner_summary():
             age = int(scanner.get("last_stamp_age", 999))
@@ -183,7 +183,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                 "globalopts": "Global Options",
                 "selectdevices": "Select Devices",
                 "calibration1_global": "Calibration 1: Global",
-                "calibration2_scanners": "Calibration 2: Scanners",
+                "calibration2_scanners": "Calibration 2: Scanner RSSI Offsets",
             },
             description_placeholders=messages,
         )
@@ -332,17 +332,30 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
 
         if user_input is not None:
             if user_input[CONF_SAVE_AND_CLOSE]:
+                # Update the running options (this propagates to coordinator etc)
                 self.options.update(
                     {
                         CONF_ATTENUATION: user_input[CONF_ATTENUATION],
                         CONF_REF_POWER: user_input[CONF_REF_POWER],
                     }
                 )
-                # Let's update the options - but we don't want to call create entry as that will close the flow.
-                self.hass.config_entries.async_update_entry(self.config_entry, options=self.options)
+                # Ideally, we'd like to just save out the config entry and return to the main menu.
+                # Unfortunately, doing so seems to break the chosen device (for at least 15 seconds or so)
+                # until it gets re-invigorated. My guess is that the link between coordinator and the
+                # sensor entity might be getting broken, but not entirely sure.
+                # For now disabling the return-to-menu and instead we finish out the flow.
+
+                # Previous block for returning to menu:
+                # # Let's update the options - but we don't want to call create entry as that will close the flow.
+                # # This will save out the config entry:
+                # self.hass.config_entries.async_update_entry(self.config_entry, options=self.options)
                 # Reset last device so that the next step doesn't think it exists.
-                self._last_device = None
-                return await self.async_step_init()
+                # self._last_device = None
+                # return await self.async_step_init()
+
+                # Current block for finishing the flow:
+                return await self._update_options()
+
             self._last_ref_power = user_input[CONF_REF_POWER]
             self._last_attenuation = user_input[CONF_ATTENUATION]
             self._last_device = user_input[CONF_DEVICES]
@@ -393,7 +406,17 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                 | {"suffix": "After you click Submit, the new distances will be shown here."},
             )
         device = self._get_bermuda_device_from_registry(user_input[CONF_DEVICES])
-        scanner = device.scanners[user_input[CONF_SCANNERS]]
+
+        if user_input[CONF_SCANNERS] in device.scanners:
+            scanner = device.scanners[user_input[CONF_SCANNERS]]
+        else:
+            return self.async_show_form(
+                step_id="calibration_global",
+                errors={"err_scanner_no_record": "The selected scanner hasn't (yet) seen this device."},
+                data_schema=vol.Schema(data_schema),
+                description_placeholders=_ugly_token_hack
+                | {"suffix": "After you click Submit, the new distances will be shown here."},
+            )
 
         distances = [
             rssi_to_metres(historical_rssi, self._last_ref_power, self._last_attenuation)
@@ -444,20 +467,35 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         """
         if user_input is not None:
             if user_input[CONF_SAVE_AND_CLOSE]:
-                self.options.update(user_input[CONF_SCANNER_INFO])
-                # Let's update the options - but we don't want to call create entry as that will close the flow.
-                self.hass.config_entries.async_update_entry(self.config_entry, options=self.options)
-                # Reset last device so that the next step doesn't think it exists.
-                self._last_device = None
-                self._last_scanner_info = None
-                return await self.async_step_init()
+                # Convert the name-based dict to use MAC addresses
+                rssi_offset_by_address = {}
+                for address in self.coordinator.scanner_list:
+                    scanner_name = self.coordinator.devices[address].name
+                    rssi_offset_by_address[address] = user_input[CONF_SCANNER_INFO][scanner_name]
+
+                self.options.update({CONF_RSSI_OFFSETS: rssi_offset_by_address})
+                # Per previous step, returning elsewhere in the flow after updating the entry doesn't
+                # seem to work, so we'll just save and close the flow.
+                # # Let's update the options - but we don't want to call create entry as that will close the flow.
+                # self.hass.config_entries.async_update_entry(self.config_entry, options=self.options)
+                # # Reset last device so that the next step doesn't think it exists.
+                # self._last_device = None
+                # self._last_scanner_info = None
+                # return await self.async_step_init()
+
+                # Save the config entry and close the flow.
+                return await self._update_options()
+
+            # It's a refresh, basically...
             self._last_scanner_info = user_input[CONF_SCANNER_INFO]
             self._last_device = user_input[CONF_DEVICES]
-        existing_rssi_offsets = self.options.get(CONF_RSSI_OFFSETS, {})
+
+        saved_rssi_offsets = self.options.get(CONF_RSSI_OFFSETS, {})
         rssi_offset_dict = {}
+
         for scanner in self.coordinator.scanner_list:
             scanner_name = self.coordinator.devices[scanner].name
-            rssi_offset_dict[scanner_name] = existing_rssi_offsets.get(scanner, 0)
+            rssi_offset_dict[scanner_name] = saved_rssi_offsets.get(scanner, 0)
         data_schema = {
             vol.Required(
                 CONF_DEVICES,
@@ -465,9 +503,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             ): DeviceSelector(DeviceSelectorConfig(integration=DOMAIN)),
             vol.Required(
                 CONF_SCANNER_INFO,
-                default={CONF_RSSI_OFFSETS: rssi_offset_dict}
-                if not self._last_scanner_info
-                else self._last_scanner_info,
+                default=rssi_offset_dict if not self._last_scanner_info else self._last_scanner_info,
             ): ObjectSelector(),
             vol.Optional(CONF_SAVE_AND_CLOSE, default=False): vol.Coerce(bool),
         }
@@ -482,7 +518,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         # Gather new estimates for distances using rssi hist and the new offset.
         for scanner in self.coordinator.scanner_list:
             scanner_name = self.coordinator.devices[scanner].name
-            cur_offset = self._last_scanner_info[CONF_RSSI_OFFSETS].get(scanner_name, 0)
+            cur_offset = self._last_scanner_info.get(scanner_name, 0)
             if scanner in device.scanners:
                 results[scanner_name] = [
                     rssi_to_metres(
@@ -495,11 +531,16 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         # Format the results for display (HA has full markdown support!)
         results_str = "| Scanner | Measurements (new...old)|\n|---|---|"
         for scanner_name, distances in results.items():
-            results_str += f"\n|{scanner_name}|"
+            results_str += f"\n|{scanner_name}|<pre>"
+            i = 0
             for distance in distances:
+                # limit how many columns we'll dump
+                i += 1
+                if i > 5:
+                    continue
                 # We round to 2 places (1cm) and pad to fit nn.nn
-                results_str += f" `{distance:>5.2f}`"
-            results_str += "|"
+                results_str += f" {distance:>6.2f}"
+            results_str += "</pre>|"
 
         return self.async_show_form(
             step_id="calibration2_scanners",
