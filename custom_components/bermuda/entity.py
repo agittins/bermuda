@@ -104,6 +104,7 @@ class BermudaEntity(CoordinatorEntity):
         # seem to be stored uppercased.
         # existing_device_id = None
         domain_name = DOMAIN
+        model = None
 
         if self._device.is_scanner:
             connection = {(dr.CONNECTION_NETWORK_MAC, self._device.address.lower())}
@@ -111,10 +112,14 @@ class BermudaEntity(CoordinatorEntity):
             # ibeacon doesn't (yet) actually set a "connection", but
             # this "matches" what it stores for identifier.
             connection = {("ibeacon", self._device.address.lower())}
+            model = f"iBeacon: {self._device.address.lower()}"
         elif self._device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
             # Private BLE Device integration doesn't specify "connection" tuples,
             # so we use what it defines for the "identifier" instead.
             connection = {("private_ble_device", self._device.address.lower())}
+            # We don't set the model since the Private BLE integration should have
+            # already named it nicely.
+            # model = f"IRK: {self._device.address.lower()[:4]}"
             # We look up and use the device from the registry so we get
             # the private_ble_device device congealment!
             # The "connection" is actually being used as the "identifiers" tuple
@@ -125,14 +130,20 @@ class BermudaEntity(CoordinatorEntity):
             domain_name = DOMAIN_PRIVATE_BLE_DEVICE
         else:
             connection = {(dr.CONNECTION_BLUETOOTH, self._device.address.upper())}
+            # No need to set model, since MAC address will be shown via connection.
+            # model = f"Bermuda: {self._device.address.lower()}"
 
-        return {
+        device_info = {
             "identifiers": {(domain_name, self._device.unique_id)},
             "connections": connection,
             "name": self._device.prefname,
         }
+        if model is not None:
+            device_info["model"] = model
         # if existing_device_id is not None:
         #    device_info['id'] = existing_device_id
+
+        return device_info
 
     @property
     def device_state_attributes(self):

@@ -64,15 +64,15 @@
         }
       },
       "calibration2_scanners": {
-        "title": "Calibration 2: Per-Scanner",
-        "description": "This step is optional but useful if your scanners have different sensitivities or varying antenna performance. Adjust the offset rssi for each scanner until the calculated distance to the selected device is correct. It is best not to change the offset for the scanner you used as part of the \"reference pair\" in step 1.\n\n{suffix}",
+        "title": "Calibration 2: Per-Scanner RSSI Offsets",
+        "description": "This step is optional but useful if your scanners have different sensitivities or varying antenna performance. Adjust the offset rssi for each scanner until the calculated distance to the selected device is correct. Leave the scanner you used in your \"reference pair\" in step 1 at Zero.\n\n{suffix}",
         "data": {
           "configured_devices": "Device",
           "save_and_close": "Save and Close",
-          "scanner_info": "Scanner info"
+          "scanner_info": "Per-Scanner RSSI Offsets"
         },
         "data_description": {
-          "scanner_info": "Enter a non-zero number to offset the rssi reported by that scanner. Adjust until the estimated distance above matches the actual distance between that scanner and the selected transmitting device."
+          "scanner_info": "Leave at zero to accept the global default, or enter a non-zero number to offset the rssi reported by that scanner. Adjust until the estimated distance above matches the actual distance between that scanner and the selected transmitting device. Negative values will increase the distance, positive values will decrease it."
         }
       }
     }

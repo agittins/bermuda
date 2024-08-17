@@ -160,7 +160,6 @@ class BermudaDevice(dict):
                 self.address,
                 discoveryinfo,  # the entire BluetoothScannerDevice struct
                 scanner_device.area_id or "area_not_defined",
-                self.options,
             )
         else:
             self.scanners[format_mac(scanner_device.address)] = BermudaDeviceScanner(
@@ -168,7 +167,7 @@ class BermudaDevice(dict):
                 discoveryinfo,  # the entire BluetoothScannerDevice struct
                 scanner_device.area_id or "area_not_defined",
                 self.options,
-                scanner_device.name,
+                scanner_device,
             )
         device_scanner = self.scanners[format_mac(scanner_device.address)]
         # Let's see if we should update our last_seen based on this...
