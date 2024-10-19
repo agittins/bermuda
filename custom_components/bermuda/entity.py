@@ -153,3 +153,33 @@ class BermudaEntity(CoordinatorEntity):
             "id": str(self.coordinator.data.get("id")),
             "integration": DOMAIN,
         }
+
+
+class BermudaGlobalEntity(CoordinatorEntity):
+    """Holds all Bermuda global data under one entity type/device."""
+
+    def __init__(
+        self,
+        coordinator: BermudaDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        self.coordinator = coordinator
+        self.config_entry = config_entry
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """
+        Handle updated data from the co-ordinator.
+
+        (we don't need to implement this, but if we want to do anything special we can)
+        """
+        self.async_write_ha_state()
+
+    @property
+    def device_info(self):
+        """Implementing this creates an entry in the device registry."""
+        return {
+            "identifiers": {(DOMAIN, "BERMUDA_GLOBAL")},
+            "name": "Bermuda Global",
+        }
