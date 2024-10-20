@@ -1,6 +1,6 @@
 ---
 name: Issue
-about: Create a report to help us improve
+about: Create a report to help improve Bermuda, or to get help with a problem you are having
 ---
 
 <!-- Before you open a new issue:
