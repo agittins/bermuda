@@ -6,12 +6,23 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.sensor.const import SensorDeviceClass, SensorStateClass
-from homeassistant.const import SIGNAL_STRENGTH_DECIBELS_MILLIWATT, STATE_UNAVAILABLE, UnitOfLength
+from homeassistant.const import (
+    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    STATE_UNAVAILABLE,
+    EntityCategory,
+    UnitOfLength,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import _LOGGER, ADDR_TYPE_IBEACON, ADDR_TYPE_PRIVATE_BLE_DEVICE, DOMAIN, SIGNAL_DEVICE_NEW
-from .entity import BermudaEntity
+from .const import (
+    _LOGGER,
+    ADDR_TYPE_IBEACON,
+    ADDR_TYPE_PRIVATE_BLE_DEVICE,
+    DOMAIN,
+    SIGNAL_DEVICE_NEW,
+)
+from .entity import BermudaEntity, BermudaGlobalEntity
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -67,7 +78,14 @@ async def async_setup_entry(
     # Connect device_new to a signal so the coordinator can call it
     _LOGGER.debug("Registering device_new callback.")
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, device_new))
-
+    async_add_devices(
+        (
+            BermudaTotalProxyCount(coordinator, entry),
+            BermudaActiveProxyCount(coordinator, entry),
+            BermudaTotalDeviceCount(coordinator, entry),
+            BermudaVisibleDeviceCount(coordinator, entry),
+        )
+    )
     # Now we must tell the co-ord to do initial refresh, so that it will call our callback.
     # This runs inside the event loop so should be fine as-is.
     # Disabling as it seems to work ok without, and it might be cause of async race.
@@ -300,3 +318,115 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
         if distance is not None:
             return round(distance, 3)
         return None
+
+
+class BermudaGlobalSensor(BermudaGlobalEntity, SensorEntity):
+    """bermuda Global Sensor class."""
+
+    _attr_has_entity_name = True
+
+    @property
+    def name(self):
+        """Return the name of the sensor."""
+        return "Area"
+
+    @property
+    def device_class(self):
+        """Return de device class of the sensor."""
+        return "bermuda__custom_device_class"
+
+
+class BermudaTotalProxyCount(BermudaGlobalSensor):
+    """Counts the total number of proxies we have access to."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def unique_id(self):
+        """
+        "Uniquely identify this sensor so that it gets stored in the entity_registry,
+        and can be maintained / renamed etc by the user.
+        """
+        return "BERMUDA_GLOBAL_PROXY_COUNT"
+
+    @property
+    def native_value(self) -> int:
+        """Gets the number of proxies we have access to."""
+        return len(self.coordinator.scanner_list)
+
+    @property
+    def name(self):
+        """Gets the name of the sensor."""
+        return "Total proxy count"
+
+
+class BermudaActiveProxyCount(BermudaGlobalSensor):
+    """Counts the number of proxies that are active."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def unique_id(self):
+        """
+        "Uniquely identify this sensor so that it gets stored in the entity_registry,
+        and can be maintained / renamed etc by the user.
+        """
+        return "BERMUDA_GLOBAL_ACTIVE_PROXY_COUNT"
+
+    @property
+    def native_value(self) -> int:
+        """Gets the number of proxies we have access to."""
+        return self.coordinator.count_active_scanners()
+
+    @property
+    def name(self):
+        """Gets the name of the sensor."""
+        return "Active proxy count"
+
+
+class BermudaTotalDeviceCount(BermudaGlobalSensor):
+    """Counts the total number of devices we can see."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def unique_id(self):
+        """
+        "Uniquely identify this sensor so that it gets stored in the entity_registry,
+        and can be maintained / renamed etc by the user.
+        """
+        return "BERMUDA_GLOBAL_DEVICE_COUNT"
+
+    @property
+    def native_value(self) -> int:
+        """Gets the amount of devices we have seen."""
+        return len(self.coordinator.devices)
+
+    @property
+    def name(self):
+        """Gets the name of the sensor."""
+        return "Total device count"
+
+
+class BermudaVisibleDeviceCount(BermudaGlobalSensor):
+    """Counts the number of devices that are active."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def unique_id(self):
+        """
+        "Uniquely identify this sensor so that it gets stored in the entity_registry,
+        and can be maintained / renamed etc by the user.
+        """
+        return "BERMUDA_GLOBAL_VISIBLE_DEVICE_COUNT"
+
+    @property
+    def native_value(self) -> int:
+        """Gets the amount of devices that are active."""
+        return self.coordinator.count_active_devices()
+
+    @property
+    def name(self):
+        """Gets the name of the sensor."""
+        return "Visible device count"
