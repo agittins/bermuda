@@ -1,15 +1,6 @@
 ---
 name: Issue
 about: Create a report to help us improve
-body:
-- type: input
-  id: bermuda_version
-  attributes:
-    label: Bermuda Version
-    description: "Which version of Bermuda are you running?"
-    placeholder: "eg: v0.6.2"
-  validations:
-    required: true
 ---
 
 <!-- Before you open a new issue:
@@ -23,7 +14,7 @@ tricky to set up at first I'm finding it difficult to spend a lot of individual
 time to help solve issues. So if you are able to follow through the instructions
 here, it will hopefully help me find the source of the problem more quickly.
 
-Many people bump into the same issues when they first start, so please take a 
+Many people bump into the same issues when they first start, so please take a
 look through the Wiki where I try to address most of those FAQ's. Particularly
 the "Troubleshooting" page at https://github.com/agittins/bermuda/wiki/Troubleshooting
 
