@@ -9,7 +9,11 @@ from typing import TYPE_CHECKING, cast
 
 import voluptuous as vol
 from homeassistant.components import bluetooth
-from homeassistant.components.bluetooth import MONOTONIC_TIME, BluetoothChange, BluetoothScannerDevice
+from homeassistant.components.bluetooth import (
+    MONOTONIC_TIME,
+    BluetoothChange,
+    BluetoothScannerDevice,
+)
 from homeassistant.components.bluetooth.api import _get_manager
 from homeassistant.const import EVENT_STATE_CHANGED
 from homeassistant.core import (
@@ -21,10 +25,18 @@ from homeassistant.core import (
     SupportsResponse,
     callback,
 )
-from homeassistant.helpers import area_registry as ar
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import (
+    area_registry as ar,
+)
+from homeassistant.helpers import (
+    config_validation as cv,
+)
+from homeassistant.helpers import (
+    device_registry as dr,
+)
+from homeassistant.helpers import (
+    entity_registry as er,
+)
 from homeassistant.helpers.device_registry import (
     EVENT_DEVICE_REGISTRY_UPDATED,
     EventDeviceRegistryUpdatedData,
@@ -76,7 +88,7 @@ from .util import clean_charbuf
 
 if TYPE_CHECKING:
     from habluetooth import BluetoothServiceInfoBleak
-    from homeassistant.components.bluetooth import HomeAssistantBluetoothManager
+    from homeassistant.components.bluetooth.manager import HomeAssistantBluetoothManager
     from homeassistant.config_entries import ConfigEntry
 
     from .bermuda_device_scanner import BermudaDeviceScanner
@@ -375,8 +387,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             for device in self.devices.values():
                 record = device.scanners.get(scanner, None)
                 if record is not None and record.stamp is not None:
-                    if record.stamp > last_stamp:
-                        last_stamp = record.stamp
+                    last_stamp = max(record.stamp, last_stamp)
             results.append(
                 {
                     "name": scannerdev.name,
