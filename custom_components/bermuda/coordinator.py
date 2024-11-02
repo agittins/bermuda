@@ -596,7 +596,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 device.prefname = (
                     device.name
                     or device.local_name
-                    or f"{DOMAIN}_{slugify(device.address)}{f" ({device.manufacturer}) "
+                    or f"{DOMAIN}_{slugify(device.address)}{f" ({slugify(device.manufacturer)}) "
                 if device.manufacturer else ""}"
                 )
 
