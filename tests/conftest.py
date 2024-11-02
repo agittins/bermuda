@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from unittest.mock import patch
+from homeassistant.config_entries import ConfigEntryState
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -99,5 +100,5 @@ async def setup_bermuda_entry(hass: HomeAssistant):
     config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_CONFIG, entry_id="test", title=NAME)
     config_entry.add_to_hass(hass)
     await async_setup_component(hass, DOMAIN, {})
-    assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
+    assert config_entry.state == ConfigEntryState.LOADED
     return config_entry
