@@ -122,7 +122,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     ) -> None:
         """Initialize."""
         self.platforms = []
-
         self.config_entry = entry
 
         self.sensor_interval = entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
@@ -153,6 +152,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.metadevices: dict[str, BermudaDevice] = {}
 
         self._ad_listener_cancel: Cancellable | None = None
+        self.last_config_entry_update: datetime | None = None
 
         @callback
         def handle_state_changes(ev: Event[EventStateChangedData]):
@@ -1100,6 +1100,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                 We do this via add_job to ensure it runs in the event loop.
                 """
+                self.last_config_entry_update = now()
                 self.hass.config_entries.async_update_entry(
                     self.config_entry,
                     data={
@@ -1108,7 +1109,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     },
                 )
 
-            self.hass.add_job(async_call_update_entry)
+            # To prevent strain on the system, let's only update if
+            # A) we have a new scanner
+            # B) It has been 30 minutes since our last update
+            if (
+                len(self.config_entry.data[CONFDATA_SCANNERS]) != len(confdata_scanners)
+                or self.last_config_entry_update is None
+                or (now() - self.last_config_entry_update).total_seconds() > 1800
+            ):
+                self.hass.add_job(async_call_update_entry)
 
         return True
 
