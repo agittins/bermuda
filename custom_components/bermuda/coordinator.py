@@ -89,8 +89,8 @@ from .util import clean_charbuf
 if TYPE_CHECKING:
     from habluetooth import BluetoothServiceInfoBleak
     from homeassistant.components.bluetooth.manager import HomeAssistantBluetoothManager
-    from homeassistant.config_entries import ConfigEntry
 
+    from . import BermudaConfigEntry
     from .bermuda_device_scanner import BermudaDeviceScanner
 
 Cancellable = Callable[[], None]
@@ -118,7 +118,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     def __init__(
         self,
         hass: HomeAssistant,
-        entry: ConfigEntry,
+        entry: BermudaConfigEntry,
     ) -> None:
         """Initialize."""
         self.platforms = []
@@ -521,7 +521,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 device.name = clean_charbuf(service_info.device.name)
             if device.local_name is None and service_info.advertisement.local_name:
                 device.local_name = clean_charbuf(service_info.advertisement.local_name)
-
             device.manufacturer = device.manufacturer or service_info.manufacturer
             device.connectable = service_info.connectable
 
@@ -949,7 +948,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # FIXME: Asserts should be avoided in non-tests as running python in optimized mode will skip them
         assert device.is_scanner is not True  # noqa
         closest_scanner: BermudaDeviceScanner | None = None
-
         for scanner in device.scanners.values():
             # Check each scanner and keep note of the closest one based on rssi_distance.
             # Note that rssi_distance is smoothed/filtered, and might be None if the last
@@ -1031,7 +1029,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # FIXME: Really? This can't possibly be a sensible nesting of loops.
             # should probably look at the API. Anyway, we are checking any devices
             # that have a "mac" or "bluetooth" connection,
-            for dev_entry in self.hass.data["device_registry"].devices.data.values():
+            devreg = dr.async_get(self.hass)
+            for dev_entry in devreg.devices.data.values():
                 for dev_connection in dev_entry.connections:
                     if dev_connection[0] in ["mac", "bluetooth"]:
                         found_address = format_mac(dev_connection[1])

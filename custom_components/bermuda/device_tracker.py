@@ -10,25 +10,25 @@ from homeassistant.const import STATE_HOME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import DOMAIN, SIGNAL_DEVICE_NEW
+from .const import SIGNAL_DEVICE_NEW
 from .entity import BermudaEntity
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from homeassistant.config_entries import ConfigEntry
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+    from . import BermudaConfigEntry
     from .coordinator import BermudaDataUpdateCoordinator
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BermudaConfigEntry,
     async_add_devices: AddEntitiesCallback,
 ) -> None:
     """Load Device Tracker entities for a config entry."""
-    coordinator: BermudaDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: BermudaDataUpdateCoordinator = entry.runtime_data.coordinator
 
     created_devices = []  # list of devices we've already created entities for
 
