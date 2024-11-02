@@ -581,11 +581,24 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             if device.local_name is None and service_info.advertisement.local_name:
                 device.local_name = clean_charbuf(service_info.advertisement.local_name)
             device.manufacturer = device.manufacturer or service_info.manufacturer
+            if device.manufacturer is None:
+                if (
+                    service_info.service_uuids
+                    and "feed" in service_info.service_uuids[0]
+                    or "feec" in service_info.service_uuids[0]
+                ):
+                    # https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/uuids/member_uuids.yaml
+                    device.manufacturer = "Tile"
             device.connectable = service_info.connectable
 
             # Try to make a nice name for prefname.
             if device.prefname is None or device.prefname.startswith(DOMAIN + "_"):
-                device.prefname = device.name or device.local_name or DOMAIN + "_" + slugify(device.address)
+                device.prefname = (
+                    device.name
+                    or device.local_name
+                    or f"{DOMAIN}_{slugify(device.address)}{f" ({device.manufacturer}) "
+                if device.manufacturer else ""}"
+                )
 
             # Work through the scanner entries...
             matched_scanners = bluetooth.async_scanner_devices_by_address(self.hass, service_info.address, False)
