@@ -7,6 +7,7 @@ https://github.com/agittins/bermuda
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -20,16 +21,25 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+type BermudaConfigEntry = ConfigEntry[BermudaData]
+
+
+@dataclass
+class BermudaData:
+    """Holds global data for Bermuda."""
+
+    coordinator: BermudaDataUpdateCoordinator
+
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry):
     """Set up this integration using UI."""
     if hass.data.get(DOMAIN) is None:
         _LOGGER.info(STARTUP_MESSAGE)
-
-    coordinator = hass.data.setdefault(DOMAIN, {})[entry.entry_id] = BermudaDataUpdateCoordinator(hass, entry)
+    coordinator = BermudaDataUpdateCoordinator(hass, entry)
+    entry.runtime_data = BermudaData(coordinator)
 
     await coordinator.async_refresh()
 
@@ -44,10 +54,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
 
 async def async_remove_config_entry_device(
-    hass: HomeAssistant, config_entry: ConfigEntry, device_entry: DeviceEntry
+    hass: HomeAssistant, config_entry: BermudaConfigEntry, device_entry: DeviceEntry
 ) -> bool:
     """Remove a config entry from a device."""
-    coordinator: BermudaDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator: BermudaDataUpdateCoordinator = config_entry.runtime_data
     address = None
     for ident in device_entry.identifiers:
         try:
@@ -73,7 +83,7 @@ async def async_remove_config_entry_device(
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> bool:
     """Handle removal of an entry."""
     if unload_result := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         _LOGGER.debug("Unloaded platforms.")
@@ -81,6 +91,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_result
 
 
-async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def async_reload_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> None:
     """Reload config entry."""
     await hass.config_entries.async_reload(entry.entry_id)

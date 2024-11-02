@@ -19,7 +19,6 @@ from .const import (
     _LOGGER,
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
-    DOMAIN,
     SIGNAL_DEVICE_NEW,
 )
 from .entity import BermudaEntity, BermudaGlobalEntity
@@ -27,19 +26,19 @@ from .entity import BermudaEntity, BermudaGlobalEntity
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from homeassistant import config_entries
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+    from . import BermudaConfigEntry
     from .coordinator import BermudaDataUpdateCoordinator
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: config_entries.ConfigEntry,
+    entry: BermudaConfigEntry,
     async_add_devices: AddEntitiesCallback,
 ) -> None:
     """Setup sensor platform."""
-    coordinator: BermudaDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: BermudaDataUpdateCoordinator = entry.runtime_data.coordinator
 
     created_devices = []  # list of already-created devices
 
