@@ -1113,7 +1113,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # A) we have a new scanner
             # B) It has been 30 minutes since our last update
             if (
-                len(self.config_entry.data[CONFDATA_SCANNERS]) != len(confdata_scanners)
+                len(self.config_entry.data.get(CONFDATA_SCANNERS, {})) != len(confdata_scanners)
                 or self.last_config_entry_update is None
                 or (now() - self.last_config_entry_update).total_seconds() > 1800
             ):
