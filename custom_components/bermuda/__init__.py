@@ -87,7 +87,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> 
     """Handle removal of an entry."""
     if unload_result := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         _LOGGER.debug("Unloaded platforms.")
-        hass.data[DOMAIN].pop(entry.entry_id)
     return unload_result
 
 

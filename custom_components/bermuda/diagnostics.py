@@ -9,14 +9,13 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from .const import DOMAIN
 
 if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
-
+    from . import BermudaConfigEntry
     from .coordinator import BermudaDataUpdateCoordinator
 
 
-async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
+async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: BermudaConfigEntry) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
-    coordinator: BermudaDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: BermudaDataUpdateCoordinator = entry.runtime_data.coordintor
 
     # We can call this with our own config_entry because the diags step doesn't
     # actually use it.

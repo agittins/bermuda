@@ -21,10 +21,8 @@ from .const import (
 )
 
 if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
-
+    from . import BermudaConfigEntry
     from .coordinator import BermudaDataUpdateCoordinator
-
     # from . import BermudaDevice
 
 
@@ -39,7 +37,7 @@ class BermudaEntity(CoordinatorEntity):
     def __init__(
         self,
         coordinator: BermudaDataUpdateCoordinator,
-        config_entry: ConfigEntry,
+        config_entry: BermudaConfigEntry,
         address: str,
     ) -> None:
         super().__init__(coordinator)
@@ -161,7 +159,7 @@ class BermudaGlobalEntity(CoordinatorEntity):
     def __init__(
         self,
         coordinator: BermudaDataUpdateCoordinator,
-        config_entry: ConfigEntry,
+        config_entry: BermudaConfigEntry,
     ) -> None:
         super().__init__(coordinator)
         self.coordinator = coordinator
