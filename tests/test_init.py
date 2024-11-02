@@ -32,7 +32,7 @@ async def test_setup_unload_and_reload_entry(
 
     # Unload the entry and verify that the data has been removed
     assert await hass.config_entries.async_unload(setup_bermuda_entry.entry_id)
-    assert setup_bermuda_entry.entry_id == ConfigEntryState.NOT_LOADED
+    assert setup_bermuda_entry.state == ConfigEntryState.NOT_LOADED
 
 
 async def test_setup_entry_exception(hass, error_on_get_data):
