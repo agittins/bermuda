@@ -135,7 +135,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
 
     async def async_step_init(self, user_input=None):  # pylint: disable=unused-argument
         """Manage the options."""
-        self.coordinator = self.config_entry.runtime_data
+        self.coordinator = self.config_entry.runtime_data.coordinator
         self.devices = self.coordinator.devices
 
         messages = {}

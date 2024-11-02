@@ -57,7 +57,7 @@ async def async_remove_config_entry_device(
     hass: HomeAssistant, config_entry: BermudaConfigEntry, device_entry: DeviceEntry
 ) -> bool:
     """Remove a config entry from a device."""
-    coordinator: BermudaDataUpdateCoordinator = config_entry.runtime_data
+    coordinator: BermudaDataUpdateCoordinator = config_entry.runtime_data.coordinator
     address = None
     for ident in device_entry.identifiers:
         try:
