@@ -21,6 +21,7 @@ from homeassistant.helpers.device_registry import format_mac
 from .bermuda_device_scanner import BermudaDeviceScanner
 from .const import (
     _LOGGER,
+    _LOGGER_SPAM_LESS,
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     BDADDR_TYPE_NOT_MAC48,
@@ -130,7 +131,13 @@ class BermudaDevice(dict):
 
         """
         for scanner in self.scanners.values():
-            scanner.calculate_data()
+            if isinstance(scanner, BermudaDeviceScanner):
+                # in issue #355 someone had an empty dict instead of a scanner object.
+                # it may be due to a race condition during startup, but we check now
+                # just in case. Was not able to reproduce.
+                scanner.calculate_data()
+            else:
+                _LOGGER_SPAM_LESS.debug("scanner_not_instance", "Scanner device is not a BermudaDevice instance, skipping.")
 
         # Update whether the device has been seen recently, for device_tracker:
         if (
