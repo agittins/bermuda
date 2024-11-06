@@ -145,6 +145,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         self._manager: HomeAssistantBluetoothManager = _get_manager(hass)
 
+        self._entity_registry = er.async_get(self.hass)
+        self._device_registry = dr.async_get(self.hass)
+
         # Track the list of Private BLE devices, noting their entity id
         # and current "last address".
         self.pb_state_sources: dict[str, str | None] = {}
@@ -179,7 +182,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                 # If no sensors have yet been configured, the coordinator
                                 # won't be getting polled for fresh data. Since we have
                                 # found something, we should get it to do that.
-                                self.hass.add_job(self.async_config_entry_first_refresh())
+                                # No longer using async_config_entry_first_refresh as it
+                                # breaks
+                                self.hass.add_job(self.async_refresh())
 
         self.hass.bus.async_listen(EVENT_STATE_CHANGED, handle_state_changes)
 
@@ -206,24 +211,54 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # this will fire all that often, and even when it does fire
             # the difference in cycle time appears to be less than 1ms.
             _LOGGER.debug(
-                "Device registry has changed, we will reload scanners and Private BLE Devs. ev: %s",
+                "Device registry has changed. ev: %s",
                 ev,
             )
-            # Mark so that we will rebuild scanner list on next update cycle.
-            self._do_full_scanner_init = True
-            # Same with Private BLE Device entities
-            self._do_private_device_init = True
+            if ev.data["action"] in {"create", "update"}:
+                device = self._device_registry.async_get(ev.data["device_id"])
+                # if this is an "update" we also get a "changes" dict, but we don't
+                # bother with it yet.
 
-            # If there are no `CONFIGURED_DEVICES` and the user only has private_ble_devices
-            # in their setup, then we might have done our init runs before that integration
-            # was up - in which case we'll get device registry changes. We should kick off
-            # the update in case it's not running yet (because of no subscribers yet being
-            # attached to the dataupdatecoordinator).
+                if device is not None:
+                    # Work out if it's a device that interests us and respond appropriately.
+                    for conn_type, _conn_id in device.connections:
+                        if conn_type == "private_ble_device":
+                            _LOGGER.debug("Trigger updating of Private BLE Devices")
+                            self._do_private_device_init = True
+                        elif conn_type == "ibeacon":
+                            # this was probably us, nothing else to do
+                            pass
+                        else:
+                            # might be a scanner, so let's refresh those
+                            _LOGGER.debug("Trigger updating of Scanner Listings")
+                            self._do_full_scanner_init = True
+                else:
+                    _LOGGER.error("Received DR update/create but device id does not exist: %s", ev.data["device_id"])
+
+            elif ev.data["action"] == "remove":
+                device_found = False
+                for scanner in self.scanner_list:
+                    if self.devices[scanner].entry_id == ev.data["device_id"]:
+                        _LOGGER.debug("Scanner %s removed, trigger update of scanners.", self.devices[scanner].name)
+                        self._do_full_scanner_init = True
+                        device_found = True
+                if not device_found:
+                    # If we save the private ble device's device_id into devices[].entry_id
+                    # we could check ev.data["device_id"] against it to decide if we should
+                    # rescan PBLE devices. But right now we don't, so scan 'em anyway.
+                    _LOGGER.debug("Opportunistic trigger of update for Private BLE Devices")
+                    self._do_private_device_init = True
+
+            # The co-ordinator will only get updates if we have created entities already.
+            # Since this might not always be the case (say, private_ble_device loads after
+            # we do), then we trigger an update here with the expectation that we got a
+            # device registry update after the private ble device was created. There might
+            # be other corner cases where we need to trigger our own update here, so test
+            # carefully and completely if you are tempted to remove / alter this.
             self.hass.add_job(self._async_update_data())
 
         # Listen for changes to the device registry and handle them.
-        # Primarily for when scanners get moved to a different area,
-        # or when Private BLE Device entries are created/loaded.
+        # Primarily for changes to scanners and Private BLE Devices.
         hass.bus.async_listen(EVENT_DEVICE_REGISTRY_UPDATED, handle_devreg_changes)
 
         self.options = {}
@@ -689,9 +724,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         This function sets up the skeleton metadevice entry for Private BLE (IRK)
         devices, ready for update_metadevices to manage.
         """
-        entreg = er.async_get(self.hass)
-        devreg = dr.async_get(self.hass)
-
         if self._do_private_device_init:
             self._do_private_device_init = False
             _LOGGER.debug("Refreshing Private BLE Device list")
@@ -701,7 +733,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # pb here means "private ble device"
             pb_entries = self.hass.config_entries.async_entries(DOMAIN_PRIVATE_BLE_DEVICE, include_disabled=False)
             for pb_entry in pb_entries:
-                pb_entities = entreg.entities.get_entries_for_config_entry_id(pb_entry.entry_id)
+                pb_entities = self._entity_registry.entities.get_entries_for_config_entry_id(pb_entry.entry_id)
                 # This will be a list of entities for a given private ble device,
                 # let's pull out the device_tracker one, since it has the state
                 # info we need.
@@ -715,7 +747,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                         # Grab the device entry (for the name, mostly)
                         if pb_entity.device_id is not None:
-                            pb_device = devreg.async_get(pb_entity.device_id)
+                            pb_device = self._device_registry.async_get(pb_entity.device_id)
                         else:
                             pb_device = None
 
@@ -1050,7 +1082,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                 scandev.name = dev_entry.name_by_user
                             else:
                                 scandev.name = dev_entry.name
-                            areas = self.area_reg.async_get_area(dev_entry.area_id)
+                            areas = self.area_reg.async_get_area(dev_entry.area_id) if dev_entry.area_id else None
                             if areas is not None and hasattr(areas, "name"):
                                 scandev.area_name = areas.name
                             else:
@@ -1074,7 +1106,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # Take the existing list of scanners and save them into config data
             # for our next start-up.
             for entry in self.hass.config_entries.async_entries(DOMAIN, include_disabled=False, include_ignore=False):
-                _LOGGER.debug("Loaded entry %s", entry.entry_id)
+                _LOGGER.debug("Loaded entry %s, state: %s", entry.entry_id, entry.state)
                 self.config_entry = entry
             self.scanner_list.clear()
             confdata_scanners: dict[str, dict] = {}
@@ -1087,6 +1119,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug("Aborting refresh scanners due to config entry not being ready")
                 return False
 
+            if self.config_entry.data.get(CONFDATA_SCANNERS, {}) == confdata_scanners:
+                _LOGGER.debug("Scanner configs are identical, not doing update.")
+                # Return true since we're happy that the config entry
+                # exists and has the current scanner data that we want,
+                # so there's nothing to do.
+                # See #351, #341
+                return True
+
             _LOGGER.debug(
                 "Replacing config data scanners was %s now %s",
                 self.config_entry.data.get(CONFDATA_SCANNERS, {}),
@@ -1096,7 +1136,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             @callback
             def async_call_update_entry() -> None:
                 """
-                Called in the event loop to update the scanner entries in our config.
+                Call in the event loop to update the scanner entries in our config.
 
                 We do this via add_job to ensure it runs in the event loop.
                 """
