@@ -221,7 +221,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                 if device is not None:
                     # Work out if it's a device that interests us and respond appropriately.
-                    for (conn_type, conn_id) in device.connections:
+                    for conn_type, _conn_id in device.connections:
                         if conn_type == "private_ble_device":
                             _LOGGER.debug("Trigger updating of Private BLE Devices")
                             self._do_private_device_init = True
@@ -233,10 +233,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                             _LOGGER.debug("Trigger updating of Scanner Listings")
                             self._do_full_scanner_init = True
                 else:
-                    _LOGGER.error(
-                        "Received DR update/create but device id does not exist: %s",
-                        ev.data["device_id"]
-                    )
+                    _LOGGER.error("Received DR update/create but device id does not exist: %s", ev.data["device_id"])
 
             elif ev.data["action"] == "remove":
                 device_found = False
@@ -727,7 +724,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         This function sets up the skeleton metadevice entry for Private BLE (IRK)
         devices, ready for update_metadevices to manage.
         """
-
         if self._do_private_device_init:
             self._do_private_device_init = False
             _LOGGER.debug("Refreshing Private BLE Device list")
@@ -1086,7 +1082,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                 scandev.name = dev_entry.name_by_user
                             else:
                                 scandev.name = dev_entry.name
-                            areas = self.area_reg.async_get_area(dev_entry.area_id)
+                            areas = self.area_reg.async_get_area(dev_entry.area_id) if dev_entry.area_id else None
                             if areas is not None and hasattr(areas, "name"):
                                 scandev.area_name = areas.name
                             else:
@@ -1124,9 +1120,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 return False
 
             if self.config_entry.data.get(CONFDATA_SCANNERS, {}) == confdata_scanners:
-                _LOGGER.debug(
-                    "Scanner configs are identical, not doing update."
-                )
+                _LOGGER.debug("Scanner configs are identical, not doing update.")
                 # Return true since we're happy that the config entry
                 # exists and has the current scanner data that we want,
                 # so there's nothing to do.
