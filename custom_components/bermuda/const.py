@@ -6,6 +6,8 @@ from __future__ import annotations
 import logging
 from typing import Final
 
+from homeassistant.const import Platform
+
 from .log_spam_less import BermudaLogSpamLess
 
 NAME = "Bermuda BLE Trilateration"
@@ -33,7 +35,11 @@ SENSOR = "sensor"
 SWITCH = "switch"
 DEVICE_TRACKER = "device_tracker"
 # PLATFORMS = [BINARY_SENSOR, SENSOR, SWITCH]
-PLATFORMS = [SENSOR, DEVICE_TRACKER]
+PLATFORMS = [
+    Platform.SENSOR,
+    Platform.DEVICE_TRACKER,
+    #  Platform.IMAGE
+]
 
 # Should probably retreive this from the component, but it's in "DOMAIN" *shrug*
 DOMAIN_PRIVATE_BLE_DEVICE = "private_ble_device"
