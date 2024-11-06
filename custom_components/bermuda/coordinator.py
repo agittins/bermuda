@@ -312,6 +312,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         setattr(scanner, key, value)
                 self.scanner_list.append(address)
 
+        # Set up the dump_devices service
         hass.services.async_register(
             DOMAIN,
             "dump_devices",
@@ -368,6 +369,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         if self.stamp_last_update < MONOTONIC_TIME() - (UPDATE_INTERVAL * 2):
             self.hass.add_job(self._async_update_data())
 
+    def _check_all_platforms_created(self, address):
+        """Checks if all platforms have finished loading a device's entities."""
+        dev = self._get_device(address)
+        if all([dev.create_sensor_done, dev.create_tracker_done, dev.create_number_done, dev.create_button_done]):
+            dev.create_all_done = True
+
     def sensor_created(self, address):
         """Allows sensor platform to report back that sensors have been set up."""
         dev = self._get_device(address)
@@ -376,6 +383,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # _LOGGER.debug("Sensor confirmed created for %s", address)
         else:
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
+        self._check_all_platforms_created(address)
 
     def device_tracker_created(self, address):
         """Allows device_tracker platform to report back that sensors have been set up."""
@@ -385,6 +393,21 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # _LOGGER.debug("Device_tracker confirmed created for %s", address)
         else:
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
+        self._check_all_platforms_created(address)
+
+    def number_created(self, address):
+        """Receives report from number platform that sensors have been set up."""
+        dev = self._get_device(address)
+        if dev is not None:
+            dev.create_number_done = True
+        self._check_all_platforms_created(address)
+
+    def button_created(self, address):
+        """Receives report from number platform that sensors have been set up."""
+        dev = self._get_device(address)
+        if dev is not None:
+            dev.create_button_done = True
+        self._check_all_platforms_created(address)
 
     def count_active_devices(self) -> int:
         """
@@ -630,7 +653,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # already loaded up.
         for address, device in self.devices.items():
             if device.create_sensor:
-                if not device.create_sensor_done or not device.create_tracker_done:
+                if not device.create_all_done:
                     _LOGGER.debug("Firing device_new for %s (%s)", device.name, address)
                     # Note that the below should be OK thread-wise, debugger indicates this is being
                     # called by _run in events.py, so pretty sure we are "in the event loop".
@@ -871,6 +894,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         Note that at this point all the distances etc should be fresh for
         the source devices, so we can just copy values from them to the metadevice.
+        However, the sources might not yet be using the metadevice's custom ref_power,
+        so their *first* update might have the un-adjusted value after a mac change or
+        other initialisation.
         """
         # First seed the metadevice skeletons and set their latest beacon_source entries
         # Private BLE Devices:
@@ -891,6 +917,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             if latest_source is not None and source_device is not None:
                 # Map the source device's scanner list into ours
                 metadev.scanners = source_device.scanners
+
+                # Set the source device's ref_power from our own
+                source_device.set_ref_power(metadev.ref_power)
 
                 # anything that isn't already set to something interesting, overwrite
                 # it with the new device's data.
@@ -969,6 +998,18 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         """Convert monotonic timestamp to age (eg: "6 seconds ago")."""
         return get_age(self.dt_mono_to_datetime(stamp))
 
+    def resolve_area_name(self, area_id) -> str | None:
+        """
+        Given an area_id, return the current area name.
+
+        Will return None if the area id does *not* resolve to a single
+        known area name.
+        """
+        areas = self.area_reg.async_get_area(area_id)
+        if hasattr(areas, "name"):
+            return getattr(areas, "name", "invalid_area")
+        return None
+
     def _refresh_areas_by_min_distance(self):
         """Set area for ALL devices based on closest beacon."""
         for device in self.devices.values():
@@ -995,43 +1036,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # We're closer than the last-closest, we win!
                     closest_scanner = scanner
 
-        if closest_scanner is not None:
-            # We found a winner
-            old_area = device.area_name
-            device.area_id = closest_scanner.area_id
-            areas = self.area_reg.async_get_area(device.area_id)
-            if hasattr(areas, "name"):
-                device.area_name = getattr(areas, "name", "invalid_area")
-            else:
-                # Wasn't a single area entry. Let's freak out, but not in a spammy way.
-                _LOGGER_SPAM_LESS.warning(
-                    f"scanner_no_area_{closest_scanner.name}",
-                    "Could not discern area from scanner %s: %s."
-                    "Please assign an area then reload this integration"
-                    "- Bermuda can't really work without it.",
-                    closest_scanner.name,
-                    areas,
-                )
-                device.area_name = f"No area: {closest_scanner.name}"
-            device.area_distance = closest_scanner.rssi_distance
-            device.area_rssi = closest_scanner.rssi
-            device.area_scanner = closest_scanner.name
-            if (old_area != device.area_name) and device.create_sensor:
-                # We check against area_name so we can know if the
-                # device's area changed names.
-                _LOGGER.debug(
-                    "Device %s was in '%s', now in '%s'",
-                    device.name,
-                    old_area,
-                    device.area_name,
-                )
-        else:
-            # Not close to any scanners!
-            device.area_id = None
-            device.area_name = None
-            device.area_distance = None
-            device.area_rssi = None
-            device.area_scanner = None
+        # Apply the newly-found closest scanner (or apply None if we didn't find one)
+        device.apply_scanner_selection(closest_scanner)
 
     def _refresh_scanners(self, scanners: list[BluetoothScannerDevice] | None = None):
         """

@@ -43,6 +43,7 @@ class BermudaEntity(CoordinatorEntity):
         super().__init__(coordinator)
         self.coordinator = coordinator
         self.config_entry = config_entry
+        self.address = address
         self._device = coordinator.devices[address]
         self.area_reg = ar.async_get(coordinator.hass)
         self.devreg = dr.async_get(coordinator.hass)
