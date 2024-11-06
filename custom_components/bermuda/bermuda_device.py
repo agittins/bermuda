@@ -137,7 +137,9 @@ class BermudaDevice(dict):
                 # just in case. Was not able to reproduce.
                 scanner.calculate_data()
             else:
-                _LOGGER_SPAM_LESS.error("scanner_not_instance", "Scanner device is not a BermudaDevice instance, skipping.")
+                _LOGGER_SPAM_LESS.error(
+                    "scanner_not_instance", "Scanner device is not a BermudaDevice instance, skipping."
+                )
 
         # Update whether the device has been seen recently, for device_tracker:
         if (
