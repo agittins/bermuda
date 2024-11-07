@@ -588,7 +588,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 device.local_name = clean_charbuf(service_info.advertisement.local_name)
             device.manufacturer = device.manufacturer or service_info.manufacturer
             if device.manufacturer is None:
-                if service_info.service_uuids(member_uuid := service_info[4:8]) in self.member_uuids:
+                if (
+                    service_info.service_uuids
+                    and (member_uuid := service_info.service_uuids[0][4:8]) in self.member_uuids
+                ):
                     # https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/uuids/member_uuids.yaml
                     device.manufacturer = self.member_uuids[member_uuid]
             device.connectable = service_info.connectable
