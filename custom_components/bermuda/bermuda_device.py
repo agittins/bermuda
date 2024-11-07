@@ -54,6 +54,7 @@ class BermudaDevice(dict):
         self.local_name: str | None = None
         self.prefname: str | None = None  # "preferred" name - ideally local_name
         self.address: str = address
+        self.ref_power: float = 0  # If non-zero, use in place of global ref_power.
         self.options = options
         self.unique_id: str | None = None  # mac address formatted.
         self.address_type = BDADDR_TYPE_UNKNOWN
@@ -78,6 +79,9 @@ class BermudaDevice(dict):
         self.create_sensor: bool = False  # Create/update a sensor for this device
         self.create_sensor_done: bool = False  # Sensor should now exist
         self.create_tracker_done: bool = False  # device_tracker should now exist
+        self.create_number_done: bool = False
+        self.create_button_done: bool = False
+        self.create_all_done: bool = False  # All platform entities are done and ready.
         self.last_seen: float = 0  # stamp from most recent scanner spotting. MONOTONIC_TIME
         self.scanners: dict[str, BermudaDeviceScanner] = {}
 
@@ -124,6 +128,54 @@ class BermudaDevice(dict):
             else:
                 self.address_type = BDADDR_TYPE_OTHER
 
+    def set_ref_power(self, value: float):
+        """
+        Set a new reference power for this device and immediately apply
+        an interim distance calculation.
+        """
+        self.ref_power = value
+        nearest_distance = 9999  # running tally to find closest scanner
+        nearest_scanner = None
+        for scanner in self.scanners.values():
+            rawdist = scanner.set_ref_power(value)
+            if rawdist < nearest_distance:
+                nearest_distance = rawdist
+                nearest_scanner = scanner
+        if nearest_scanner is not None:
+            self.apply_scanner_selection(nearest_scanner)
+
+    def apply_scanner_selection(self, closest_scanner: BermudaDeviceScanner | None):
+        """
+        Given a DeviceScanner entry, apply the distance and area attributes
+        from it to this device.
+
+        Used to apply a "winning" scanner's data to the device for setting closest Area.
+        """
+        if closest_scanner is not None:
+            # We found a winner
+            old_area = self.area_name
+            self.area_id = closest_scanner.area_id
+            self.area_name = closest_scanner.area_name
+            self.area_distance = closest_scanner.rssi_distance
+            self.area_rssi = closest_scanner.rssi
+            self.area_scanner = closest_scanner.name
+            if (old_area != self.area_name) and self.create_sensor:
+                # We check against area_name so we can know if the
+                # device's area changed names.
+                _LOGGER.debug(
+                    "Device %s was in '%s', now in '%s'",
+                    self.name,
+                    old_area,
+                    self.area_name,
+                )
+        else:
+            # Not close to any scanners!
+            self.area_id = None
+            self.area_name = None
+            self.area_distance = None
+            self.area_rssi = None
+            self.area_scanner = None
+
     def calculate_data(self):
         """
         Call after doing update_scanner() calls so that distances
@@ -166,19 +218,21 @@ class BermudaDevice(dict):
         if format_mac(scanner_device.address) in self.scanners:
             # Device already exists, update it
             self.scanners[format_mac(scanner_device.address)].update_advertisement(
-                self.address,
                 discoveryinfo,  # the entire BluetoothScannerDevice struct
-                scanner_device.area_id or "area_not_defined",
             )
+            device_scanner = self.scanners[format_mac(scanner_device.address)]
         else:
+            # Create it
             self.scanners[format_mac(scanner_device.address)] = BermudaDeviceScanner(
-                self.address,
+                self,
                 discoveryinfo,  # the entire BluetoothScannerDevice struct
-                scanner_device.area_id or "area_not_defined",
                 self.options,
                 scanner_device,
             )
-        device_scanner = self.scanners[format_mac(scanner_device.address)]
+            device_scanner = self.scanners[format_mac(scanner_device.address)]
+            # On first creation, we also want to copy our ref_power to it (but not afterwards,
+            # since a metadevice might take over that role later)
+            device_scanner.ref_power = self.ref_power
         # Let's see if we should update our last_seen based on this...
         if device_scanner.stamp is not None and self.last_seen < device_scanner.stamp:
             self.last_seen = device_scanner.stamp
