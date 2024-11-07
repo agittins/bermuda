@@ -1196,8 +1196,18 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             self.redaction_list_update()
         if isinstance(data, str):
             # the end of the recursive wormhole, do the actual work:
-            for find, fix in self.redactions.items():
-                data = re.sub(find, fix, data, flags=re.IGNORECASE)
+            if ":" in data:
+                if data not in self.redactions:
+                    if data.upper() not in self.redactions:
+                        for find, fix in list(self.redactions.items()):
+                            if find in data:
+                                self.redactions[data] = re.sub(find, fix, data, flags=re.IGNORECASE)
+                                data = self.redactions[data]
+                                break
+                    else:
+                        data = self.redactions[data.upper()]
+                else:
+                    data = self.redactions[data]
             # redactions done, now replace any remaining MAC addresses
             # We are only looking for xx:xx:xx... format.
             return self._redact_generic_re.sub(self._redact_generic_sub, data)
