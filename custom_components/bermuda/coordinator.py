@@ -5,9 +5,11 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import voluptuous as vol
+import yaml
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import (
     MONOTONIC_TIME,
@@ -135,7 +137,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         self.stamp_last_update: float = 0  # Last time we ran an update, from MONOTONIC_TIME()
         self.stamp_last_prune: float = 0  # When we last pruned device list
+        file_path = Path(__file__).parent / "manufacturer_identification" / "member_uuids.yaml"
 
+        with file_path.open("r") as f:
+            member_uuids_yaml = yaml.safe_load(f)["uuids"]
+        self.member_uuids = {hex(member["uuid"])[2:]: member["name"] for member in member_uuids_yaml}
         super().__init__(
             hass,
             _LOGGER,
@@ -582,23 +588,18 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 device.local_name = clean_charbuf(service_info.advertisement.local_name)
             device.manufacturer = device.manufacturer or service_info.manufacturer
             if device.manufacturer is None:
-                if (
-                    service_info.service_uuids
-                    and "feed" in service_info.service_uuids[0]
-                    or "feec" in service_info.service_uuids[0]
-                ):
+                if service_info.service_uuids(member_uuid := service_info[4:8]) in self.member_uuids:
                     # https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/uuids/member_uuids.yaml
-                    device.manufacturer = "Tile"
+                    device.manufacturer = self.member_uuids[member_uuid]
             device.connectable = service_info.connectable
 
             # Try to make a nice name for prefname.
             if device.prefname is None or device.prefname.startswith(DOMAIN + "_"):
-                device.prefname = (
-                    device.name
-                    or device.local_name
-                    or f"{DOMAIN}_{slugify(device.address)}{f" ({slugify(device.manufacturer)}) "
-                if device.manufacturer else ""}"
-                )
+                if device.manufacturer:
+                    default_prefix = f"{slugify(device.manufacturer)}"
+                else:
+                    default_prefix = DOMAIN
+                device.prefname = device.name or device.local_name or f"{default_prefix}_{slugify(device.address)}"
 
             # Work through the scanner entries...
             matched_scanners = bluetooth.async_scanner_devices_by_address(self.hass, service_info.address, False)

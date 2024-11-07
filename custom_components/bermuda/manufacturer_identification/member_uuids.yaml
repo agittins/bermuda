@@ -1,0 +1,1345 @@
+# https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/uuids/member_uuids.yaml
+#  This document, regardless of its title or content, is not a Bluetooth
+# Specification as defined in the Bluetooth Patent/Copyright License Agreement
+# (“PCLA”) and Bluetooth Trademark License Agreement. Use of this document by
+# members of Bluetooth SIG is governed by the membership and other related
+# agreements between Bluetooth SIG Inc. (“Bluetooth SIG”) and its members,
+# including the PCLA and other agreements posted on Bluetooth SIG’s website
+# located at www.bluetooth.com.
+#
+# THIS DOCUMENT IS PROVIDED “AS IS” AND BLUETOOTH SIG, ITS MEMBERS, AND THEIR
+# AFFILIATES MAKE NO REPRESENTATIONS OR WARRANTIES AND DISCLAIM ALL WARRANTIES,
+# EXPRESS OR IMPLIED, INCLUDING ANY WARRANTY OF MERCHANTABILITY, TITLE,
+# NON-INFRINGEMENT, FITNESS FOR ANY PARTICULAR PURPOSE, THAT THE CONTENT OF THIS
+# DOCUMENT IS FREE OF ERRORS.
+#
+# TO THE EXTENT NOT PROHIBITED BY LAW, BLUETOOTH SIG, ITS MEMBERS, AND THEIR
+# AFFILIATES DISCLAIM ALL LIABILITY ARISING OUT OF OR RELATING TO USE OF THIS
+# DOCUMENT AND ANY INFORMATION CONTAINED IN THIS DOCUMENT, INCLUDING LOST REVENUE,
+# PROFITS, DATA OR PROGRAMS, OR BUSINESS INTERRUPTION, OR FOR SPECIAL, INDIRECT,
+# CONSEQUENTIAL, INCIDENTAL OR PUNITIVE DAMAGES, HOWEVER CAUSED AND REGARDLESS OF
+# THE THEORY OF LIABILITY, AND EVEN IF BLUETOOTH SIG, ITS MEMBERS, OR THEIR
+# AFFILIATES HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+#
+# This document is proprietary to Bluetooth SIG. This document may contain or
+# cover subject matter that is intellectual property of Bluetooth SIG and its
+# members. The furnishing of this document does not grant any license to any
+# intellectual property of Bluetooth SIG or its members.
+#
+# This document is subject to change without notice.
+#
+# Copyright © 2020–2024 by Bluetooth SIG, Inc. The Bluetooth word mark and logos
+# are owned by Bluetooth SIG, Inc. Other third-party brands and names are the
+# property of their respective owners.
+
+uuids:
+ - uuid: 0xFEFF
+   name: GN Netcom
+ - uuid: 0xFEFE
+   name: GN Hearing A/S
+ - uuid: 0xFEFD
+   name: "Gimbal, Inc."
+ - uuid: 0xFEFC
+   name: "Gimbal, Inc."
+ - uuid: 0xFEFB
+   name: Telit Wireless Solutions (Formerly Stollmann E+V GmbH)
+ - uuid: 0xFEFA
+   name: "PayPal, Inc."
+ - uuid: 0xFEF9
+   name: "PayPal, Inc."
+ - uuid: 0xFEF8
+   name: Aplix Corporation
+ - uuid: 0xFEF7
+   name: Aplix Corporation
+ - uuid: 0xFEF6
+   name: "Wicentric, Inc."
+ - uuid: 0xFEF5
+   name: Dialog Semiconductor GmbH
+ - uuid: 0xFEF4
+   name: Google LLC
+ - uuid: 0xFEF3
+   name: Google LLC
+ - uuid: 0xFEF2
+   name: CSR
+ - uuid: 0xFEF1
+   name: CSR
+ - uuid: 0xFEF0
+   name: Intel
+ - uuid: 0xFEEF
+   name: Polar Electro Oy
+ - uuid: 0xFEEE
+   name: Polar Electro Oy
+ - uuid: 0xFEED
+   name: "Tile, Inc."
+ - uuid: 0xFEEC
+   name: "Tile, Inc."
+ - uuid: 0xFEEB
+   name: "Swirl Networks, Inc."
+ - uuid: 0xFEEA
+   name: "Swirl Networks, Inc."
+ - uuid: 0xFEE9
+   name: Quintic Corp.
+ - uuid: 0xFEE8
+   name: Quintic Corp.
+ - uuid: 0xFEE7
+   name: Tencent Holdings Limited.
+ - uuid: 0xFEE6
+   name: "Silvair, Inc."
+ - uuid: 0xFEE5
+   name: Nordic Semiconductor ASA
+ - uuid: 0xFEE4
+   name: Nordic Semiconductor ASA
+ - uuid: 0xFEE3
+   name: "Anki, Inc."
+ - uuid: 0xFEE2
+   name: "Anki, Inc."
+ - uuid: 0xFEE1
+   name: "Anhui Huami Information Technology Co., Ltd."
+ - uuid: 0xFEE0
+   name: "Anhui Huami Information Technology Co., Ltd."
+ - uuid: 0xFEDF
+   name: Design SHIFT
+ - uuid: 0xFEDE
+   name: "Coin, Inc."
+ - uuid: 0xFEDD
+   name: Jawbone
+ - uuid: 0xFEDC
+   name: Jawbone
+ - uuid: 0xFEDB
+   name: "Perka, Inc."
+ - uuid: 0xFEDA
+   name: ISSC Technologies Corp.
+ - uuid: 0xFED9
+   name: Pebble Technology Corporation
+ - uuid: 0xFED8
+   name: Google LLC
+ - uuid: 0xFED7
+   name: Broadcom
+ - uuid: 0xFED6
+   name: Broadcom
+ - uuid: 0xFED5
+   name: Plantronics Inc.
+ - uuid: 0xFED4
+   name: "Apple, Inc."
+ - uuid: 0xFED3
+   name: "Apple, Inc."
+ - uuid: 0xFED2
+   name: "Apple, Inc."
+ - uuid: 0xFED1
+   name: "Apple, Inc."
+ - uuid: 0xFED0
+   name: "Apple, Inc."
+ - uuid: 0xFECF
+   name: "Apple, Inc."
+ - uuid: 0xFECE
+   name: "Apple, Inc."
+ - uuid: 0xFECD
+   name: "Apple, Inc."
+ - uuid: 0xFECC
+   name: "Apple, Inc."
+ - uuid: 0xFECB
+   name: "Apple, Inc."
+ - uuid: 0xFECA
+   name: "Apple, Inc."
+ - uuid: 0xFEC9
+   name: "Apple, Inc."
+ - uuid: 0xFEC8
+   name: "Apple, Inc."
+ - uuid: 0xFEC7
+   name: "Apple, Inc."
+ - uuid: 0xFEC6
+   name: "Kocomojo, LLC"
+ - uuid: 0xFEC5
+   name: Realtek Semiconductor Corp.
+ - uuid: 0xFEC4
+   name: PLUS Location Systems
+ - uuid: 0xFEC3
+   name: "360fly, Inc."
+ - uuid: 0xFEC2
+   name: "Blue Spark Technologies, Inc."
+ - uuid: 0xFEC1
+   name: KDDI Corporation
+ - uuid: 0xFEC0
+   name: KDDI Corporation
+ - uuid: 0xFEBF
+   name: "Nod, Inc."
+ - uuid: 0xFEBE
+   name: Bose Corporation
+ - uuid: 0xFEBD
+   name: "Clover Network, Inc"
+ - uuid: 0xFEBC
+   name: Dexcom Inc
+ - uuid: 0xFEBB
+   name: adafruit industries
+ - uuid: 0xFEBA
+   name: Tencent Holdings Limited
+ - uuid: 0xFEB9
+   name: LG Electronics
+ - uuid: 0xFEB8
+   name: "Meta Platforms, Inc."
+ - uuid: 0xFEB7
+   name: "Meta Platforms, Inc."
+ - uuid: 0xFEB6
+   name: "Vencer Co., Ltd"
+ - uuid: 0xFEB5
+   name: WiSilica Inc.
+ - uuid: 0xFEB4
+   name: WiSilica Inc.
+ - uuid: 0xFEB3
+   name: Taobao
+ - uuid: 0xFEB2
+   name: Microsoft Corporation
+ - uuid: 0xFEB1
+   name: Electronics Tomorrow Limited
+ - uuid: 0xFEB0
+   name: Nest Labs Inc
+ - uuid: 0xFEAF
+   name: Nest Labs Inc
+ - uuid: 0xFEAE
+   name: Nokia
+ - uuid: 0xFEAD
+   name: Nokia
+ - uuid: 0xFEAC
+   name: Nokia
+ - uuid: 0xFEAB
+   name: Nokia
+ - uuid: 0xFEAA
+   name: Google LLC
+ - uuid: 0xFEA9
+   name: Savant Systems LLC
+ - uuid: 0xFEA8
+   name: Savant Systems LLC
+ - uuid: 0xFEA7
+   name: UTC Fire and Security
+ - uuid: 0xFEA6
+   name: "GoPro, Inc."
+ - uuid: 0xFEA5
+   name: "GoPro, Inc."
+ - uuid: 0xFEA4
+   name: Paxton Access Ltd
+ - uuid: 0xFEA3
+   name: ITT Industries
+ - uuid: 0xFEA2
+   name: "Intrepid Control Systems, Inc."
+ - uuid: 0xFEA1
+   name: "Intrepid Control Systems, Inc."
+ - uuid: 0xFEA0
+   name: Google LLC
+ - uuid: 0xFE9F
+   name: Google LLC
+ - uuid: 0xFE9E
+   name: Dialog Semiconductor B.V.
+ - uuid: 0xFE9D
+   name: Mobiquity Networks Inc
+ - uuid: 0xFE9C
+   name: "GSI Laboratories, Inc."
+ - uuid: 0xFE9B
+   name: "Samsara Networks, Inc"
+ - uuid: 0xFE9A
+   name: Estimote
+ - uuid: 0xFE99
+   name: Currant Inc
+ - uuid: 0xFE98
+   name: Currant Inc
+ - uuid: 0xFE97
+   name: Tesla Motors Inc.
+ - uuid: 0xFE96
+   name: Tesla Motors Inc.
+ - uuid: 0xFE95
+   name: Xiaomi Inc.
+ - uuid: 0xFE94
+   name: OttoQ In
+ - uuid: 0xFE93
+   name: OttoQ In
+ - uuid: 0xFE92
+   name: "Jarden Safety & Security"
+ - uuid: 0xFE91
+   name: "Shanghai Imilab Technology Co.,Ltd"
+ - uuid: 0xFE90
+   name: JUMA
+ - uuid: 0xFE8F
+   name: CSR
+ - uuid: 0xFE8E
+   name: ARM Ltd
+ - uuid: 0xFE8D
+   name: Interaxon Inc.
+ - uuid: 0xFE8C
+   name: TRON Forum
+ - uuid: 0xFE8B
+   name: "Apple, Inc."
+ - uuid: 0xFE8A
+   name: "Apple, Inc."
+ - uuid: 0xFE89
+   name: "B&O Play A/S"
+ - uuid: 0xFE88
+   name: SALTO SYSTEMS S.L.
+ - uuid: 0xFE87
+   name: "Qingdao Yeelink Information Technology Co., Ltd. ( 青岛亿联客信息技术有限公司 )"
+ - uuid: 0xFE86
+   name: "HUAWEI Technologies Co., Ltd"
+ - uuid: 0xFE85
+   name: RF Digital Corp
+ - uuid: 0xFE84
+   name: RF Digital Corp
+ - uuid: 0xFE83
+   name: Blue Bite
+ - uuid: 0xFE82
+   name: Medtronic Inc.
+ - uuid: 0xFE81
+   name: Medtronic Inc.
+ - uuid: 0xFE80
+   name: Doppler Lab
+ - uuid: 0xFE7F
+   name: Doppler Lab
+ - uuid: 0xFE7E
+   name: Awear Solutions Ltd
+ - uuid: 0xFE7D
+   name: Aterica Health Inc.
+ - uuid: 0xFE7C
+   name: Telit Wireless Solutions (Formerly Stollmann E+V GmbH)
+ - uuid: 0xFE7B
+   name: "Orion Labs, Inc."
+ - uuid: 0xFE7A
+   name: Bragi GmbH
+ - uuid: 0xFE79
+   name: Zebra Technologies
+ - uuid: 0xFE78
+   name: Hewlett-Packard Company
+ - uuid: 0xFE77
+   name: Hewlett-Packard Company
+ - uuid: 0xFE76
+   name: TangoMe
+ - uuid: 0xFE75
+   name: TangoMe
+ - uuid: 0xFE74
+   name: unwire
+ - uuid: 0xFE73
+   name: "Abbott (formerly St. Jude Medical, Inc.)"
+ - uuid: 0xFE72
+   name: "Abbott (formerly St. Jude Medical, Inc.)"
+ - uuid: 0xFE71
+   name: Plume Design Inc
+ - uuid: 0xFE70
+   name: "Beijing Jingdong Century Trading Co., Ltd."
+ - uuid: 0xFE6F
+   name: LINE Corporation
+ - uuid: 0xFE6E
+   name: The University of Tokyo
+ - uuid: 0xFE6D
+   name: The University of Tokyo
+ - uuid: 0xFE6C
+   name: "TASER International, Inc."
+ - uuid: 0xFE6B
+   name: "TASER International, Inc."
+ - uuid: 0xFE6A
+   name: Kontakt Micro-Location Sp. z o.o.
+ - uuid: 0xFE69
+   name: Capsle Technologies Inc.
+ - uuid: 0xFE68
+   name: Capsle Technologies Inc.
+ - uuid: 0xFE67
+   name: Lab Sensor Solutions
+ - uuid: 0xFE66
+   name: Intel Corporation
+ - uuid: 0xFE65
+   name: CHIPOLO d.o.o.
+ - uuid: 0xFE64
+   name: Siemens AG
+ - uuid: 0xFE63
+   name: "Connected Yard, Inc."
+ - uuid: 0xFE62
+   name: Indagem Tech LLC
+ - uuid: 0xFE61
+   name: Logitech International SA
+ - uuid: 0xFE60
+   name: "Lierda Science & Technology Group Co., Ltd."
+ - uuid: 0xFE5F
+   name: "Eyefi, Inc."
+ - uuid: 0xFE5E
+   name: Plastc Corporation
+ - uuid: 0xFE5D
+   name: Grundfos A/S
+ - uuid: 0xFE5C
+   name: million hunters GmbH
+ - uuid: 0xFE5B
+   name: GT-tronics HK Ltd
+ - uuid: 0xFE5A
+   name: Cronologics Corporation
+ - uuid: 0xFE59
+   name: Nordic Semiconductor ASA
+ - uuid: 0xFE58
+   name: Nordic Semiconductor ASA
+ - uuid: 0xFE57
+   name: Dotted Labs
+ - uuid: 0xFE56
+   name: Google LLC
+ - uuid: 0xFE55
+   name: Google LLC
+ - uuid: 0xFE54
+   name: "Motiv, Inc."
+ - uuid: 0xFE53
+   name: 3M
+ - uuid: 0xFE52
+   name: SetPoint Medical
+ - uuid: 0xFE51
+   name: SRAM
+ - uuid: 0xFE50
+   name: Google LLC
+ - uuid: 0xFE4F
+   name: "Molekule, Inc."
+ - uuid: 0xFE4E
+   name: NTT docomo
+ - uuid: 0xFE4D
+   name: Casambi Technologies Oy
+ - uuid: 0xFE4C
+   name: Volkswagen AG
+ - uuid: 0xFE4B
+   name: Signify Netherlands B.V. (formerly Philips Lighting B.V.)
+ - uuid: 0xFE4A
+   name: "OMRON HEALTHCARE Co., Ltd."
+ - uuid: 0xFE49
+   name: SenionLab AB
+ - uuid: 0xFE48
+   name: General Motors
+ - uuid: 0xFE47
+   name: General Motors
+ - uuid: 0xFE46
+   name: "B&O Play A/S"
+ - uuid: 0xFE45
+   name: Snapchat Inc
+ - uuid: 0xFE44
+   name: SK Telecom
+ - uuid: 0xFE43
+   name: "Andreas Stihl AG & Co. KG"
+ - uuid: 0xFE42
+   name: Nets A/S
+ - uuid: 0xFE41
+   name: Inugo Systems Limited
+ - uuid: 0xFE40
+   name: Inugo Systems Limited
+ - uuid: 0xFE3F
+   name: Friday Labs Limited
+ - uuid: 0xFE3E
+   name: BD Medical
+ - uuid: 0xFE3D
+   name: BD Medical
+ - uuid: 0xFE3C
+   name: alibaba
+ - uuid: 0xFE3B
+   name: Dolby Laboratories
+ - uuid: 0xFE3A
+   name: "TTS Tooltechnic Systems AG & Co. KG"
+ - uuid: 0xFE39
+   name: "TTS Tooltechnic Systems AG & Co. KG"
+ - uuid: 0xFE38
+   name: Spaceek LTD
+ - uuid: 0xFE37
+   name: Spaceek LTD
+ - uuid: 0xFE36
+   name: "HUAWEI Technologies Co., Ltd"
+ - uuid: 0xFE35
+   name: "HUAWEI Technologies Co., Ltd"
+ - uuid: 0xFE34
+   name: SmallLoop LLC
+ - uuid: 0xFE33
+   name: CHIPOLO d.o.o.
+ - uuid: 0xFE32
+   name: "Pro-Mark, Inc."
+ - uuid: 0xFE31
+   name: Volkswagen AG
+ - uuid: 0xFE30
+   name: Volkswagen AG
+ - uuid: 0xFE2F
+   name: "CRESCO Wireless, Inc"
+ - uuid: 0xFE2E
+   name: "ERi,Inc."
+ - uuid: 0xFE2D
+   name: "LAMPLIGHT Co., Ltd."
+ - uuid: 0xFE2C
+   name: Google LLC
+ - uuid: 0xFE2B
+   name: ITT Industries
+ - uuid: 0xFE2A
+   name: "DaisyWorks, Inc."
+ - uuid: 0xFE29
+   name: Gibson Innovations
+ - uuid: 0xFE28
+   name: Ayla Networks
+ - uuid: 0xFE27
+   name: Google LLC
+ - uuid: 0xFE26
+   name: Google LLC
+ - uuid: 0xFE25
+   name: "Apple, Inc."
+ - uuid: 0xFE24
+   name: August Home Inc
+ - uuid: 0xFE23
+   name: Zoll Medical Corporation
+ - uuid: 0xFE22
+   name: Zoll Medical Corporation
+ - uuid: 0xFE21
+   name: Bose Corporation
+ - uuid: 0xFE20
+   name: Emerson
+ - uuid: 0xFE1F
+   name: "Garmin International, Inc."
+ - uuid: 0xFE1E
+   name: "LAMPLIGHT Co., Ltd."
+ - uuid: 0xFE1D
+   name: Illuminati Instrument Corporation
+ - uuid: 0xFE1C
+   name: "NetMedia, Inc."
+ - uuid: 0xFE1B
+   name: Tyto Life LLC
+ - uuid: 0xFE1A
+   name: Tyto Life LLC
+ - uuid: 0xFE19
+   name: Google LLC
+ - uuid: 0xFE18
+   name: "Runtime, Inc."
+ - uuid: 0xFE17
+   name: Telit Wireless Solutions GmbH
+ - uuid: 0xFE16
+   name: "Footmarks, Inc."
+ - uuid: 0xFE15
+   name: "Amazon.com Services, Inc.."
+ - uuid: 0xFE14
+   name: Flextronics International USA Inc.
+ - uuid: 0xFE13
+   name: Apple Inc.
+ - uuid: 0xFE12
+   name: M-Way Solutions GmbH
+ - uuid: 0xFE11
+   name: GMC-I Messtechnik GmbH
+ - uuid: 0xFE10
+   name: "LAPIS Technology Co., Ltd."
+ - uuid: 0xFE0F
+   name: Signify Netherlands B.V. (formerly Philips Lighting B.V.)
+ - uuid: 0xFE0E
+   name: Setec Pty Ltd
+ - uuid: 0xFE0D
+   name: "Procter & Gamble"
+ - uuid: 0xFE0C
+   name: "Procter & Gamble"
+ - uuid: 0xFE0B
+   name: ruwido austria gmbh
+ - uuid: 0xFE0A
+   name: ruwido austria gmbh
+ - uuid: 0xFE09
+   name: "Pillsy, Inc."
+ - uuid: 0xFE08
+   name: Microsoft
+ - uuid: 0xFE07
+   name: "Sonos, Inc."
+ - uuid: 0xFE06
+   name: "Qualcomm Technologies, Inc."
+ - uuid: 0xFE05
+   name: CORE Transport Technologies NZ Limited
+ - uuid: 0xFE04
+   name: "Motorola Solutions, Inc."
+ - uuid: 0xFE03
+   name: "Amazon.com Services, Inc."
+ - uuid: 0xFE02
+   name: Robert Bosch GmbH
+ - uuid: 0xFE01
+   name: Duracell U.S. Operations Inc.
+ - uuid: 0xFE00
+   name: "Amazon.com Services, Inc."
+ - uuid: 0xFDFF
+   name: OSRAM GmbH
+ - uuid: 0xFDFE
+   name: ADHERIUM(NZ) LIMITED
+ - uuid: 0xFDFD
+   name: RecursiveSoft Inc.
+ - uuid: 0xFDFC
+   name: Optrel AG
+ - uuid: 0xFDFB
+   name: Tandem Diabetes Care
+ - uuid: 0xFDFA
+   name: Tandem Diabetes Care
+ - uuid: 0xFDF9
+   name: INIA
+ - uuid: 0xFDF8
+   name: Onvocal
+ - uuid: 0xFDF7
+   name: HP Inc.
+ - uuid: 0xFDF6
+   name: AIAIAI ApS
+ - uuid: 0xFDF5
+   name: Milwaukee Electric Tools
+ - uuid: 0xFDF4
+   name: "O. E. M. Controls, Inc."
+ - uuid: 0xFDF3
+   name: Amersports
+ - uuid: 0xFDF2
+   name: AMICCOM Electronics Corporation
+ - uuid: 0xFDF1
+   name: "LAMPLIGHT Co.,Ltd"
+ - uuid: 0xFDF0
+   name: Google LLC
+ - uuid: 0xFDEF
+   name: "ART AND PROGRAM, INC."
+ - uuid: 0xFDEE
+   name: "Huawei Technologies Co., Ltd."
+ - uuid: 0xFDED
+   name: Pole Star
+ - uuid: 0xFDEC
+   name: Mannkind Corporation
+ - uuid: 0xFDEB
+   name: Syntronix Corporation
+ - uuid: 0xFDEA
+   name: "SeeScan, Inc"
+ - uuid: 0xFDE9
+   name: Spacesaver Corporation
+ - uuid: 0xFDE8
+   name: Robert Bosch GmbH
+ - uuid: 0xFDE7
+   name: "SECOM Co., LTD"
+ - uuid: 0xFDE6
+   name: Intelletto Technologies Inc
+ - uuid: 0xFDE5
+   name: SMK Corporation
+ - uuid: 0xFDE4
+   name: "JUUL Labs, Inc."
+ - uuid: 0xFDE3
+   name: Abbott Diabetes Care
+ - uuid: 0xFDE2
+   name: Google LLC
+ - uuid: 0xFDE1
+   name: Fortin Electronic Systems
+ - uuid: 0xFDE0
+   name: John Deere
+ - uuid: 0xFDDF
+   name: Harman International
+ - uuid: 0xFDDE
+   name: Noodle Technology Inc.
+ - uuid: 0xFDDD
+   name: Arch Systems Inc
+ - uuid: 0xFDDC
+   name: 4iiii Innovations Inc.
+ - uuid: 0xFDDB
+   name: "Samsung Electronics Co., Ltd."
+ - uuid: 0xFDDA
+   name: MHCS
+ - uuid: 0xFDD9
+   name: "Jiangsu Teranovo Tech Co., Ltd."
+ - uuid: 0xFDD8
+   name: "Jiangsu Teranovo Tech Co., Ltd."
+ - uuid: 0xFDD7
+   name: Emerson
+ - uuid: 0xFDD6
+   name: Ministry of Supply
+ - uuid: 0xFDD5
+   name: Brompton Bicycle Ltd
+ - uuid: 0xFDD4
+   name: LX Solutions Pty Limited
+ - uuid: 0xFDD3
+   name: FUBA Automotive Electronics GmbH
+ - uuid: 0xFDD2
+   name: Bose Corporation
+ - uuid: 0xFDD1
+   name: "Huawei Technologies Co., Ltd"
+ - uuid: 0xFDD0
+   name: "Huawei Technologies Co., Ltd"
+ - uuid: 0xFDCF
+   name: "Nalu Medical, Inc"
+ - uuid: 0xFDCE
+   name: "SENNHEISER electronic GmbH & Co. KG"
+ - uuid: 0xFDCD
+   name: "Qingping Technology (Beijing) Co., Ltd."
+ - uuid: 0xFDCC
+   name: Shoof Technologies
+ - uuid: 0xFDCB
+   name: Meggitt SA
+ - uuid: 0xFDCA
+   name: Fortin Electronic Systems
+ - uuid: 0xFDC9
+   name: Busch-Jaeger Elektro GmbH
+ - uuid: 0xFDC8
+   name: Hach – Danaher
+ - uuid: 0xFDC7
+   name: Eli Lilly and Company
+ - uuid: 0xFDC6
+   name: Eli Lilly and Company
+ - uuid: 0xFDC5
+   name: Automatic Labs
+ - uuid: 0xFDC4
+   name: Simavita (Aust) Pty Ltd
+ - uuid: 0xFDC3
+   name: "Baidu Online Network Technology (Beijing) Co., Ltd"
+ - uuid: 0xFDC2
+   name: "Baidu Online Network Technology (Beijing) Co., Ltd"
+ - uuid: 0xFDC1
+   name: Hunter Douglas
+ - uuid: 0xFDC0
+   name: Hunter Douglas
+ - uuid: 0xFDBF
+   name: California Things Inc.
+ - uuid: 0xFDBE
+   name: California Things Inc.
+ - uuid: 0xFDBD
+   name: "Clover Network, Inc."
+ - uuid: 0xFDBC
+   name: Emerson
+ - uuid: 0xFDBB
+   name: Profoto
+ - uuid: 0xFDBA
+   name: Comcast Cable Corporation
+ - uuid: 0xFDB9
+   name: Comcast Cable Corporation
+ - uuid: 0xFDB8
+   name: LivaNova USA Inc.
+ - uuid: 0xFDB7
+   name: LivaNova USA Inc.
+ - uuid: 0xFDB6
+   name: GWA Hygiene GmbH
+ - uuid: 0xFDB5
+   name: ECSG
+ - uuid: 0xFDB4
+   name: HP Inc
+ - uuid: 0xFDB3
+   name: Audiodo AB
+ - uuid: 0xFDB2
+   name: Portable Multimedia Ltd
+ - uuid: 0xFDB1
+   name: Oura Health Ltd
+ - uuid: 0xFDB0
+   name: Oura Health Ltd
+ - uuid: 0xFDAF
+   name: Wiliot LTD
+ - uuid: 0xFDAE
+   name: "Houwa System Design, k.k."
+ - uuid: 0xFDAD
+   name: "Houwa System Design, k.k."
+ - uuid: 0xFDAC
+   name: Tentacle Sync GmbH
+ - uuid: 0xFDAB
+   name: Xiaomi Inc.
+ - uuid: 0xFDAA
+   name: Xiaomi Inc.
+ - uuid: 0xFDA9
+   name: "Rhombus Systems, Inc."
+ - uuid: 0xFDA8
+   name: PSA Peugeot Citroën
+ - uuid: 0xFDA7
+   name: WWZN Information Technology Company Limited
+ - uuid: 0xFDA6
+   name: WWZN Information Technology Company Limited
+ - uuid: 0xFDA5
+   name: "Neurostim OAB, Inc."
+ - uuid: 0xFDA4
+   name: Inseego Corp.
+ - uuid: 0xFDA3
+   name: Inseego Corp.
+ - uuid: 0xFDA2
+   name: "Groove X, Inc"
+ - uuid: 0xFDA1
+   name: "Groove X, Inc"
+ - uuid: 0xFDA0
+   name: Secugen Corporation
+ - uuid: 0xFD9F
+   name: VitalTech Affiliates LLC
+ - uuid: 0xFD9E
+   name: The Coca-Cola Company
+ - uuid: 0xFD9D
+   name: Gastec Corporation
+ - uuid: 0xFD9C
+   name: "Huawei Technologies Co., Ltd."
+ - uuid: 0xFD9B
+   name: "Huawei Technologies Co., Ltd."
+ - uuid: 0xFD9A
+   name: "Huawei Technologies Co., Ltd."
+ - uuid: 0xFD99
+   name: ABB Oy
+ - uuid: 0xFD98
+   name: "Disney Worldwide Services, Inc."
+ - uuid: 0xFD97
+   name: "June Life, Inc."
+ - uuid: 0xFD96
+   name: Google LLC
+ - uuid: 0xFD95
+   name: Rigado
+ - uuid: 0xFD94
+   name: Hewlett Packard Enterprise
+ - uuid: 0xFD93
+   name: Bayerische Motoren Werke AG
+ - uuid: 0xFD92
+   name: "Qualcomm Technologies International, Ltd. (QTIL)"
+ - uuid: 0xFD91
+   name: "Groove X, Inc."
+ - uuid: 0xFD90
+   name: "Guangzhou SuperSound Information Technology Co.,Ltd"
+ - uuid: 0xFD8F
+   name: Matrix ComSec Pvt. Ltd.
+ - uuid: 0xFD8E
+   name: Motorola Solutions
+ - uuid: 0xFD8D
+   name: quip NYC Inc.
+ - uuid: 0xFD8C
+   name: Google LLC
+ - uuid: 0xFD8B
+   name: Jigowatts Inc.
+ - uuid: 0xFD8A
+   name: Signify Netherlands B.V.
+ - uuid: 0xFD89
+   name: Urbanminded LTD
+ - uuid: 0xFD88
+   name: Urbanminded LTD
+ - uuid: 0xFD87
+   name: Google LLC
+ - uuid: 0xFD86
+   name: Abbott
+ - uuid: 0xFD85
+   name: Husqvarna AB
+ - uuid: 0xFD84
+   name: "Tile, Inc."
+ - uuid: 0xFD83
+   name: iNFORM Technology GmbH
+ - uuid: 0xFD82
+   name: Sony Corporation
+ - uuid: 0xFD81
+   name: "CANDY HOUSE, Inc."
+ - uuid: 0xFD80
+   name: "Phindex Technologies, Inc"
+ - uuid: 0xFD7F
+   name: Husqvarna AB
+ - uuid: 0xFD7E
+   name: "Samsung Electronics Co., Ltd."
+ - uuid: 0xFD7D
+   name: Center for Advanced Research Wernher Von Braun
+ - uuid: 0xFD7C
+   name: Toshiba Information Systems(Japan) Corporation
+ - uuid: 0xFD7B
+   name: "WYZE LABS, INC."
+ - uuid: 0xFD7A
+   name: Withings
+ - uuid: 0xFD79
+   name: Withings
+ - uuid: 0xFD78
+   name: Withings
+ - uuid: 0xFD77
+   name: Withings
+ - uuid: 0xFD76
+   name: Insulet Corporation
+ - uuid: 0xFD75
+   name: Insulet Corporation
+ - uuid: 0xFD74
+   name: BRControls Products BV
+ - uuid: 0xFD73
+   name: BRControls Products BV
+ - uuid: 0xFD72
+   name: Logitech International SA
+ - uuid: 0xFD71
+   name: GN Hearing A/S
+ - uuid: 0xFD70
+   name: "GuangDong Oppo Mobile Telecommunications Corp., Ltd"
+ - uuid: 0xFD6F
+   name: "Apple, Inc."
+ - uuid: 0xFD6E
+   name: Polidea sp. z o.o.
+ - uuid: 0xFD6D
+   name: Sigma Elektro GmbH
+ - uuid: 0xFD6C
+   name: "Samsung Electronics Co., Ltd."
+ - uuid: 0xFD6B
+   name: rapitag GmbH
+ - uuid: 0xFD6A
+   name: Emerson
+ - uuid: 0xFD69
+   name: "Samsung Electronics Co., Ltd"
+ - uuid: 0xFD68
+   name: Ubique Innovation AG
+ - uuid: 0xFD67
+   name: Montblanc Simplo GmbH
+ - uuid: 0xFD66
+   name: Zebra Technologies Corporation
+ - uuid: 0xFD65
+   name: Razer Inc.
+ - uuid: 0xFD64
+   name: INRIA
+ - uuid: 0xFD63
+   name: Google LLC
+ - uuid: 0xFD62
+   name: Google LLC
+ - uuid: 0xFD61
+   name: Arendi AG
+ - uuid: 0xFD60
+   name: Sercomm Corporation
+ - uuid: 0xFD5F
+   name: "Meta Platforms Technologies, LLC"
+ - uuid: 0xFD5E
+   name: Tapkey GmbH
+ - uuid: 0xFD5D
+   name: maxon motor ltd.
+ - uuid: 0xFD5C
+   name: React Mobile
+ - uuid: 0xFD5B
+   name: V2SOFT INC.
+ - uuid: 0xFD5A
+   name: "Samsung Electronics Co., Ltd."
+ - uuid: 0xFD59
+   name: "Samsung Electronics Co., Ltd."
+ - uuid: 0xFD58
+   name: Volvo Car Corporation
+ - uuid: 0xFD57
+   name: Volvo Car Corporation
+ - uuid: 0xFD56
+   name: Resmed Ltd
+ - uuid: 0xFD55
+   name: "Braveheart Wireless, Inc."
+ - uuid: 0xFD54
+   name: "Qingdao Haier Technology Co., Ltd."
+ - uuid: 0xFD53
+   name: PCI Private Limited
+ - uuid: 0xFD52
+   name: UTC Fire and Security
+ - uuid: 0xFD51
+   name: UTC Fire and Security
+ - uuid: 0xFD50
+   name: "Hangzhou Tuya Information  Technology Co., Ltd"
+ - uuid: 0xFD4F
+   name: SONITOR TECHNOLOGIES AS
+ - uuid: 0xFD4E
+   name: "70mai Co.,Ltd."
+ - uuid: 0xFD4D
+   name: "70mai Co.,Ltd."
+ - uuid: 0xFD4C
+   name: "Adolf Wuerth GmbH & Co KG"
+ - uuid: 0xFD4B
+   name: "Samsung Electronics Co., Ltd."
+ - uuid: 0xFD4A
+   name: Sigma Elektro GmbH
+ - uuid: 0xFD49
+   name: Panasonic Corporation
+ - uuid: 0xFD48
+   name: Geberit International AG
+ - uuid: 0xFD47
+   name: Liberty Global Inc.
+ - uuid: 0xFD46
+   name: Lemco IKE
+ - uuid: 0xFD45
+   name: "GB Solution co.,Ltd"
+ - uuid: 0xFD44
+   name: Apple Inc.
+ - uuid: 0xFD43
+   name: Apple Inc.
+ - uuid: 0xFD42
+   name: "Globe (Jiangsu) Co.,Ltd"
+ - uuid: 0xFD41
+   name: Amazon Lab126
+ - uuid: 0xFD40
+   name: Beflex Inc.
+ - uuid: 0xFD3F
+   name: "Cognosos, Inc"
+ - uuid: 0xFD3E
+   name: "Pure Watercraft, inc."
+ - uuid: 0xFD3D
+   name: "Woan Technology (Shenzhen) Co., Ltd."
+ - uuid: 0xFD3C
+   name: Redline Communications Inc.
+ - uuid: 0xFD3B
+   name: Verkada Inc.
+ - uuid: 0xFD3A
+   name: Verkada Inc.
+ - uuid: 0xFD39
+   name: PREDIKTAS
+ - uuid: 0xFD38
+   name: Danfoss A/S
+ - uuid: 0xFD37
+   name: TireCheck GmbH
+ - uuid: 0xFD36
+   name: Google LLC
+ - uuid: 0xFD35
+   name: Transsion Holdings Limited
+ - uuid: 0xFD34
+   name: Aerosens LLC.
+ - uuid: 0xFD33
+   name: "DashLogic, Inc."
+ - uuid: 0xFD32
+   name: Gemalto Holding BV
+ - uuid: 0xFD31
+   name: LG Electronics Inc.
+ - uuid: 0xFD30
+   name: Sesam Solutions BV
+ - uuid: 0xFD2F
+   name: Bitstrata Systems Inc.
+ - uuid: 0xFD2E
+   name: Bitstrata Systems Inc.
+ - uuid: 0xFD2D
+   name: Xiaomi Inc.
+ - uuid: 0xFD2C
+   name: The Access Technologies
+ - uuid: 0xFD2B
+   name: The Access Technologies
+ - uuid: 0xFD2A
+   name: Sony Corporation
+ - uuid: 0xFD29
+   name: Asahi Kasei Corporation
+ - uuid: 0xFD28
+   name: Julius Blum GmbH
+ - uuid: 0xFD27
+   name: "Integrated Illumination Systems, Inc."
+ - uuid: 0xFD26
+   name: Novo Nordisk A/S
+ - uuid: 0xFD25
+   name: "GD Midea Air-Conditioning Equipment Co., Ltd."
+ - uuid: 0xFD24
+   name: "GD Midea Air-Conditioning Equipment Co., Ltd."
+ - uuid: 0xFD23
+   name: "DOM Sicherheitstechnik GmbH & Co. KG"
+ - uuid: 0xFD22
+   name: "Huawei Technologies Co., Ltd."
+ - uuid: 0xFD21
+   name: "Huawei Technologies Co., Ltd."
+ - uuid: 0xFD20
+   name: GN Hearing A/S
+ - uuid: 0xFD1F
+   name: 3M
+ - uuid: 0xFD1E
+   name: Plume Design Inc.
+ - uuid: 0xFD1D
+   name: "Samsung Electronics Co., Ltd"
+ - uuid: 0xFD1C
+   name: Brady Worldwide Inc.
+ - uuid: 0xFD1B
+   name: "Helios Sports, Inc."
+ - uuid: 0xFD1A
+   name: CSIRO
+ - uuid: 0xFD19
+   name: "Smith & Nephew Medical Limited"
+ - uuid: 0xFD18
+   name: LEGIC Identsystems AG
+ - uuid: 0xFD17
+   name: LEGIC Identsystems AG
+ - uuid: 0xFD16
+   name: "Sensitech, Inc."
+ - uuid: 0xFD15
+   name: Panasonic Corporation
+ - uuid: 0xFD14
+   name: "BRG Sports, Inc."
+ - uuid: 0xFD13
+   name: "BRG Sports, Inc."
+ - uuid: 0xFD12
+   name: "AEON MOTOR CO.,LTD."
+ - uuid: 0xFD11
+   name: "AEON MOTOR CO.,LTD."
+ - uuid: 0xFD10
+   name: "AEON MOTOR CO.,LTD."
+ - uuid: 0xFD0F
+   name: "AEON MOTOR CO.,LTD."
+ - uuid: 0xFD0E
+   name: "HerdDogg, Inc"
+ - uuid: 0xFD0D
+   name: Blecon Ltd
+ - uuid: 0xFD0C
+   name: OSM HK Limited
+ - uuid: 0xFD0B
+   name: "Luminostics, Inc."
+ - uuid: 0xFD0A
+   name: "Luminostics, Inc."
+ - uuid: 0xFD09
+   name: Cousins and Sears LLC
+ - uuid: 0xFD08
+   name: Bull Group Incorporated Company
+ - uuid: 0xFD07
+   name: Swedlock AB
+ - uuid: 0xFD06
+   name: RACE-AI LLC
+ - uuid: 0xFD05
+   name: "Qualcomm Technologies, Inc."
+ - uuid: 0xFD04
+   name: Shure Inc.
+ - uuid: 0xFD03
+   name: Quuppa Oy
+ - uuid: 0xFD02
+   name: LEGO System A/S
+ - uuid: 0xFD01
+   name: Sanvita Medical Corporation
+ - uuid: 0xFD00
+   name: "FUTEK Advanced Sensor Technology, Inc."
+ - uuid: 0xFCFF
+   name: 701x
+ - uuid: 0xFCFE
+   name: Sonova Consumer Hearing GmbH
+ - uuid: 0xFCFD
+   name: "Barrot Technology Co.,Ltd."
+ - uuid: 0xFCFC
+   name: "Barrot Technology Co.,Ltd."
+ - uuid: 0xFCFB
+   name: "Shenzhen Benwei Media Co., Ltd."
+ - uuid: 0xFCFA
+   name: "Leupold & Stevens, Inc."
+ - uuid: 0xFCF9
+   name: "Leupold & Stevens, Inc."
+ - uuid: 0xFCF8
+   name: "Honor Device Co., Ltd."
+ - uuid: 0xFCF7
+   name: "Honor Device Co., Ltd."
+ - uuid: 0xFCF6
+   name: The Linux Foundation
+ - uuid: 0xFCF5
+   name: "Trident Communication Technology, LLC"
+ - uuid: 0xFCF4
+   name: Allegion
+ - uuid: 0xFCF3
+   name: Armatura LLC
+ - uuid: 0xFCF2
+   name: Bitwards Oy
+ - uuid: 0xFCF1
+   name: Google LLC
+ - uuid: 0xFCF0
+   name: "Security Enhancement Systems, LLC"
+ - uuid: 0xFCEF
+   name: Divesoft s.r.o.
+ - uuid: 0xFCEE
+   name: "Velentium, LLC"
+ - uuid: 0xFCED
+   name: Workaround Gmbh
+ - uuid: 0xFCEC
+   name: Griffwerk GmbH
+ - uuid: 0xFCEB
+   name: Avi-On
+ - uuid: 0xFCEA
+   name: Chess Wise B.V.
+ - uuid: 0xFCE9
+   name: "MindRhythm, Inc."
+ - uuid: 0xFCE8
+   name: ITT Industries
+ - uuid: 0xFCE7
+   name: TKH Security B.V.
+ - uuid: 0xFCE6
+   name: Guard RFID Solutions Inc.
+ - uuid: 0xFCE5
+   name: "Samsara Networks, Inc"
+ - uuid: 0xFCE4
+   name: "Samsara Networks, Inc"
+ - uuid: 0xFCE3
+   name: "Smith & Nephew Medical Limited"
+ - uuid: 0xFCE2
+   name: Baracoda Daily Healthtech
+ - uuid: 0xFCE1
+   name: Sony Group Corporation
+ - uuid: 0xFCE0
+   name: "Akciju sabiedriba \"SAF TEHNIKA\""
+ - uuid: 0xFCDF
+   name: "NIO USA, Inc."
+ - uuid: 0xFCDE
+   name: "ARCTOP, INC."
+ - uuid: 0xFCDD
+   name: Mobilaris AB
+ - uuid: 0xFCDC
+   name: "Amazon.com Services, LLC"
+ - uuid: 0xFCDB
+   name: aconno GmbH
+ - uuid: 0xFCDA
+   name: Draeger
+ - uuid: 0xFCD9
+   name: "Huso, INC"
+ - uuid: 0xFCD8
+   name: Appex Factory S.L.
+ - uuid: 0xFCD7
+   name: PowerPal Pty Ltd
+ - uuid: 0xFCD6
+   name: SWISSINNO SOLUTIONS AG
+ - uuid: 0xFCD5
+   name: "Nortek Security & Control"
+ - uuid: 0xFCD4
+   name: OMRON HEALTHCARE
+ - uuid: 0xFCD3
+   name: "Fisher & Paykel Healthcare"
+ - uuid: 0xFCD2
+   name: Allterco Robotics ltd
+ - uuid: 0xFCD1
+   name: "Shenzhen Benwei Media Co.,Ltd."
+ - uuid: 0xFCD0
+   name: Laerdal Medical AS
+ - uuid: 0xFCCF
+   name: Google LLC
+ - uuid: 0xFCCE
+   name: "Luna Health, Inc."
+ - uuid: 0xFCCD
+   name: Zound Industries International AB
+ - uuid: 0xFCCB
+   name: TOTO LTD.
+ - uuid: 0xFCCA
+   name: Cosmed s.r.l.
+ - uuid: 0xFCC9
+   name: SkyHawke Technologies
+ - uuid: 0xFCC8
+   name: "Allthenticate, Inc."
+ - uuid: 0xFCC7
+   name: PB INC.
+ - uuid: 0xFCC6
+   name: Wiliot LTD.
+ - uuid: 0xFCC5
+   name: "OMRON(DALIAN) CO,.LTD."
+ - uuid: 0xFCC4
+   name: "OMRON(DALIAN) CO,.LTD."
+ - uuid: 0xFCC3
+   name: HP Inc.
+ - uuid: 0xFCC2
+   name: "Qualcomm Technologies, Inc."
+ - uuid: 0xFCC1
+   name: TIMECODE SYSTEMS LIMITED
+ - uuid: 0xFCC0
+   name: Xiaomi Inc.
+ - uuid: 0xFCBF
+   name: ASSA ABLOY Opening Solutions Sweden AB
+ - uuid: 0xFCBE
+   name: "Musen Connect, Inc."
+ - uuid: 0xFCBD
+   name: Toshiba Corporation
+ - uuid: 0xFCBC
+   name: "Drowsy Digital, Inc."
+ - uuid: 0xFCBB
+   name: SharkNinja Operating LLC
+ - uuid: 0xFCBA
+   name: BlueID GmbH
+ - uuid: 0xFCB9
+   name: "Lumi United Technology Co., Ltd"
+ - uuid: 0xFCB8
+   name: "Ribbiot, INC."
+ - uuid: 0xFCB7
+   name: T-Mobile USA
+ - uuid: 0xFCB6
+   name: "OMRON HEALTHCARE Co., Ltd."
+ - uuid: 0xFCB5
+   name: "OMRON HEALTHCARE Co., Ltd."
+ - uuid: 0xFCB4
+   name: "OMRON HEALTHCARE Co., Ltd."
+ - uuid: 0xFCB3
+   name: SWEEN
+ - uuid: 0xFCB2
+   name: Apple Inc.
+ - uuid: 0xFCB1
+   name: Google LLC
+ - uuid: 0xFCB0
+   name: Ford Motor Company
+ - uuid: 0xFCAF
+   name: AltoBeam Inc.
+ - uuid: 0xFCAE
+   name: Imagine Marketing Limited
+ - uuid: 0xFCAD
+   name: "Beijing 99help Safety Technology Co., Ltd"
+ - uuid: 0xFCAC
+   name: IRISS INC.
+ - uuid: 0xFCAB
+   name: IRISS INC.
+ - uuid: 0xFCAA
+   name: "Spintly, Inc."
+ - uuid: 0xFCA9
+   name: Medtronic Inc.
+ - uuid: 0xFCA8
+   name: Medtronic Inc.
+ - uuid: 0xFCA7
+   name: Hubble Network Inc.
+ - uuid: 0xFCA6
+   name: Hubble Network Inc.
+ - uuid: 0xFCA5
+   name: "HAYWARD INDUSTRIES, INC."
+ - uuid: 0xFCA4
+   name: HP Inc.
+ - uuid: 0xFCA3
+   name: Gunnebo Aktiebolag
+ - uuid: 0xFCA2
+   name: "Meizu Technology Co., Ltd."
+ - uuid: 0xFCA1
+   name: PF SCHWEISSTECHNOLOGIE GMBH
+ - uuid: 0xFCA0
+   name: Apple Inc.
+ - uuid: 0xFC9F
+   name: "Delta Development Team, Inc"
+ - uuid: 0xFC9E
+   name: Dell Computer Corporation
+ - uuid: 0xFC9D
+   name: Lenovo (Singapore) Pte Ltd.
+ - uuid: 0xFC9C
+   name: "Binary Power, Inc."
+ - uuid: 0xFC9B
+   name: Merry Electronics (S) Pte Ltd
+ - uuid: 0xFC9A
+   name: Plockat Solutions AB
+ - uuid: 0xFC99
+   name: Badger Meter
+ - uuid: 0xFC98
+   name: Ruuvi Innovations Ltd.
+ - uuid: 0xFC97
+   name: Japan Display Inc.
+ - uuid: 0xFC96
+   name: LEGO System A/S
+ - uuid: 0xFC95
+   name: Hippo Camp Software Ltd.
+ - uuid: 0xFC94
+   name: Apple Inc.
+ - uuid: 0xFC93
+   name: Komatsu Ltd.
+ - uuid: 0xFC92
+   name: "Furuno Electric Co., Ltd."
+ - uuid: 0xFC91
+   name: "Samsung Electronics Co., Ltd."
+ - uuid: 0xFC90
+   name: Wiliot LTD.
+ - uuid: 0xFC8F
+   name: Bose Corporation
+ - uuid: 0xFC8E
+   name: "Blue Iris Labs, Inc."
+ - uuid: 0xFC8D
+   name: Caire Inc.
+ - uuid: 0xFC8C
+   name: SES-Imagotag
+ - uuid: 0xFC8B
+   name: Kaspersky Lab Middle East FZ-LLC
+ - uuid: 0xFC8A
+   name: Intel Corporation
+ - uuid: 0xFC89
+   name: Intel Corporation
+ - uuid: 0xFC88
+   name: CCC del Uruguay
+ - uuid: 0xFC87
+   name: "Samsara Networks, Inc"
+ - uuid: 0xFC86
+   name: "Samsara Networks, Inc"
+ - uuid: 0xFC85
+   name: "Zhejiang Huanfu Technology Co., LTD"
+ - uuid: 0xFC84
+   name: "NINGBO FOTILE KITCHENWARE CO., LTD."
+ - uuid: 0xFC83
+   name: "iHealth Labs, Inc."
+ - uuid: 0xFC82
+   name: "Zwift, Inc."
+ - uuid: 0xFC81
+   name: "Axon Enterprise, Inc."
+ - uuid: 0xFC80
+   name: TELE System Communications Pte. Ltd.
+ - uuid: 0xFC7F
+   name: Southco
+ - uuid: 0xFC7E
+   name: Harman International
+ - uuid: 0xFC7D
+   name: "MML US, Inc"
+ - uuid: 0xFC7C
+   name: "Motorola Mobility, LLC"
+ - uuid: 0xFC7B
+   name: "Testo SE & Co. KGaA"
+ - uuid: 0xFC7A
+   name: Outshiny India Private Limited
+ - uuid: 0xFC79
+   name: LG Electronics Inc.
+ - uuid: 0xFC78
+   name: DHL
+ - uuid: 0xFC77
+   name: SING SUN TECHNOLOGY (INTERNATIONAL) LIMITED
+ - uuid: 0xFC76
+   name: Weber-Stephen Products LLC
+ - uuid: 0xFC75
+   name: Xiaomi Inc.
+ - uuid: 0xFC74
+   name: EMBEINT INC
+ - uuid: 0xFC73
+   name: Google LLC
+ - uuid: 0xFC72
+   name: "iodyne, LLC"
+ - uuid: 0xFC71
+   name: Hive-Zox International SA
+ - uuid: 0xFC70
+   name: "MOTIVE TECHNOLOGIES, INC."
