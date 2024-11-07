@@ -463,3 +463,7 @@ class BermudaDeviceScanner(dict):
                 continue
             out[var] = val
         return out
+
+    def __repr__(self) -> str:
+        """Help debugging by giving it a clear name instead of empty dict."""
+        return self.address
