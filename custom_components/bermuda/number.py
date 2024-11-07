@@ -7,31 +7,30 @@ from typing import TYPE_CHECKING
 from homeassistant.components.number import (
     NumberDeviceClass,
     NumberExtraStoredData,
+    NumberMode,
     RestoreNumber,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import SIGNAL_STRENGTH_DECIBELS_MILLIWATT, EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import DOMAIN, SIGNAL_DEVICE_NEW
+from .const import SIGNAL_DEVICE_NEW
 from .entity import BermudaEntity
 
 if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
-    from homeassistant.helpers.entity_registry import RegistryEntry
 
+    from . import BermudaConfigEntry
     from .coordinator import BermudaDataUpdateCoordinator
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BermudaConfigEntry,
     async_add_devices: AddEntitiesCallback,
 ) -> None:
     """Load Number entities for a config entry."""
-    coordinator: BermudaDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: BermudaDataUpdateCoordinator = entry.runtime_data.coordinator
 
     created_devices = []  # list of devices we've already created entities for
 
@@ -64,7 +63,7 @@ async def async_setup_entry(
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, device_new))
 
     # Now we must tell the co-ord to do initial refresh, so that it will call our callback.
-    await coordinator.async_config_entry_first_refresh()
+    # await coordinator.async_config_entry_first_refresh()
 
 
 class BermudaNumber(BermudaEntity, RestoreNumber):
@@ -75,18 +74,18 @@ class BermudaNumber(BermudaEntity, RestoreNumber):
     _attr_name = "Calibration Ref Power at 1m. 0 for default."
     _attr_translation_key = "ref_power"
     _attr_device_class = NumberDeviceClass.SIGNAL_STRENGTH
-    _attr_unit_of_measurement = SIGNAL_STRENGTH_DECIBELS_MILLIWATT
     _attr_entity_category = EntityCategory.CONFIG
     # _attr_entity_registry_enabled_default = False
     _attr_native_min_value = -127
     _attr_native_max_value = 0
     _attr_native_step = 1
-    _attr_mode = "box"
+    _attr_native_unit_of_measurement = SIGNAL_STRENGTH_DECIBELS_MILLIWATT
+    _attr_mode = NumberMode.BOX
 
     def __init__(
         self,
         coordinator: BermudaDataUpdateCoordinator,
-        entry: RegistryEntry,
+        entry: BermudaConfigEntry,
         address: str,
     ) -> None:
         """Initialise the number entity."""
@@ -97,7 +96,7 @@ class BermudaNumber(BermudaEntity, RestoreNumber):
         """Restore values from HA storage on startup."""
         await super().async_added_to_hass()
         self.restored_data = await self.async_get_last_number_data()
-        if self.restored_data is not None:
+        if self.restored_data is not None and self.restored_data.native_value is not None:
             self.coordinator.devices[self.address].set_ref_power(self.restored_data.native_value)
 
     @property

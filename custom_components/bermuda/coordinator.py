@@ -372,8 +372,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     def _check_all_platforms_created(self, address):
         """Checks if all platforms have finished loading a device's entities."""
         dev = self._get_device(address)
-        if all([dev.create_sensor_done, dev.create_tracker_done, dev.create_number_done, dev.create_button_done]):
-            dev.create_all_done = True
+        if dev is not None:
+            if all([dev.create_sensor_done, dev.create_tracker_done, dev.create_number_done]):
+                dev.create_all_done = True
 
     def sensor_created(self, address):
         """Allows sensor platform to report back that sensors have been set up."""
@@ -402,12 +403,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             dev.create_number_done = True
         self._check_all_platforms_created(address)
 
-    def button_created(self, address):
-        """Receives report from number platform that sensors have been set up."""
-        dev = self._get_device(address)
-        if dev is not None:
-            dev.create_button_done = True
-        self._check_all_platforms_created(address)
+    # def button_created(self, address):
+    #     """Receives report from number platform that sensors have been set up."""
+    #     dev = self._get_device(address)
+    #     if dev is not None:
+    #         dev.create_button_done = True
+    #     self._check_all_platforms_created(address)
 
     def count_active_devices(self) -> int:
         """

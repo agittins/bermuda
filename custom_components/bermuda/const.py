@@ -35,7 +35,7 @@ SWITCH = "switch"
 DEVICE_TRACKER = "device_tracker"
 NUMBER = "number"
 # PLATFORMS = [BINARY_SENSOR, SENSOR, SWITCH]
-PLATFORMS = [SENSOR, DEVICE_TRACKER, NUMBER, BUTTON]
+PLATFORMS = [SENSOR, DEVICE_TRACKER, NUMBER]
 
 # Should probably retreive this from the component, but it's in "DOMAIN" *shrug*
 DOMAIN_PRIVATE_BLE_DEVICE = "private_ble_device"
