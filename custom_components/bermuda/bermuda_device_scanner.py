@@ -65,6 +65,7 @@ class BermudaDeviceScanner(dict):
         # which is a bit silly, I suspect.
         self.name: str = scandata.scanner.name
         self.scanner_device_name = scanner_device.name
+        self.scanner_device = scanner_device  # links to the source device
         self.adapter: str = scandata.scanner.adapter
         self.address = scanner_device.address
         self.source: str = scandata.scanner.source
@@ -72,7 +73,6 @@ class BermudaDeviceScanner(dict):
         self.area_name: str | None = scanner_device.area_name
         self.parent_device = parent_device
         self.parent_device_address = parent_device.address
-        self.scanner_device = scanner_device  # links to the source device
         self.options = options
         self.stamp: float | None = 0
         self.scanner_sends_stamps: bool = False
@@ -102,6 +102,13 @@ class BermudaDeviceScanner(dict):
             "platform_data": [],
         }
 
+        self.cached_remote_scanners = set()
+        self.conf_rssi_offset = self.options.get(CONF_RSSI_OFFSETS, {}).get(self.address, 0)
+        self.conf_ref_power = self.options.get(CONF_REF_POWER)
+        self.conf_attenuation = self.options.get(CONF_ATTENUATION)
+        self.conf_max_velocity = self.options.get(CONF_MAX_VELOCITY)
+        self.conf_smoothing_samples = self.options.get(CONF_SMOOTHING_SAMPLES)
+
         # Just pass the rest on to update...
         self.update_advertisement(scandata)
 
@@ -115,14 +122,19 @@ class BermudaDeviceScanner(dict):
         claims to have data.
         """
         # In case the scanner has changed it's details since startup:
+        # FIXME: This should probably be a separate function that the refresh_scanners
+        # calls if necessary, rather than re-doing it every cycle.
         scanner = scandata.scanner
-        self.name: str = scanner.name
-        self.area_id: str = self.scanner_device.area_id
+        self.name = scanner.name
+        self.area_id = self.scanner_device.area_id
         self.area_name = self.scanner_device.area_name
-        new_stamp: float | None
+        new_stamp: float | None = None
+
+        scanner_address = scandata.scanner.source
+
         # Only remote scanners log timestamps here (local usb adaptors do not),
-        if scanner.source in self.cached_remote_scanners or isinstance(scanner, BaseHaRemoteScanner):
-            self.cached_remote_scanners.add(scanner.source)
+        if scanner_address in self.cached_remote_scanners or isinstance(scanner, BaseHaRemoteScanner):
+            self.cached_remote_scanners.add(scanner_address)
             # Found a remote scanner which has timestamp history...
             self.scanner_sends_stamps = True
             # There's no API for this, so we somewhat sneakily are accessing
@@ -236,15 +248,16 @@ class BermudaDeviceScanner(dict):
         setting change (such as altering a device's ref_power setting).
         """
         # Check if we should use a device-based ref_power
-        if self.ref_power == 0:
-            ref_power = self.options.get(CONF_REF_POWER)
+        if self.ref_power == 0: # No user-supplied per-device value
+            # use global default
+            ref_power = self.conf_ref_power
         else:
             ref_power = self.ref_power
 
         distance = rssi_to_metres(
-            self.rssi + self.options.get(CONF_RSSI_OFFSETS, {}).get(self.address, 0),
+            self.rssi + self.conf_rssi_offset,
             ref_power,
-            self.options.get(CONF_ATTENUATION),
+            self.conf_attenuation
         )
         self.rssi_distance_raw = distance
         if reading_is_new:
@@ -371,11 +384,11 @@ class BermudaDeviceScanner(dict):
                     peak_velocity = delta_d / delta_t
                 # if our initial reading is an approach, we are done here
                 if peak_velocity >= 0:
-                    for old_distance, hist_stamp in zip(self.hist_distance[2:], self.hist_stamp[2:], strict=False):
-                        if hist_stamp is None:
+                    for old_distance, old_stamp in zip(self.hist_distance[2:], self.hist_stamp[2:], strict=False):
+                        if old_stamp is None:
                             continue  # Skip this iteration if hist_stamp[i] is None
 
-                        delta_t = velo_newstamp - hist_stamp
+                        delta_t = velo_newstamp - old_stamp
                         if delta_t <= 0:
                             # Additionally, skip if delta_t is zero or negative
                             # to avoid division by zero
@@ -384,7 +397,7 @@ class BermudaDeviceScanner(dict):
 
                         velocity = delta_d / delta_t
 
-                        if velocity > peak_velocity:
+                        if velocity > peak_velocity:  # noqa: PLR1730 - max() is slower.
                             # but on subsequent comparisons we only care if they're faster retreats
                             peak_velocity = velocity
                 # we've been through the history and have peak velo retreat, or the most recent
@@ -396,7 +409,7 @@ class BermudaDeviceScanner(dict):
 
             self.hist_velocity.insert(0, velocity)
 
-            if velocity > self.max_velocity:
+            if velocity > self.conf_max_velocity:
                 if self.parent_device_address.upper() in self.options.get(CONF_DEVICES, []):
                     _LOGGER.debug(
                         "This sparrow %s flies too fast (%2fm/s), ignoring",
@@ -413,10 +426,8 @@ class BermudaDeviceScanner(dict):
 
             dist_count = len(self.hist_distance_by_interval)
             # trim the log to length
-            if self.smoothing_samples < dist_count:
-                del self.hist_distance_by_interval[self.smoothing_samples :]
-                # Set equal to smoothing samples
-                dist_count = self.smoothing_samples
+            if len(self.hist_distance_by_interval) > self.conf_smoothing_samples:
+                del self.hist_distance_by_interval[self.conf_smoothing_samples :]
 
             # Calculate a moving-window average, that only includes
             # historical values if they're "closer" (ie more reliable).
@@ -430,13 +441,13 @@ class BermudaDeviceScanner(dict):
             dist_total: float = 0
             local_min: float = self.rssi_distance_raw or DISTANCE_INFINITE
             for distance in self.hist_distance_by_interval:
-                if distance <= local_min:
+                if distance is not None and distance <= local_min:
                     local_min = distance
                 dist_total += local_min
 
-            if dist_total > 0:  # Calculate the minimised-windowed-average
-                movavg = dist_total / dist_count
-            else:  # we have only a single measurement.
+            if (_hist_dist_len := len(self.hist_distance_by_interval)) > 0:
+                movavg = dist_total / _hist_dist_len
+            else:
                 movavg = local_min
             # The average is only helpful if it's lower than the actual reading.
             if self.rssi_distance_raw is None or movavg < self.rssi_distance_raw:
