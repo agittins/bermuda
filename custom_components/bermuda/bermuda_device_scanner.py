@@ -191,11 +191,15 @@ class BermudaDeviceScanner(dict):
             # I want to know if it does.
             # AJG 2024-01-11: This does happen. Looks like maybe apple devices?
             # Changing from warning to debug to quiet users' logs.
-            _LOGGER.debug(
-                "Device changed TX-POWER! That was unexpected: %s %sdB",
-                self.parent_device_address,
-                scandata.advertisement.tx_power,
-            )
+            # Also happens with esphome set with long beacon interval tx, as it alternates
+            # between sending some generic advert and the iBeacon advert. ie, it's bogus for that
+            # case.
+            # _LOGGER.debug(
+            #     "Device changed TX-POWER! That was unexpected: %s %sdB",
+            #     self.parent_device_address,
+            #     scandata.advertisement.tx_power,
+            # )
+            pass
         self.tx_power = scandata.advertisement.tx_power
 
         # Track each advertisement element as or if they change.
