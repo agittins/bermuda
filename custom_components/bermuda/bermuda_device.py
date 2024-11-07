@@ -130,8 +130,8 @@ class BermudaDevice(dict):
 
     def set_ref_power(self, value: float):
         """
-        Set a new reference power for this device and apply an interim
-        distance calculation.
+        Set a new reference power for this device and immediately apply
+        an interim distance calculation.
         """
         self.ref_power = value
         nearest_distance = 9999  # running tally to find closest scanner

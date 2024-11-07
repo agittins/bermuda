@@ -64,8 +64,8 @@ class BermudaDeviceScanner(dict):
         self.adapter: str = scandata.scanner.adapter
         self.address = scanner_device.address
         self.source: str = scandata.scanner.source
-        self.area_id: str = scanner_device.area_id
-        self.area_name: str = scanner_device.area_name
+        self.area_id: str | None = scanner_device.area_id
+        self.area_name: str | None = scanner_device.area_name
         self.parent_device = parent_device
         self.parent_device_address = parent_device.address
         self.scanner_device = scanner_device  # links to the source device
@@ -105,10 +105,10 @@ class BermudaDeviceScanner(dict):
         claims to have data.
         """
         # In case the scanner has changed it's details since startup:
-        self.name: str = scandata.scanner.name
-        self.area_id: str = self.scanner_device.area_id
+        self.name = scandata.scanner.name
+        self.area_id = self.scanner_device.area_id
         self.area_name = self.scanner_device.area_name
-        new_stamp: float | None = None
+        new_stamp = None
 
         # Only remote scanners log timestamps here (local usb adaptors do not),
         if hasattr(scandata.scanner, "_discovered_device_timestamps"):
@@ -361,9 +361,7 @@ class BermudaDeviceScanner(dict):
                             # (not so for == 0 since it might still be an invalid retreat)
                             break
 
-                    if velocity > peak_velocity:
-                        # but on subsequent comparisons we only care if they're faster retreats
-                        peak_velocity = velocity
+                    peak_velocity = max(velocity, peak_velocity)
                 # we've been through the history and have peak velo retreat, or the most recent
                 # approach velo.
                 velocity = peak_velocity

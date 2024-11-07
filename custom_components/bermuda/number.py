@@ -111,6 +111,11 @@ class BermudaNumber(BermudaEntity, RestoreNumber):
         """Set value."""
         self.coordinator.devices[self.address].set_ref_power(value)
         self.async_write_ha_state()
+        # Beware that STATE_DUMP_INTERVAL for restore_state's dump_state
+        # is 15 minutes, so if HA is killed instead of exiting cleanly,
+        # updated values may not be restored. Tempting to schedule a dump
+        # here, since updates to calib will be infrequent, but users are
+        # moderately likely to restart HA after playing with them.
 
     @property
     def unique_id(self):
