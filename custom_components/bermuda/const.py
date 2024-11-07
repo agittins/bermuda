@@ -92,6 +92,8 @@ PRUNE_TIME_INTERVAL = 310  # Every 5m10s, prune stale devices
 PRUNE_TIME_DEFAULT = 259200  # Max age of regular device entries (3days)
 PRUNE_TIME_IRK = 3600  # Resolvable Private addresses change often, prune regularly (1h)
 
+SAVEOUT_COOLDOWN = 10  # seconds to delay before re-trying config entry save.
+
 DOCS = {}
 
 
