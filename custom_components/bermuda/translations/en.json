@@ -78,12 +78,6 @@
     }
   },
   "entity": {
-    "input": {
-      "ref_power": {
-        "name": "Ref Power 1m",
-        "description": "Set to zero to use the default ref_power, or adjust so that the device reads correct distance at 1 metre. A more negative value will increase the estimated distance, a more positive value will decrease the estimate. Be aware that *increasing* distance estimates don't show up immediately due to smoothing, so it is best to set a small negative value like -1 first, wait for the distance estimate to increase beyond your target, and then make the value more negative until you reach your desired target distance."
-      }
-    },
     "sensor": {
       "distance": {
         "name": "Distance"
