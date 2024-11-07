@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components.bluetooth import MONOTONIC_TIME, BluetoothServiceInfoBleak
-from homeassistant.config_entries import ConfigEntry, OptionsFlowWithConfigEntry
+from homeassistant.config_entries import OptionsFlowWithConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import (
@@ -50,9 +50,9 @@ from .const import (
 from .util import rssi_to_metres
 
 if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
     from homeassistant.data_entry_flow import FlowResult
 
+    from . import BermudaConfigEntry
     from .bermuda_device import BermudaDevice
     from .coordinator import BermudaDataUpdateCoordinator
 
@@ -122,7 +122,7 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
     """Config flow options handler for bermuda."""
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
+    def __init__(self, config_entry: BermudaConfigEntry) -> None:
         """Initialize HACS options flow."""
         super().__init__(config_entry)
         self.coordinator: BermudaDataUpdateCoordinator
@@ -135,7 +135,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
 
     async def async_step_init(self, user_input=None):  # pylint: disable=unused-argument
         """Manage the options."""
-        self.coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id]
+        self.coordinator = self.config_entry.runtime_data.coordinator
         self.devices = self.coordinator.devices
 
         messages = {}
@@ -234,7 +234,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             return await self._update_options()
 
         # Grab the co-ordinator's device list so we can build a selector from it.
-        self.devices = self.hass.data[DOMAIN][self.config_entry.entry_id].devices
+        self.devices = self.config_entry.runtime_data.coordinator.devices
 
         # Where we store the options before building the selector
         options_list = []

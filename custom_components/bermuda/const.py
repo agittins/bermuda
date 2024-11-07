@@ -29,11 +29,13 @@ BINARY_SENSOR_DEVICE_CLASS = "connectivity"
 
 # Platforms
 BINARY_SENSOR = "binary_sensor"
+BUTTON = "button"
 SENSOR = "sensor"
 SWITCH = "switch"
 DEVICE_TRACKER = "device_tracker"
+NUMBER = "number"
 # PLATFORMS = [BINARY_SENSOR, SENSOR, SWITCH]
-PLATFORMS = [SENSOR, DEVICE_TRACKER]
+PLATFORMS = [SENSOR, DEVICE_TRACKER, NUMBER]
 
 # Should probably retreive this from the component, but it's in "DOMAIN" *shrug*
 DOMAIN_PRIVATE_BLE_DEVICE = "private_ble_device"
@@ -89,6 +91,8 @@ PRUNE_MAX_COUNT = 1000  # How many device entries to allow at maximum
 PRUNE_TIME_INTERVAL = 310  # Every 5m10s, prune stale devices
 PRUNE_TIME_DEFAULT = 259200  # Max age of regular device entries (3days)
 PRUNE_TIME_IRK = 3600  # Resolvable Private addresses change often, prune regularly (1h)
+
+SAVEOUT_COOLDOWN = 10  # seconds to delay before re-trying config entry save.
 
 DOCS = {}
 

@@ -11,6 +11,7 @@ from custom_components.bermuda.const import DOMAIN
 from custom_components.bermuda.coordinator import BermudaDataUpdateCoordinator
 
 from .const import MOCK_CONFIG
+from homeassistant.config_entries import ConfigEntryState
 
 # from pytest_homeassistant_custom_component.common import AsyncMock
 
@@ -24,16 +25,14 @@ async def test_setup_unload_and_reload_entry(
     hass: HomeAssistant, bypass_get_data, setup_bermuda_entry: MockConfigEntry
 ):
     """Test entry setup and unload."""
-    assert isinstance(hass.data[DOMAIN][setup_bermuda_entry.entry_id], BermudaDataUpdateCoordinator)
 
     # Reload the entry and assert that the data from above is still there
     assert await hass.config_entries.async_reload(setup_bermuda_entry.entry_id)
-    assert DOMAIN in hass.data and setup_bermuda_entry.entry_id in hass.data[DOMAIN]
-    assert isinstance(hass.data[DOMAIN][setup_bermuda_entry.entry_id], BermudaDataUpdateCoordinator)
+    assert setup_bermuda_entry.state == ConfigEntryState.LOADED
 
     # Unload the entry and verify that the data has been removed
     assert await hass.config_entries.async_unload(setup_bermuda_entry.entry_id)
-    assert setup_bermuda_entry.entry_id not in hass.data[DOMAIN]
+    assert setup_bermuda_entry.state == ConfigEntryState.NOT_LOADED
 
 
 async def test_setup_entry_exception(hass, error_on_get_data):
