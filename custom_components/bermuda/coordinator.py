@@ -137,11 +137,17 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         self.stamp_last_update: float = 0  # Last time we ran an update, from MONOTONIC_TIME()
         self.stamp_last_prune: float = 0  # When we last pruned device list
-        file_path = Path(__file__).parent / "manufacturer_identification" / "member_uuids.yaml"
 
-        with file_path.open("r") as f:
-            member_uuids_yaml = yaml.safe_load(f)["uuids"]
-        self.member_uuids = {hex(member["uuid"])[2:]: member["name"] for member in member_uuids_yaml}
+        self.member_uuids = {}
+        def load_manufacturer_ids():
+            """Import yaml file containing manufacturer name mappings."""
+            file_path = Path(__file__).parent / "manufacturer_identification" / "member_uuids.yaml"
+
+            with file_path.open("r") as f:
+                member_uuids_yaml = yaml.safe_load(f)["uuids"]
+            self.member_uuids = {hex(member["uuid"])[2:]: member["name"] for member in member_uuids_yaml}
+
+        hass.async_add_executor_job(load_manufacturer_ids)
         super().__init__(
             hass,
             _LOGGER,
