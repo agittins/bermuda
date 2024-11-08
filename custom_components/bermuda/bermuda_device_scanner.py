@@ -89,25 +89,19 @@ class BermudaDeviceScanner(dict):
         self.hist_distance_by_interval = []  # updated per-interval
         self.hist_interval = []  # WARNING: This is actually "age of ad when we polled"
         self.hist_velocity = []  # Effective velocity versus previous stamped reading
-        self.cached_remote_scanners = set()
-        self.rssi_offset = self.options.get(CONF_RSSI_OFFSETS, {}).get(self.address, 0)
-        self.ref_power = self.options.get(CONF_REF_POWER)
-        self.attenuation = self.options.get(CONF_ATTENUATION)
-        self.max_velocity = self.options.get(CONF_MAX_VELOCITY)
-        self.smoothing_samples = self.options.get(CONF_SMOOTHING_SAMPLES)
-        self.adverts: dict[str, list] = {
-            "manufacturer_data": [],
-            "service_data": [],
-            "service_uuids": [],
-            "platform_data": [],
-        }
-
+        self.tx_power: float | None = None
         self.cached_remote_scanners = set()
         self.conf_rssi_offset = self.options.get(CONF_RSSI_OFFSETS, {}).get(self.address, 0)
         self.conf_ref_power = self.options.get(CONF_REF_POWER)
         self.conf_attenuation = self.options.get(CONF_ATTENUATION)
         self.conf_max_velocity = self.options.get(CONF_MAX_VELOCITY)
         self.conf_smoothing_samples = self.options.get(CONF_SMOOTHING_SAMPLES)
+        self.adverts: dict[str, list] = {
+            "manufacturer_data": [],
+            "service_data": [],
+            "service_uuids": [],
+            "platform_data": [],
+        }
 
         # Just pass the rest on to update...
         self.update_advertisement(scandata)
