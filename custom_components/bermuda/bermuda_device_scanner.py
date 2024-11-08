@@ -89,18 +89,12 @@ class BermudaDeviceScanner(dict):
         self.hist_distance_by_interval = []  # updated per-interval
         self.hist_interval = []  # WARNING: This is actually "age of ad when we polled"
         self.hist_velocity = []  # Effective velocity versus previous stamped reading
-        self.stale_update_count = 0  # How many times we did an update but no new stamps were found.
-        self.tx_power: float | None = None
-        self.rssi_distance: float | None = None
-        self.rssi_distance_raw: float | None = None
-        self.adverts: dict[str, bytes] = {}
         self.cached_remote_scanners = set()
         self.rssi_offset = self.options.get(CONF_RSSI_OFFSETS, {}).get(self.address, 0)
         self.ref_power = self.options.get(CONF_REF_POWER)
         self.attenuation = self.options.get(CONF_ATTENUATION)
         self.max_velocity = self.options.get(CONF_MAX_VELOCITY)
         self.smoothing_samples = self.options.get(CONF_SMOOTHING_SAMPLES)
-        self.hist_dist_count = 0
         self.adverts: dict[str, list] = {
             "manufacturer_data": [],
             "service_data": [],
@@ -331,7 +325,6 @@ class BermudaDeviceScanner(dict):
             # And ensure the smoothing history gets a fresh start
 
             self.hist_distance_by_interval = [self.rssi_distance_raw]
-            self.hist_dist_count = 1
 
         elif new_stamp is None and (self.stamp is None or self.stamp < MONOTONIC_TIME() - DISTANCE_TIMEOUT):
             # DEVICE IS AWAY!
@@ -340,7 +333,6 @@ class BermudaDeviceScanner(dict):
             # Clear the smoothing history
             if len(self.hist_distance_by_interval) > 0:
                 self.hist_distance_by_interval.clear()
-                self.hist_dist_count = 0
 
         else:
             # Add the current reading (whether new or old) to
@@ -397,16 +389,16 @@ class BermudaDeviceScanner(dict):
                     )
                 # Discard the bogus reading by duplicating the last.
                 self.hist_distance_by_interval.insert(0, self.hist_distance_by_interval[0])
-                self.hist_dist_count += 1
             else:
                 # Looks valid enough, add the current reading to the interval log
                 self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
-                self.hist_dist_count += 1
+            dist_count = len(self.hist_distance_by_interval)
 
             # trim the log to length
-            if self.smoothing_samples < self.hist_dist_count:
+            if self.smoothing_samples < dist_count:
                 del self.hist_distance_by_interval[self.smoothing_samples :]
-                self.hist_dist_count -= 1
+                # It should only ever need to remove one
+                dist_count -= 1
 
             # Calculate a moving-window average, that only includes
             # historical values if their "closer" (ie more reliable).
@@ -424,8 +416,8 @@ class BermudaDeviceScanner(dict):
                     local_min = distance
                 dist_total += local_min
 
-            if self.hist_dist_count > 0:
-                movavg = dist_total / self.hist_dist_count
+            if dist_count > 0:
+                movavg = dist_total / dist_count
             else:
                 movavg = local_min
             # The average is only helpful if it's lower than the actual reading.
