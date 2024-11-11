@@ -213,7 +213,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         self.devices: dict[str, BermudaDevice] = {}
         # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
-
+        self._has_purged = False
         self._purge_task = hass.loop.call_soon_threadsafe(hass.async_create_task, self.purge_redactions(hass))
         self.area_reg = ar.async_get(hass)
 
@@ -1298,12 +1298,17 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 cancel_on_shutdown=True,
             ),
         )
+        self._has_purged = True
 
     async def stop_purging(self):
         """Stop purging. There might be a better way to do this?."""
         if self._purge_task:
-            self._purge_task()  # This cancels the async_call_later task
-            self._purge_task = None
+            if self._has_purged:
+                self._purge_task()  # This cancels the async_call_later task
+                self._purge_task = None
+            else:
+                self._purge_task.cancel()
+                self._purge_task = None
 
     def redact_data(self, data):
         """
