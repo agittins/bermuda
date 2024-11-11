@@ -402,7 +402,7 @@ class BermudaDeviceScanner(dict):
                 dist_count = self.smoothing_samples
 
             # Calculate a moving-window average, that only includes
-            # historical values if their "closer" (ie more reliable).
+            # historical values if they're "closer" (ie more reliable).
             #
             # This might be improved by weighting the values by age, but
             # already does a fairly reasonable job of hugging the bottom
@@ -417,9 +417,9 @@ class BermudaDeviceScanner(dict):
                     local_min = distance
                 dist_total += local_min
 
-            if dist_count > 0:
-                movavg = dist_total / dist_count
-            else:
+            if dist_total > 0:  # Calculate the minimised-windowed-average
+                movavg = dist_total / len(self.hist_distance_by_interval)
+            else:  # we have only a single measurement.
                 movavg = local_min
             # The average is only helpful if it's lower than the actual reading.
             if self.rssi_distance_raw is None or movavg < self.rssi_distance_raw:
