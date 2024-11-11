@@ -45,6 +45,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry):
 
     if not coordinator.last_update_success:
         _LOGGER.debug("Coordinator last update failed, rasing ConfigEntryNotReady")
+        await coordinator.stop_purging()
         raise ConfigEntryNotReady
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
