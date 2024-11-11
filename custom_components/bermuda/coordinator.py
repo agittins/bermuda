@@ -215,6 +215,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
 
         # Run it once so it will schedule itself in the future.
+        self._purge_task = None
         hass.loop.call_soon_threadsafe(hass.async_create_task, self.purge_redactions(hass))
         self.area_reg = ar.async_get(hass)
 
@@ -333,13 +334,19 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         _LOGGER.debug("Trigger updating of Scanner Listings")
                         self._do_full_scanner_init = True
             else:
-                _LOGGER.error("Received DR update/create but device id does not exist: %s", ev.data["device_id"])
+                _LOGGER.error(
+                    "Received DR update/create but device id does not exist: %s",
+                    ev.data["device_id"],
+                )
 
         elif ev.data["action"] == "remove":
             device_found = False
             for scanner in self.scanner_list:
                 if self.devices[scanner].entry_id == ev.data["device_id"]:
-                    _LOGGER.debug("Scanner %s removed, trigger update of scanners.", self.devices[scanner].name)
+                    _LOGGER.debug(
+                        "Scanner %s removed, trigger update of scanners.",
+                        self.devices[scanner].name,
+                    )
                     self._do_full_scanner_init = True
                     device_found = True
             if not device_found:
@@ -391,7 +398,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         """Checks if all platforms have finished loading a device's entities."""
         dev = self._get_device(address)
         if dev is not None:
-            if all([dev.create_sensor_done, dev.create_tracker_done, dev.create_number_done]):
+            if all(
+                [
+                    dev.create_sensor_done,
+                    dev.create_tracker_done,
+                    dev.create_number_done,
+                ]
+            ):
                 dev.create_all_done = True
 
     def sensor_created(self, address):
@@ -1279,7 +1292,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     async def purge_redactions(self, hass: HomeAssistant):
         """Empty redactions and free up some memory."""
         self.redactions = {}
-        async_call_later(
+        self._purge_task = async_call_later(
             hass,
             8 * 60 * 60,
             lambda _: HassJob(
@@ -1287,6 +1300,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 cancel_on_shutdown=True,
             ),
         )
+
+    async def stop_purging(self):
+        """Stop purging. There might be a better way to do this?."""
+        if self._purge_task:
+            self._purge_task()  # This cancels the async_call_later task
+            self._purge_task = None
 
     def redact_data(self, data):
         """
