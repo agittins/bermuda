@@ -52,7 +52,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry):
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     # Run it once so it will schedule itself in the future.
-    hass.loop.call_soon_threadsafe(hass.async_create_task, coordinator.purge_redactions(hass))
+    await coordinator.purge_redactions(hass)
 
     return True
 
