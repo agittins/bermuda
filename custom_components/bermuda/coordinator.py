@@ -22,6 +22,7 @@ from homeassistant.const import EVENT_STATE_CHANGED
 from homeassistant.core import (
     Event,
     EventStateChangedData,
+    HassJob,
     HomeAssistant,
     ServiceCall,
     ServiceResponse,
@@ -1281,7 +1282,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         async_call_later(
             hass,
             8 * 60 * 60,
-            lambda _: hass.loop.call_soon_threadsafe(hass.async_create_task, self.purge_redactions(hass)),
+            lambda _: HassJob(
+                hass.loop.call_soon_threadsafe(hass.async_create_task, self.purge_redactions(hass)),
+                cancel_on_shutdown=True,
+            ),
         )
 
     def redact_data(self, data):
