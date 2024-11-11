@@ -7,6 +7,7 @@ from homeassistant.config_entries import ConfigEntryState
 
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -69,7 +70,7 @@ def error_get_data_fixture():
     """Simulate error when retrieving data from API."""
     with patch(
         "custom_components.bermuda.BermudaDataUpdateCoordinator.async_refresh",
-        side_effect=Exception,
+        side_effect=HomeAssistantError,
     ):
         yield
 
