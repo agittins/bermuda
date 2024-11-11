@@ -214,9 +214,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.devices: dict[str, BermudaDevice] = {}
         # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
 
-        # Run it once so it will schedule itself in the future.
-        self._purge_task = None
-        hass.loop.call_soon_threadsafe(hass.async_create_task, self.purge_redactions(hass))
+        self._purge_task = hass.loop.call_soon_threadsafe(hass.async_create_task, self.purge_redactions(hass))
         self.area_reg = ar.async_get(hass)
 
         # Restore the scanners saved in config entry data. We maintain

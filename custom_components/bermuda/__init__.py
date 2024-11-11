@@ -50,9 +50,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry):
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
-    # Run it once so it will schedule itself in the future.
-    await coordinator.purge_redactions(hass)
-    entry.async_on_unload(coordinator.stop_purging)
 
     return True
 
@@ -98,8 +95,3 @@ async def async_unload_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> 
 async def async_reload_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> None:
     """Reload config entry."""
     await hass.config_entries.async_reload(entry.entry_id)
-
-
-async def async_remove_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> None:
-    """Remove the entry."""
-    await entry.runtime_data.coordinator.stop_purging()
