@@ -38,7 +38,7 @@ DEVICE_TRACKER = "device_tracker"
 PLATFORMS = [
     Platform.SENSOR,
     Platform.DEVICE_TRACKER,
-    #  Platform.IMAGE
+    # Platform.IMAGE
 ]
 
 # Should probably retreive this from the component, but it's in "DOMAIN" *shrug*
