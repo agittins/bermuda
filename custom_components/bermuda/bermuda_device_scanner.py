@@ -389,16 +389,17 @@ class BermudaDeviceScanner(dict):
                     )
                 # Discard the bogus reading by duplicating the last.
                 self.hist_distance_by_interval.insert(0, self.hist_distance_by_interval[0])
+            elif len(self.hist_distance_by_interval) == 0:
+                self.hist_distance_by_interval = [self.rssi_distance_raw]
             else:
-                # Looks valid enough, add the current reading to the interval log
-                self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
-            dist_count = len(self.hist_distance_by_interval)
+                self.hist_distance_by_interval.insert(0, self.hist_distance_by_interval[0])
 
+            dist_count = len(self.hist_distance_by_interval)
             # trim the log to length
             if self.smoothing_samples < dist_count:
                 del self.hist_distance_by_interval[self.smoothing_samples :]
-                # It should only ever need to remove one
-                dist_count -= 1
+                # Set equal to smoothing samples
+                dist_count = self.smoothing_samples
 
             # Calculate a moving-window average, that only includes
             # historical values if their "closer" (ie more reliable).
