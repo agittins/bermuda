@@ -70,7 +70,7 @@ def error_get_data_fixture():
     """Simulate error when retrieving data from API."""
     with patch(
         "custom_components.bermuda.BermudaDataUpdateCoordinator.async_refresh",
-        side_effect=UpdateFailed,
+        side_effect=Exception,
     ):
         yield
 
