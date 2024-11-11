@@ -1280,7 +1280,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.redactions = {}
         async_call_later(
             hass,
-            1 * 1 * 10,
+            8 * 60 * 60,
             lambda _: hass.loop.call_soon_threadsafe(hass.async_create_task, self.purge_redactions(hass)),
         )
 
