@@ -100,6 +100,6 @@ async def async_reload_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> 
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-async def remove_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> None:
+async def async_remove_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> None:
     """Remove the entry."""
     await entry.runtime_data.coordinator.stop_purging()
