@@ -46,6 +46,7 @@ from homeassistant.helpers.device_registry import (
     format_mac,
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import slugify
 from homeassistant.util.dt import get_age, now
@@ -212,6 +213,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.devices: dict[str, BermudaDevice] = {}
         # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
 
+        # Run it once so it will schedule itself in the future.
+        hass.loop.call_soon_threadsafe(hass.async_create_task, self.purge_redactions(hass))
         self.area_reg = ar.async_get(hass)
 
         # Restore the scanners saved in config entry data. We maintain
@@ -1239,13 +1242,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         i = len(self.redactions)  # not entirely accurate but we don't care.
 
         # SCANNERS
-        for address in self.scanner_list:
-            if address.upper() not in self.redactions:
+        for non_lower_address in self.scanner_list:
+            address = non_lower_address.lower()
+            if address not in self.redactions:
                 i += 1
-                self.redactions[address.upper()] = f"{address[:2]}::SCANNER_{i}::{address[-2:]}"
+                self.redactions[address] = f"{address[:2]}::SCANNER_{i}::{address[-2:]}"
         # CONFIGURED DEVICES
-        for address in self.options.get(CONF_DEVICES, []):
-            if address.upper() not in self.redactions:
+        for non_lower_address in self.options.get(CONF_DEVICES, []):
+            address = non_lower_address.lower()
+            if address not in self.redactions:
                 i += 1
                 if address.count("_") == 2:
                     self.redactions[address] = f"{address[:4]}::CFG_iBea_{i}::{address[32:]}"
@@ -1255,8 +1260,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # Don't know what it is, but not a mac.
                     self.redactions[address] = f"CFG_OTHER_{1}_{address}"
         # EVERYTHING ELSE
-        for address, device in self.devices.items():
-            if address.upper() not in self.redactions:
+        for non_lower_address, device in self.devices.items():
+            address = non_lower_address.lower()
+            if address not in self.redactions:
                 # Only add if they are not already there.
                 i += 1
                 if device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
@@ -1268,6 +1274,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 else:
                     # Don't know what it is.
                     self.redactions[address] = f"OTHER_{1}_{address}"
+
+    async def purge_redactions(self, hass: HomeAssistant):
+        """Empty redactions and free up some memory."""
+        self.redactions = {}
+        async_call_later(
+            hass,
+            1 * 1 * 10,
+            lambda _: hass.loop.call_soon_threadsafe(hass.async_create_task, self.purge_redactions(hass)),
+        )
 
     def redact_data(self, data):
         """
@@ -1281,17 +1296,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # Initialise the list of addresses if not already done.
             self.redaction_list_update()
         if isinstance(data, str):
+            data = data.lower()
             # the end of the recursive wormhole, do the actual work:
             if ":" in data:
                 if data not in self.redactions:
-                    if data.upper() not in self.redactions:
-                        for find, fix in list(self.redactions.items()):
-                            if find in data:
-                                self.redactions[data] = re.sub(find, fix, data, flags=re.IGNORECASE)
-                                data = self.redactions[data]
-                                break
-                    else:
-                        data = self.redactions[data.upper()]
+                    for find, fix in list(self.redactions.items()):
+                        if find in data:
+                            self.redactions[data] = data.replace(find, fix)
+                            data = self.redactions[data]
+                            break
                 else:
                     data = self.redactions[data]
             # redactions done, now replace any remaining MAC addresses

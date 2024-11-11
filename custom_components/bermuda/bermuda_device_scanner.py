@@ -418,7 +418,7 @@ class BermudaDeviceScanner(dict):
                 dist_total += local_min
 
             if dist_total > 0:  # Calculate the minimised-windowed-average
-                movavg = dist_total / len(self.hist_distance_by_interval)
+                movavg = dist_total / dist_count
             else:  # we have only a single measurement.
                 movavg = local_min
             # The average is only helpful if it's lower than the actual reading.
