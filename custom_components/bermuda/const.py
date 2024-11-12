@@ -92,6 +92,11 @@ PRUNE_TIME_INTERVAL = 310  # Every 5m10s, prune stale devices
 PRUNE_TIME_DEFAULT = 259200  # Max age of regular device entries (3days)
 PRUNE_TIME_IRK = 3600  # Resolvable Private addresses change often, prune regularly (1h)
 
+# Maximum number of devices per scanner before we clamp down for repair
+REPAIR_MAX_DEVICES = 2000
+# Repair IDs. Note that these must be updated in en.json as well!
+REPAIR_ID_ADVERTS = "excessive_stale_adverts"
+
 SAVEOUT_COOLDOWN = 10  # seconds to delay before re-trying config entry save.
 
 DOCS = {}

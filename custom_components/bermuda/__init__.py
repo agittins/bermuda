@@ -12,9 +12,12 @@ from typing import TYPE_CHECKING
 
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import (
+    issue_registry as ir,
+)
 from homeassistant.helpers.device_registry import DeviceEntry, format_mac
 
-from .const import _LOGGER, DOMAIN, PLATFORMS, STARTUP_MESSAGE
+from .const import _LOGGER, DOMAIN, PLATFORMS, REPAIR_ID_ADVERTS, STARTUP_MESSAGE
 from .coordinator import BermudaDataUpdateCoordinator
 
 if TYPE_CHECKING:
@@ -42,6 +45,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry):
     entry.runtime_data = BermudaData(coordinator)
 
     await coordinator.async_refresh()
+
+    if coordinator.manager_is_toxic:
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            REPAIR_ID_ADVERTS,
+            is_fixable=True,
+            learn_more_url="https://github.com/agittins/bermuda/issues/367",
+            severity=ir.IssueSeverity.ERROR,
+            translation_key=REPAIR_ID_ADVERTS,
+            is_persistent=False,
+        )
+        # Don't raise UpdateFailed, it doesn't seem to get caught (either here
+        # nor from within coordinator.py) and throws rapid, infinite exceptions,
+        # which also prevents the repair from being raised.
+        # raise UpdateFailed("no good")
+        # Instead, just return false and that's enough to stop Bermuda loading and
+        # to raise the repair issue.
+        # return False
 
     if not coordinator.last_update_success:
         _LOGGER.debug("Coordinator last update failed, rasing ConfigEntryNotReady")

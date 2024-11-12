@@ -106,5 +106,18 @@
         }
       }
     }
+  },
+  "issues": {
+    "excessive_stale_adverts": {
+      "title": "Excessive Stale Adverts",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Excessive Adverts Found",
+            "description": "Bermuda has found an excessive number of stale advertisements in the bluetooth back-end ({count}, to be exact). To prevent crashing your system, Bermuda has refused to start until those stale advertisements are removed.\n\nIf you wish Bermuda to clean the old advertisements directly, click SUBMIT. For more information, visit (https://github.com/agittins/bermuda/issues/367)"
+          }
+        }
+      }
+    }
   }
 }

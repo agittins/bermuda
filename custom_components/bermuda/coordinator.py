@@ -84,6 +84,7 @@ from .const import (
     PRUNE_TIME_DEFAULT,
     PRUNE_TIME_INTERVAL,
     PRUNE_TIME_IRK,
+    REPAIR_MAX_DEVICES,
     SAVEOUT_COOLDOWN,
     SIGNAL_DEVICE_NEW,
     UPDATE_INTERVAL,
@@ -151,6 +152,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
         self._manager: HomeAssistantBluetoothManager = _get_manager(hass)
+
+        # self.halted is used to shut down Bermuda if we find
+        # a system-threatening problem, like excessive adverts in
+        # the back-end.
+        self.manager_is_toxic: bool = self._found_rogue_backend()
 
         self._entity_registry = er.async_get(self.hass)
         self._device_registry = dr.async_get(self.hass)
@@ -254,6 +260,22 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     bluetooth.BluetoothScanningMode.ACTIVE,
                 )
             )
+
+    def _found_rogue_backend(self) -> bool:
+        """
+        Verify sanity of the backends so we can abort startup if unsafe.
+
+        Returns True if we find a backend that would cause us to crash
+        or perform poorly, and raises a repair issue.
+        """
+        if len(self._manager._all_history) > REPAIR_MAX_DEVICES:  # noqa: SLF001
+            # This scanner has waaaay too much going on. We refuse to play.
+            _LOGGER.critical(
+                "The backend has %s records in it - Bermuda must not start",
+                len(self._manager._all_history),  # noqa: SLF001
+            )
+            return True
+        return False
 
     def load_manufacturer_ids(self):
         """Import yaml file containing manufacturer name mappings."""
@@ -489,7 +511,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             device.unique_id = mac
         return device
 
-    async def _async_update_data(self):
+    async def _async_update_data(self) -> None:
         """
         Update data for known devices by scanning bluetooth advert cache.
 
@@ -497,6 +519,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         (no network requests made etc).
 
         """
+        if self.manager_is_toxic:
+            # We are blocked from running due to finding some
+            # catastrophic environmental issue.
+            # self.last_update_success = False
+            return
+            #  raise UpdateFailed
+
         for service_info in bluetooth.async_discovered_service_info(self.hass, False):
             # Note that some of these entries are restored from storage,
             # so we won't necessarily find (immediately, or perhaps ever)
@@ -693,7 +722,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         # end of async update
         self.stamp_last_update = MONOTONIC_TIME()
-        self.last_update_success = True
+        # self.last_update_success = True
 
     def prune_devices(self):
         """Scan through all collected devices, and remove those that meet Pruning criteria."""
