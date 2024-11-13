@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, cast
 
 import voluptuous as vol
 import yaml
+from habluetooth import BaseHaRemoteScanner, BaseHaScanner
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import (
     MONOTONIC_TIME,
@@ -152,7 +153,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=UPDATE_INTERVAL),
         )
 
-        self._manager: HomeAssistantBluetoothManager = _get_manager(hass)
+        self._manager: HomeAssistantBluetoothManager = _get_manager(hass)  # instance of the bluetooth manager
+        self._hascanners: set[BaseHaScanner]  # Links to the backend scanners
+        self._hascanner_timestamps: dict[str, dict[str, float]]  # scanner_address, device_address, stamp
 
         self._entity_registry = er.async_get(self.hass)
         self._device_registry = dr.async_get(self.hass)
@@ -1127,22 +1130,32 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # scanner_b: BermudaDevice entry
         #
         # Evil: We're acessing private members of bt manager to do it since there's no API call for it.
-        _allscanners = self._manager._connectable_scanners | self._manager._non_connectable_scanners  # noqa: SLF001
-        for scanner_ha in _allscanners:
-            scanner_address = format_mac(scanner_ha.source).lower()
-            scanner_devreg = self._device_registry.async_get_device(connections={("mac", scanner_address)})
+        self._hascanners = self._manager._connectable_scanners | self._manager._non_connectable_scanners  # noqa: SLF001
+        for hascanner in self._hascanners:
+            scanner_address = format_mac(hascanner.source).lower()
+            scanner_devreg = self._device_registry.async_get_device(
+                connections={
+                    ("mac", scanner_address),  # Matches ESPHome proxies, Shellys etc
+                    ("bluetooth", scanner_address),  # Matches local USB Bluetooth (hci0..)
+                }
+            )
             if scanner_devreg is None:
                 _LOGGER_SPAM_LESS.error(
                     "scanner_not_in_devreg",
                     "Failed to find scanner %s (%s) in Device Registry",
-                    scanner_ha.name,
-                    scanner_ha.source,
+                    hascanner.name,
+                    hascanner.source,
                 )
                 continue
             # _LOGGER.info("Great! Found scanner: %s (%s)", scanner_ha.name, scanner_ha.source)
             # Since this scanner still exists, we won't purge it
             if scanner_address in _purge_scanners:
                 _purge_scanners.remove(scanner_address)
+
+            # Populate the local copy of timestamps, if applicable
+            if isinstance(hascanner, BaseHaRemoteScanner):
+                self._hascanner_timestamps[hascanner.source.lower()] = hascanner._discovered_device_timestamps  # noqa: SLF001
+
             scanner_b = self._get_device(scanner_address)
             if scanner_b is None:
                 # It's a new scanner, we will need to update our saved config.
