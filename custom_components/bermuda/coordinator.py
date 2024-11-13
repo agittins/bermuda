@@ -926,10 +926,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         other initialisation.
         """
         # First seed the metadevice skeletons and set their latest beacon_source entries
-        # Private BLE Devices:
+        # Private BLE Devices. It will only do anything if the self._do_private_device_init
+        # flag is set.
         self.discover_private_ble_metadevices()
 
         # iBeacon devices should already have their metadevices created.
+        # FIXME: irk and ibeacons will fight over their relative ref_power too.
 
         for metadev in self.metadevices.values():
             # We Expect the first beacon source to be the current one.
@@ -945,8 +947,24 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # Map the source device's scanner list into ours
                 metadev.scanners = source_device.scanners
 
-                # Set the source device's ref_power from our own
-                source_device.set_ref_power(metadev.ref_power)
+                # Set the source device's ref_power from our own. This will cause
+                # the source device and all its scanner entries to update their
+                # distance measurements. This won't affect Area wins though, because
+                # they are "relative", not absolute.
+
+                # FIXME: This has two potential bugs:
+                # - if multiple metadevices share a source, they will
+                #   "fight" over their preferred ref_power, if different.
+                # - The non-meta device (if tracked) will receive distances
+                #   based on the meta device's ref_power.
+                # - The non-meta device if tracked will have its own ref_power ignored.
+                #
+                # None of these are terribly awful, but worth fixing.
+
+                # Note we are setting the ref_power on the source_device, not the
+                # individual scanner entries (it will propagate to them though)
+                if source_device.ref_power != metadev.ref_power:
+                    source_device.set_ref_power(metadev.ref_power)
 
                 # anything that isn't already set to something interesting, overwrite
                 # it with the new device's data.
