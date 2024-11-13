@@ -164,7 +164,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.metadevices: dict[str, BermudaDevice] = {}
 
         self._ad_listener_cancel: Cancellable | None = None
-        self.last_config_entry_update: float = 0
+
+        # Tracks the last stamp that we *actually* saved our config entry. Mostly for debugging,
+        # we use a request stamp for tracking our add_job request.
+        self.last_config_entry_update: float = 0  # Stamp of last *save-out* of config.data
+
+        # We want to delay the first save-out, since it takes a few seconds for things
+        # to stabilise. So set the stamp into the future.
+        self.last_config_entry_update_request = MONOTONIC_TIME() + SAVEOUT_COOLDOWN  # Stamp for save-out requests
 
         self.hass.bus.async_listen(EVENT_STATE_CHANGED, self.handle_state_changes)
 
@@ -941,10 +948,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         other initialisation.
         """
         # First seed the metadevice skeletons and set their latest beacon_source entries
-        # Private BLE Devices:
+        # Private BLE Devices. It will only do anything if the self._do_private_device_init
+        # flag is set.
         self.discover_private_ble_metadevices()
 
         # iBeacon devices should already have their metadevices created.
+        # FIXME: irk and ibeacons will fight over their relative ref_power too.
 
         for metadev in self.metadevices.values():
             # We Expect the first beacon source to be the current one.
@@ -960,8 +969,24 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # Map the source device's scanner list into ours
                 metadev.scanners = source_device.scanners
 
-                # Set the source device's ref_power from our own
-                source_device.set_ref_power(metadev.ref_power)
+                # Set the source device's ref_power from our own. This will cause
+                # the source device and all its scanner entries to update their
+                # distance measurements. This won't affect Area wins though, because
+                # they are "relative", not absolute.
+
+                # FIXME: This has two potential bugs:
+                # - if multiple metadevices share a source, they will
+                #   "fight" over their preferred ref_power, if different.
+                # - The non-meta device (if tracked) will receive distances
+                #   based on the meta device's ref_power.
+                # - The non-meta device if tracked will have its own ref_power ignored.
+                #
+                # None of these are terribly awful, but worth fixing.
+
+                # Note we are setting the ref_power on the source_device, not the
+                # individual scanner entries (it will propagate to them though)
+                if source_device.ref_power != metadev.ref_power:
+                    source_device.set_ref_power(metadev.ref_power)
 
                 # anything that isn't already set to something interesting, overwrite
                 # it with the new device's data.
@@ -1165,54 +1190,62 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             confdata_scanners: dict[str, dict] = {}
             for device in self.devices.values():
                 if device.is_scanner:
-                    confdata_scanners[device.address] = device.to_dict()
                     self.scanner_list.append(device.address)
+                    # Only add the necessary fields to confdata
+                    confdata_scanners[device.address] = {
+                        key: getattr(device, key)
+                        for key in [
+                            "name",
+                            "local_name",
+                            "prefname",
+                            "address",
+                            "ref_power",
+                            "unique_id",
+                            "address_type",
+                            "area_id",
+                            "area_name",
+                            "is_scanner",
+                            "entry_id",
+                        ]
+                    }
 
             if self.config_entry.data.get(CONFDATA_SCANNERS, {}) == confdata_scanners:
+                # **** BAIL OUT, CONFIG HAS NOT CHANGED ****
                 # _LOGGER.debug("Scanner configs are identical, not doing update.")
-                # Return true since we're happy that the config entry
-                # exists and has the current scanner data that we want,
-                # so there's nothing to do.
-                # See #351, #341
                 self._do_full_scanner_init = False
                 return True
 
-            # _LOGGER.debug(
-            #     "Replacing config data scanners was %s now %s",
-            #     self.config_entry.data.get(CONFDATA_SCANNERS, {}),
-            #     confdata_scanners,
-            # )
+            # We will arrive here every second for as long as the saved config is
+            # different from our running config. But we don't want to save immediately,
+            # since there is a lot of bouncing that happens during setup.
 
-            @callback
-            def async_call_update_entry() -> None:
-                """
-                Call in the event loop to update the scanner entries in our config.
-
-                We do this via add_job to ensure it runs in the event loop.
-                """
-                if self.last_config_entry_update > MONOTONIC_TIME() - SAVEOUT_COOLDOWN:
-                    # We are probably not the only instance of ourselves in this queue.
-                    # let's back off for a bit.
-                    return
-                self.last_config_entry_update = MONOTONIC_TIME()
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry,
-                    data={
-                        **self.config_entry.data,
-                        CONFDATA_SCANNERS: confdata_scanners,
-                    },
-                )
-                # Clear the flag for init
-                self._do_full_scanner_init = False
-
-            # After calling the update there are a lot of cycles while loading etc.
-            # Cool off for a little before calling again...
-            if self.last_config_entry_update < MONOTONIC_TIME() - SAVEOUT_COOLDOWN:
-                self.last_config_entry_update = MONOTONIC_TIME()
-                _LOGGER.info("Saving out scanner configs")
-                self.hass.add_job(async_call_update_entry)
+            # Make sure we haven't requested recently...
+            if self.last_config_entry_update_request < MONOTONIC_TIME() - SAVEOUT_COOLDOWN:
+                # OK, we're good to go.
+                self.last_config_entry_update_request = MONOTONIC_TIME()
+                _LOGGER.debug("Requesting save-out of scanner configs")
+                self.hass.add_job(self.async_call_update_entry, confdata_scanners)
 
         return True
+
+    @callback
+    def async_call_update_entry(self, confdata_scanners) -> None:
+        """
+        Call in the event loop to update the scanner entries in our config.
+
+        We do this via add_job to ensure it runs in the event loop.
+        """
+        # Clear the flag for init and update the stamp
+        self._do_full_scanner_init = False
+        self.last_config_entry_update = MONOTONIC_TIME()
+        # Apply new config (will cause reload if there are changes)
+        self.hass.config_entries.async_update_entry(
+            self.config_entry,
+            data={
+                **self.config_entry.data,
+                CONFDATA_SCANNERS: confdata_scanners,
+            },
+        )
 
     async def service_dump_devices(self, call: ServiceCall) -> ServiceResponse:  # pylint: disable=unused-argument;
         """Return a dump of beacon advertisements by receiver."""
@@ -1230,6 +1263,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # configured and scanners
             addresses += self.scanner_list
             addresses += self.options.get(CONF_DEVICES, [])
+            # known IRK/Private BLE Devices
+            addresses += self.pb_state_sources
 
         # lowercase all the addresses for matching
         addresses = list(map(str.lower, addresses))
