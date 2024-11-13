@@ -375,7 +375,7 @@ class BermudaActiveProxyCount(BermudaGlobalSensor):
     @property
     def native_value(self) -> int:
         """Gets the number of proxies we have access to."""
-        return self.coordinator.count_active_scanners()
+        return self._cached_ratelimit(self.coordinator.count_active_scanners()) or 0
 
     @property
     def name(self):
@@ -399,7 +399,7 @@ class BermudaTotalDeviceCount(BermudaGlobalSensor):
     @property
     def native_value(self) -> int:
         """Gets the amount of devices we have seen."""
-        return len(self.coordinator.devices)
+        return self._cached_ratelimit(len(self.coordinator.devices)) or 0
 
     @property
     def name(self):
@@ -423,7 +423,7 @@ class BermudaVisibleDeviceCount(BermudaGlobalSensor):
     @property
     def native_value(self) -> int:
         """Gets the amount of devices that are active."""
-        return self.coordinator.count_active_devices()
+        return self._cached_ratelimit(self.coordinator.count_active_devices()) or 0
 
     @property
     def name(self):
