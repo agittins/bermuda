@@ -153,7 +153,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         self._manager: HomeAssistantBluetoothManager = _get_manager(hass)  # instance of the bluetooth manager
         self._hascanners: set[BaseHaScanner]  # Links to the backend scanners
-        self._hascanner_timestamps: dict[str, dict[str, float]]  # scanner_address, device_address, stamp
+        self._hascanner_timestamps: dict[str, dict[str, float]] = {} # scanner_address, device_address, stamp
 
         self._entity_registry = er.async_get(self.hass)
         self._device_registry = dr.async_get(self.hass)
