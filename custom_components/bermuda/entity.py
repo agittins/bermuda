@@ -52,16 +52,22 @@ class BermudaEntity(CoordinatorEntity):
         self.bermuda_last_state: Any = 0
         self.bermuda_last_stamp: float = 0
 
-    def _cached_ratelimit(self, statevalue: Any, fast_falling=True, fast_rising=False):
+    def _cached_ratelimit(self, statevalue: Any, fast_falling=True, fast_rising=False, interval=None):
         """
         Uses the CONF_UPDATE_INTERVAL and other logic to return either the given statevalue
         or an older, cached value. Helps to reduce excess sensor churn without compromising latency.
 
-        Only suitable for MEASUREMENTS, as numerical comparison is used.
+        Mostly suitable for MEASUREMENTS, but should work with strings, too.
+        If interval is specified the cache will use that (in seconds), otherwise the deafult is
+        the CONF_UPPDATE_INTERVAL (typically suitable for fast-close slow-far sensors)
         """
+        if interval is not None:
+            self.bermuda_update_interval = interval
+
         nowstamp = MONOTONIC_TIME()
         if (
             (self.bermuda_last_stamp < nowstamp - self.bermuda_update_interval)  # Cache is stale
+            or (self._device.ref_power_changed > nowstamp + 2)  # ref power changed in last 2sec
             or (self.bermuda_last_state is None)  # Nothing compares to you.
             or (statevalue is None)  # or you.
             or (fast_falling and statevalue < self.bermuda_last_state)  # (like Distance)
@@ -165,6 +171,9 @@ class BermudaGlobalEntity(CoordinatorEntity):
         super().__init__(coordinator)
         self.coordinator = coordinator
         self.config_entry = config_entry
+        self._cache_ratelimit_value = None
+        self._cache_ratelimit_stamp: float = 0
+        self._cache_ratelimit_interval = 60
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -174,6 +183,19 @@ class BermudaGlobalEntity(CoordinatorEntity):
         (we don't need to implement this, but if we want to do anything special we can)
         """
         self.async_write_ha_state()
+
+    def _cached_ratelimit(self, statevalue: Any, interval:int|None=None):
+        """A simple way to rate-limit sensor updates."""
+        if interval is not None:
+            self._cache_ratelimit_interval = interval
+        nowstamp = MONOTONIC_TIME()
+
+        if nowstamp > self._cache_ratelimit_stamp + self._cache_ratelimit_interval:
+            self._cache_ratelimit_stamp = nowstamp
+            self._cache_ratelimit_value = statevalue
+            return statevalue
+        else:
+            return self._cache_ratelimit_value
 
     @property
     def device_info(self):
