@@ -401,7 +401,10 @@ class BermudaDeviceScanner(dict):
                         velocity,
                     )
                 # Discard the bogus reading by duplicating the last.
-                self.hist_distance_by_interval.insert(0, self.hist_distance_by_interval[0])
+                if len(self.hist_distance_by_interval) == 0:
+                    self.hist_distance_by_interval = [self.rssi_distance_raw]
+                else:
+                    self.hist_distance_by_interval.insert(0, self.hist_distance_by_interval[0])
             else:
                 # Looks valid enough, add the current reading to the interval log
                 self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
