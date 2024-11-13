@@ -105,6 +105,8 @@ class BermudaDeviceScanner(dict):
         claims to have data.
         """
         # In case the scanner has changed it's details since startup:
+        # FIXME: This should probably be a separate function that the refresh_scanners
+        # calls if necessary, rather than re-doing it every cycle.
         self.name = scandata.scanner.name
         self.area_id = self.scanner_device.area_id
         self.area_name = self.scanner_device.area_name
@@ -240,9 +242,12 @@ class BermudaDeviceScanner(dict):
             # Add a new historical reading
             self.hist_distance.insert(0, distance)
             # don't insert into hist_distance_by_interval, that's done by the caller.
-        else:
-            # We are over-riding readings between cycles. Force the
-            # new value in-place.
+        elif self.rssi_distance is not None:
+            # We are over-riding readings between cycles.
+            # We will force the new measurement, but only if we were
+            # already showing a "current" distance, as we don't want
+            # to "freshen" a measurement that was already out of date,
+            # hence the elif not none above.
             self.rssi_distance = distance
             if len(self.hist_distance) > 0:
                 self.hist_distance[0] = distance
@@ -254,12 +259,25 @@ class BermudaDeviceScanner(dict):
             # modify in-place.
         return distance
 
-    def set_ref_power(self, value: float):
-        """Set a new reference power from the parent device and immediately update distance."""
+    def set_ref_power(self, value: float) -> float | None:
+        """
+        Set a new reference power and return the resulting distance.
+
+        Typically called from the parent device when either the user changes the calibration
+        of ref_power for a device, or when a metadevice takes on a new source device, and
+        propagates its own ref_power to our parent.
+
+        Note that it is unlikely to return None as its only returning the raw, not filtered
+        distance = the exception being uninitialised entries.
+        """
         # When the user updates the ref_power we want to reflect that change immediately,
         # and not subject it to the normal smoothing algo.
-        self.ref_power = value
-        return self._update_raw_distance(False)
+        # But make sure it's actually different, in case it's just a metadevice propagating
+        # its own ref_power without need.
+        if value != self.ref_power:
+            self.ref_power = value
+            return self._update_raw_distance(False)
+        return self.rssi_distance_raw
 
     def calculate_data(self):
         """
