@@ -507,10 +507,26 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         (no network requests made etc).
 
         """
+        ignored_scanners = {}  # List of scanners and record counts that we ignored in this run.
         for service_info in bluetooth.async_discovered_service_info(self.hass, False):
             # Note that some of these entries are restored from storage,
             # so we won't necessarily find (immediately, or perhaps ever)
             # scanner entries for any given device.
+
+            # Some integrations might leave tens of thousands of old adverts in the cache, and those
+            # integrations may or may not be still installed. So let's very quickly discard any that
+            # do or may fall into that category.
+            if (
+                (service_info.time > MONOTONIC_TIME() + 31536000)  # The timestamp is an epoch, not a monotonic
+                or (service_info.time < MONOTONIC_TIME() - PRUNE_TIME_DEFAULT)  # It's too old
+                or (service_info.source.lower() not in self.scanner_list)  # It's not a current scanner
+            ):
+                try:
+                    ignored_scanners[service_info.source] += 1
+                except KeyError:
+                    ignored_scanners[service_info.source] = 1
+                # and bail out.
+                continue
 
             # Get/Create a device entry
             device = self._get_or_create_device(service_info.address)
@@ -704,6 +720,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # end of async update
         self.stamp_last_update = MONOTONIC_TIME()
         self.last_update_success = True
+        _LOGGER.debug("Ignored scanners: %s", ignored_scanners)
 
     def prune_devices(self):
         """Scan through all collected devices, and remove those that meet Pruning criteria."""
