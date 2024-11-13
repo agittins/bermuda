@@ -55,6 +55,7 @@ class BermudaDevice(dict):
         self.prefname: str | None = None  # "preferred" name - ideally local_name
         self.address: str = address
         self.ref_power: float = 0  # If non-zero, use in place of global ref_power.
+        self.ref_power_changed: float = 0  # Stamp for last change to ref_power, for cache zapping.
         self.options = options
         self.unique_id: str | None = None  # mac address formatted.
         self.address_type = BDADDR_TYPE_UNKNOWN
@@ -152,6 +153,9 @@ class BermudaDevice(dict):
             # gets applied.
             # if nearest_scanner is not None:
             self.apply_scanner_selection(nearest_scanner)
+            # Update the stamp so that the BermudaEntity can clear the cache and show the
+            # new measurement(s) immediately.
+            self.ref_power_changed = MONOTONIC_TIME()
 
     def apply_scanner_selection(self, closest_scanner: BermudaDeviceScanner | None):
         """

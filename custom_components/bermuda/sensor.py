@@ -351,7 +351,7 @@ class BermudaTotalProxyCount(BermudaGlobalSensor):
     @property
     def native_value(self) -> int:
         """Gets the number of proxies we have access to."""
-        return len(self.coordinator.scanner_list)
+        return self._cached_ratelimit(len(self.coordinator.scanner_list)) or 0
 
     @property
     def name(self):
