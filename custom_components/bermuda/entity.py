@@ -184,7 +184,7 @@ class BermudaGlobalEntity(CoordinatorEntity):
         """
         self.async_write_ha_state()
 
-    def _cached_ratelimit(self, statevalue: Any, interval:int|None=None):
+    def _cached_ratelimit(self, statevalue: Any, interval: int | None = None):
         """A simple way to rate-limit sensor updates."""
         if interval is not None:
             self._cache_ratelimit_interval = interval
