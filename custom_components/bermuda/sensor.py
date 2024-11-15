@@ -173,6 +173,24 @@ class BermudaSensorScanner(BermudaSensor):
     def native_value(self):
         return self._device.area_scanner
 
+    @property
+    def extra_state_attributes(self) -> Mapping[str, Any] | None:
+        """Return extra state attributes for the nearest scanner."""
+        attribs = super().extra_state_attributes or {}
+
+        if self._device.area_scanner:
+            for scanner in self.coordinator.scanner_list:
+                scanner_device = self.coordinator.devices[scanner]
+                if scanner_device.address.upper() in self._device.area_scanner:
+                    if scanner_device.address in self.coordinator.scanner_entity_ids:
+                        attribs["scanner_entity_id"] = self.coordinator.scanner_entity_ids[scanner_device.address]
+                        _LOGGER.debug(
+                            "Set scanner_entity_id to %s for device %s", attribs["scanner_entity_id"], self._device.name
+                        )
+                    break
+
+        return attribs
+
 
 class BermudaSensorRssi(BermudaSensor):
     """Sensor for RSSI of closest scanner."""
