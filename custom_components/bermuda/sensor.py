@@ -62,6 +62,12 @@ async def async_setup_entry(
             for scanner in scanners:
                 entities.append(BermudaSensorScannerRange(coordinator, entry, address, scanner))
                 entities.append(BermudaSensorScannerRangeRaw(coordinator, entry, address, scanner))
+
+            #TODO how to add them at runtime?
+            entities.append(BermudaSensorValue(coordinator, entry, address, 'time_raw'))
+            for area in coordinator.bmap.areas:
+                entities.append(BermudaSensorAreaValue(coordinator, entry, address, area, 'value'))
+                entities.append(BermudaSensorAreaValue(coordinator, entry, address, area, 'value_raw'))
             # _LOGGER.debug("Sensor received new_device signal for %s", address)
             # We set update before add to False because we are being
             # call(back(ed)) from the update, so causing it to call another would be... bad.
@@ -303,7 +309,7 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
 
     @property
     def name(self):
-        return f"Unfiltered Distance to {self._scanner.name}"
+        return f"Raw Distance to {self._scanner.name}"
 
     @property
     def native_value(self):
@@ -317,6 +323,102 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
         if distance is not None:
             return round(distance, 3)
         return None
+
+
+class BermudaSensorValue(BermudaSensor):#TODO obviously not meters...
+    """Create sensors for range to each scanner. Extends closest-range class."""
+
+    def __init__(
+        self,
+        coordinator: BermudaDataUpdateCoordinator,
+        config_entry,
+        address: str,
+        valname: str,
+    ) -> None:
+        super().__init__(coordinator, config_entry, address)
+        self.coordinator = coordinator
+        self.config_entry = config_entry
+        self._device = coordinator.devices[address]
+        self.valname = valname
+    @property
+    def unique_id(self):
+        return f"{self._device.unique_id}_{self.valname}"
+
+    @property
+    def name(self):
+        return f"{self.valname}"
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        return True
+
+    @property
+    def native_value(self):
+        if hasattr(self._device, 'maptrack'):
+            val = getattr(self._device.maptrack, self.valname)
+            return val
+        return None
+
+    @property
+    def device_class(self):
+        return SensorDeviceClass.MONETARY
+
+    @property
+    def native_unit_of_measurement(self):
+        return 'XXX'
+
+    @property
+    def state_class(self):
+        return SensorStateClass.MEASUREMENT
+
+class BermudaSensorAreaValue(BermudaSensor):#TODO obviously not meters...
+    """Create sensors for range to each scanner. Extends closest-range class."""
+
+    def __init__(
+        self,
+        coordinator: BermudaDataUpdateCoordinator,
+        config_entry,
+        address: str,
+        area: str,
+        valname: str,
+    ) -> None:
+        super().__init__(coordinator, config_entry, address)
+        self.coordinator = coordinator
+        self.config_entry = config_entry
+        self._device = coordinator.devices[address]
+        self._area = area
+        self.valname = valname
+    @property
+    def unique_id(self):
+        return f"{self._device.unique_id}_{self._area}_{self.valname}"
+
+    @property
+    def name(self):
+        return f"{self.valname} for {self._area}"
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        return True
+
+    @property
+    def native_value(self):
+        if hasattr(self._device, 'maptrack'):
+            val = getattr(self._device.maptrack, self.valname)
+            if self._area in val:
+                return round(val[self._area], 3)
+        return None
+
+    @property
+    def device_class(self):
+        return SensorDeviceClass.MONETARY
+
+    @property
+    def native_unit_of_measurement(self):
+        return 'XXX'
+
+    @property
+    def state_class(self):
+        return SensorStateClass.MEASUREMENT
 
 
 class BermudaGlobalSensor(BermudaGlobalEntity, SensorEntity):

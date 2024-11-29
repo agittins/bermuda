@@ -12,6 +12,8 @@ for them, so we can use them to contribute towards measurements.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, cast
+
 import re
 
 from homeassistant.components.bluetooth import MONOTONIC_TIME, BluetoothScannerDevice
@@ -35,6 +37,8 @@ from .const import (
     DEFAULT_DEVTRACK_TIMEOUT,
 )
 
+if TYPE_CHECKING:
+    from .coordinator import BermudaDataUpdateCoordinator
 
 class BermudaDevice(dict):
     """
@@ -48,15 +52,15 @@ class BermudaDevice(dict):
     become entities in homeassistant, since there might be a _lot_ of them.
     """
 
-    def __init__(self, address, options) -> None:
+    def __init__(self, address, coordinator: BermudaDataUpdateCoordinator) -> None:
         """Initial (empty) data."""
+        self.coordinator = coordinator
         self.name: str | None = None
         self.local_name: str | None = None
         self.prefname: str | None = None  # "preferred" name - ideally local_name
         self.address: str = address
         self.ref_power: float = 0  # If non-zero, use in place of global ref_power.
         self.ref_power_changed: float = 0  # Stamp for last change to ref_power, for cache zapping.
-        self.options = options
         self.unique_id: str | None = None  # mac address formatted.
         self.address_type = BDADDR_TYPE_UNKNOWN
         self.area_id: str | None = None
@@ -152,7 +156,7 @@ class BermudaDevice(dict):
             # changed due to ref_power), we still call apply so that the new area_distance
             # gets applied.
             # if nearest_scanner is not None:
-            self.apply_scanner_selection(nearest_scanner)
+            # self.apply_scanner_selection(nearest_scanner)
             # Update the stamp so that the BermudaEntity can clear the cache and show the
             # new measurement(s) immediately.
             self.ref_power_changed = MONOTONIC_TIME()
@@ -190,6 +194,33 @@ class BermudaDevice(dict):
                 self.area_name,
             )
 
+    def get_point(self):
+        from .common.point import BermudaPoint # ehhh
+        return BermudaPoint(self)
+
+    def get_point_fresh(self):
+        return BermudaPoint.get_fresh()
+
+    def apply_area(self, dist, area, maybe = None):
+        # _LOGGER.debug("apply_area: %s, %s, %s", dist, area, maybe)
+        self.maybe_area = maybe
+        # self.area_id = closest_scanner.area_id
+        self.area_distance = dist
+        if self.area_name != area:
+            self.area_prev = self.area_name
+            self.area_name = area
+            # _LOGGER.debug(": %s", got[0][1])
+
+        # old_area = self.area_name
+        # if (old_area != self.area_name) and self.create_sensor:
+        #     # Our area has changed!
+        #     _LOGGER.debug(
+        #         "Device %s was in '%s', now '%s'",
+        #         self.name,
+        #         old_area,
+        #         self.area_name,
+        #     )
+
     def calculate_data(self):
         """
         Call after doing update_scanner() calls so that distances
@@ -211,13 +242,13 @@ class BermudaDevice(dict):
         # Update whether this device has been seen recently, for device_tracker:
         if (
             self.last_seen is not None
-            and MONOTONIC_TIME() - self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT) < self.last_seen
+            and MONOTONIC_TIME() - self.coordinator.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT) < self.last_seen
         ):
             self.zone = STATE_HOME
         else:
             self.zone = STATE_NOT_HOME
 
-        if self.address.upper() in self.options.get(CONF_DEVICES, []):
+        if self.address.upper() in self.coordinator.options.get(CONF_DEVICES, []):
             # We are a device we track. Flag for set-up:
             self.create_sensor = True
 
@@ -241,7 +272,7 @@ class BermudaDevice(dict):
             self.scanners[format_mac(scanner_device.address)] = BermudaDeviceScanner(
                 self,
                 discoveryinfo,  # the entire BluetoothScannerDevice struct
-                self.options,
+                self.coordinator,
                 scanner_device,
             )
             device_scanner = self.scanners[format_mac(scanner_device.address)]

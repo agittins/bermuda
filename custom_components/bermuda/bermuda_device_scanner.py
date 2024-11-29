@@ -58,9 +58,10 @@ class BermudaDeviceScanner(dict):
         self,
         parent_device: BermudaDevice,  # The device being tracked
         scandata: BluetoothScannerDevice,  # The advertisement info from the device, received by the scanner
-        options,
+        coordinator,
         scanner_device: BermudaDevice,  # The scanner device that "saw" it.
     ) -> None:
+        self.coordinator = coordinator
         # I am declaring these just to control their order in the dump,
         # which is a bit silly, I suspect.
         self.name: str = scanner_device.name or scandata.scanner.name
@@ -72,7 +73,7 @@ class BermudaDeviceScanner(dict):
         self.area_name: str | None = scanner_device.area_name
         self.parent_device = parent_device
         self.parent_device_address = parent_device.address
-        self.options = options
+        self.options = coordinator.options
         self.stamp: float | None = 0
         # Only remote scanners log timestamps, local usb adaptors do not.
         self.scanner_sends_stamps = isinstance(scanner_device, BaseHaRemoteScanner)
