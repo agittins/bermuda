@@ -511,7 +511,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             mac = format_mac(address).lower()
             self.devices[mac] = device = BermudaDevice(address=mac, options=self.options)
             device.address = mac
-            device.unique_id = mac
+            device.unique_id = DOMAIN + mac
         return device
 
     async def _async_update_data(self):

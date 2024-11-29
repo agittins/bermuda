@@ -10,7 +10,7 @@ from homeassistant.const import STATE_HOME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import SIGNAL_DEVICE_NEW
+from .const import *
 from .entity import BermudaEntity
 
 if TYPE_CHECKING:
@@ -69,7 +69,7 @@ class BermudaDeviceTracker(BermudaEntity, BaseTrackerEntity):
 
     _attr_should_poll = False
     _attr_has_entity_name = True
-    _attr_name = "Bermuda Tracker"
+    _attr_name = "Permuda Tracker"
 
     @property
     def unique_id(self):

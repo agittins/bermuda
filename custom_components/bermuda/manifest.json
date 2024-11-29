@@ -1,6 +1,6 @@
 {
-  "domain": "bermuda",
-  "name": "Bermuda BLE Trilateration",
+  "domain": "permuda",
+  "name": "Permuda BLE Mapping",
   "bluetooth": [
     {
       "connectable": false,

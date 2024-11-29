@@ -92,7 +92,7 @@ async def async_setup_entry(
 
 
 class BermudaSensor(BermudaEntity, SensorEntity):
-    """bermuda Sensor class."""
+    """permuda Sensor class."""
 
     @property
     def unique_id(self):
@@ -130,7 +130,7 @@ class BermudaSensor(BermudaEntity, SensorEntity):
     def device_class(self):
         """Return de device class of the sensor."""
         # There isn't one for "Area Names" so we'll arbitrarily define our own.
-        return "bermuda__custom_device_class"
+        return "permuda__custom_device_class"
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
@@ -320,7 +320,7 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
 
 
 class BermudaGlobalSensor(BermudaGlobalEntity, SensorEntity):
-    """bermuda Global Sensor class."""
+    """permuda Global Sensor class."""
 
     _attr_has_entity_name = True
 
@@ -332,7 +332,7 @@ class BermudaGlobalSensor(BermudaGlobalEntity, SensorEntity):
     @property
     def device_class(self):
         """Return de device class of the sensor."""
-        return "bermuda__custom_device_class"
+        return "permuda__custom_device_class"
 
 
 class BermudaTotalProxyCount(BermudaGlobalSensor):
@@ -346,7 +346,7 @@ class BermudaTotalProxyCount(BermudaGlobalSensor):
         "Uniquely identify this sensor so that it gets stored in the entity_registry,
         and can be maintained / renamed etc by the user.
         """
-        return "BERMUDA_GLOBAL_PROXY_COUNT"
+        return "PERMUDA_GLOBAL_PROXY_COUNT"
 
     @property
     def native_value(self) -> int:
@@ -370,7 +370,7 @@ class BermudaActiveProxyCount(BermudaGlobalSensor):
         "Uniquely identify this sensor so that it gets stored in the entity_registry,
         and can be maintained / renamed etc by the user.
         """
-        return "BERMUDA_GLOBAL_ACTIVE_PROXY_COUNT"
+        return "PERMUDA_GLOBAL_ACTIVE_PROXY_COUNT"
 
     @property
     def native_value(self) -> int:
@@ -394,7 +394,7 @@ class BermudaTotalDeviceCount(BermudaGlobalSensor):
         "Uniquely identify this sensor so that it gets stored in the entity_registry,
         and can be maintained / renamed etc by the user.
         """
-        return "BERMUDA_GLOBAL_DEVICE_COUNT"
+        return "PERMUDA_GLOBAL_DEVICE_COUNT"
 
     @property
     def native_value(self) -> int:
@@ -418,7 +418,7 @@ class BermudaVisibleDeviceCount(BermudaGlobalSensor):
         "Uniquely identify this sensor so that it gets stored in the entity_registry,
         and can be maintained / renamed etc by the user.
         """
-        return "BERMUDA_GLOBAL_VISIBLE_DEVICE_COUNT"
+        return "PERMUDA_GLOBAL_VISIBLE_DEVICE_COUNT"
 
     @property
     def native_value(self) -> int:

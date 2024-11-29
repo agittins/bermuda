@@ -8,8 +8,8 @@ from typing import Final
 
 from .log_spam_less import BermudaLogSpamLess
 
-NAME = "Bermuda BLE Trilateration"
-DOMAIN = "bermuda"
+NAME = "Permuda BLE Mapping"
+DOMAIN = "permuda"
 DOMAIN_DATA = f"{DOMAIN}_data"
 # Version gets updated by github workflow during release.
 # The version in the repository should always be 0.0.0 to reflect

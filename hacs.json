@@ -1,9 +1,9 @@
 {
-  "name": "Bermuda BLE Trilateration",
+  "name": "Permuda BLE Mapping",
   "hacs": "1.6.0",
   "homeassistant": "2024.6",
   "render_readme": true,
   "zip_release": true,
-  "filename": "bermuda.zip",
+  "filename": "permuda.zip",
   "hide_default_branch": true
 }
