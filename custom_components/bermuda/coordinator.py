@@ -1288,7 +1288,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 out[address] = device.to_dict()
 
         if redact:
+            _stamp_redact = MONOTONIC_TIME()
             out = cast(ServiceResponse, self.redact_data(out))
+            _stamp_redact_elapsed = MONOTONIC_TIME() - _stamp_redact
+            if _stamp_redact_elapsed > 3:  # It should be fast now.
+                _LOGGER.warning("Dump devices redaction took %2f seconds", _stamp_redact_elapsed)
+            else:
+                _LOGGER.debug("Dump devices redaction took %2f seconds", _stamp_redact_elapsed)
         return out
 
     def redaction_list_update(self):
