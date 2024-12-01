@@ -28,6 +28,7 @@ def rssi_to_metres(rssi, ref_power=None, attenuation=None):
 
     return 10 ** ((ref_power - rssi) / (10 * attenuation))
 
+
 @lru_cache(256)
 def clean_charbuf(instring: str | None) -> str:
     """
