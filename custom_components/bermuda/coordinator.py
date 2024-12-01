@@ -1288,7 +1288,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 out[address] = device.to_dict()
 
         if redact:
-            self.redaction_list_update()
             out = cast(ServiceResponse, self.redact_data(out))
         return out
 
@@ -1314,6 +1313,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 i += 1
                 if address.count("_") == 2:
                     self.redactions[address] = f"{address[:4]}::CFG_iBea_{i}::{address[32:]}"
+                    # Raw uuid in advert
+                    self.redactions[address.split("_")[0]] = f"{address[:4]}::CFG_iBea_{i}_{address[32:]}::"
                 elif len(address) == 17:
                     self.redactions[address] = f"{address[:2]}::CFG_MAC_{i}::{address[-2:]}"
                 else:
@@ -1326,9 +1327,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # Only add if they are not already there.
                 i += 1
                 if device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
-                    self.redactions[address] = f"{address[:2]}::IRK_DEV_{i}"
+                    self.redactions[address] = f"{address[:4]}::IRK_DEV_{i}"
                 elif address.count("_") == 2:
                     self.redactions[address] = f"{address[:4]}::OTHER_iBea_{i}::{address[32:]}"
+                    # Raw uuid in advert
+                    self.redactions[address.split("_")[0]] = f"{address[:4]}::OTHER_iBea_{i}_{address[32:]}::"
                 elif len(address) == 17:  # a MAC
                     self.redactions[address] = f"{address[:2]}::OTHER_MAC_{i}::{address[-2:]}"
                 else:
@@ -1358,7 +1361,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 self._purge_task.cancel()
                 self._purge_task = None
 
-    def redact_data(self, data):
+    def redact_data(self, data, first_run=True):
         """
         Wash any collection of data of any MAC addresses.
 
@@ -1366,27 +1369,29 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         washes any remaining mac-like addresses. This routine is recursive,
         so if you're changing it bear that in mind!
         """
-        if len(self.redactions) == 0:
-            # Initialise the list of addresses if not already done.
+        if first_run:
+            # On first/outer call, refresh the redaction list to ensure
+            # we don't let any new addresses slip through. Might be expensive
+            # on first call, but will be much cheaper for subsequent calls.
             self.redaction_list_update()
+            first_run = False
         if isinstance(data, str):
             data = data.lower()
             # the end of the recursive wormhole, do the actual work:
-            if ":" in data:
-                if data not in self.redactions:
-                    for find, fix in list(self.redactions.items()):
-                        if find in data:
-                            self.redactions[data] = data.replace(find, fix)
-                            data = self.redactions[data]
-                            break
-                else:
-                    data = self.redactions[data]
+            if data not in self.redactions:
+                for find, fix in list(self.redactions.items()):
+                    if find in data:
+                        self.redactions[data] = data.replace(find, fix)
+                        data = self.redactions[data]
+                        break
+            else:
+                data = self.redactions[data]
             # redactions done, now replace any remaining MAC addresses
             # We are only looking for xx:xx:xx... format.
             return self._redact_generic_re.sub(self._redact_generic_sub, data)
         elif isinstance(data, dict):
-            return {self.redact_data(k): self.redact_data(v) for k, v in data.items()}
+            return {self.redact_data(k, False): self.redact_data(v, False) for k, v in data.items()}
         elif isinstance(data, list):
-            return [self.redact_data(v) for v in data]
+            return [self.redact_data(v, False) for v in data]
         else:
             return data
