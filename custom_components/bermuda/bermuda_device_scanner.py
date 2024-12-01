@@ -63,8 +63,7 @@ class BermudaDeviceScanner(dict):
     ) -> None:
         # I am declaring these just to control their order in the dump,
         # which is a bit silly, I suspect.
-        self.name: str = scandata.scanner.name
-        self.scanner_device_name = scanner_device.name
+        self.name: str = scanner_device.name or scandata.scanner.name
         self.scanner_device = scanner_device  # links to the source device
         self.adapter: str = scandata.scanner.adapter
         self.address = scanner_device.address
@@ -75,7 +74,8 @@ class BermudaDeviceScanner(dict):
         self.parent_device_address = parent_device.address
         self.options = options
         self.stamp: float | None = 0
-        self.scanner_sends_stamps: bool = False
+        # Only remote scanners log timestamps, local usb adaptors do not.
+        self.scanner_sends_stamps = isinstance(scanner_device, BaseHaRemoteScanner)
         self.new_stamp: float | None = None  # Set when a new advert is loaded from update
         self.rssi: float | None = None
         self.tx_power: float | None = None
@@ -89,8 +89,6 @@ class BermudaDeviceScanner(dict):
         self.hist_distance_by_interval = []  # updated per-interval
         self.hist_interval = []  # WARNING: This is actually "age of ad when we polled"
         self.hist_velocity = []  # Effective velocity versus previous stamped reading
-        self.tx_power: float | None = None
-        self.cached_remote_scanners = set()
         self.conf_rssi_offset = self.options.get(CONF_RSSI_OFFSETS, {}).get(self.address, 0)
         self.conf_ref_power = self.options.get(CONF_REF_POWER)
         self.conf_attenuation = self.options.get(CONF_ATTENUATION)
@@ -124,13 +122,8 @@ class BermudaDeviceScanner(dict):
         self.area_name = self.scanner_device.area_name
         new_stamp: float | None = None
 
-        scanner_address = scandata.scanner.source
-
-        # Only remote scanners log timestamps here (local usb adaptors do not),
-        if scanner_address in self.cached_remote_scanners or isinstance(scanner, BaseHaRemoteScanner):
-            self.cached_remote_scanners.add(scanner_address)
+        if self.scanner_sends_stamps:
             # Found a remote scanner which has timestamp history...
-            self.scanner_sends_stamps = True
             # There's no API for this, so we somewhat sneakily are accessing
             # what is intended to be a protected dict.
             # pylint: disable-next=protected-access
@@ -199,24 +192,19 @@ class BermudaDeviceScanner(dict):
             self.stamp = new_stamp
             self.hist_stamp.insert(0, self.stamp)
 
-        # Safe to update these values regardless of stamps...
-
-        self.adapter: str = scanner.adapter
-        self.source: str = scanner.source
-        if self.tx_power is not None and scandata.advertisement.tx_power != self.tx_power:
-            # Not really an erorr, we just don't account for this happening -
-            # I want to know if it does.
-            # AJG 2024-01-11: This does happen. Looks like maybe apple devices?
-            # Changing from warning to debug to quiet users' logs.
-            # Also happens with esphome set with long beacon interval tx, as it alternates
-            # between sending some generic advert and the iBeacon advert. ie, it's bogus for that
-            # case.
-            # _LOGGER.debug(
-            #     "Device changed TX-POWER! That was unexpected: %s %sdB",
-            #     self.parent_device_address,
-            #     scandata.advertisement.tx_power,
-            # )
-            pass
+        # if self.tx_power is not None and scandata.advertisement.tx_power != self.tx_power:
+        #     # Not really an erorr, we just don't account for this happening -
+        #     # I want to know if it does.
+        #     # AJG 2024-01-11: This does happen. Looks like maybe apple devices?
+        #     # Changing from warning to debug to quiet users' logs.
+        #     # Also happens with esphome set with long beacon interval tx, as it alternates
+        #     # between sending some generic advert and the iBeacon advert. ie, it's bogus for that
+        #     # case.
+        #     _LOGGER.debug(
+        #         "Device changed TX-POWER! That was unexpected: %s %sdB",
+        #         self.parent_device_address,
+        #         scandata.advertisement.tx_power,
+        #     )
         self.tx_power = scandata.advertisement.tx_power
 
         # Track each advertisement element as or if they change.
@@ -242,17 +230,13 @@ class BermudaDeviceScanner(dict):
         setting change (such as altering a device's ref_power setting).
         """
         # Check if we should use a device-based ref_power
-        if self.ref_power == 0: # No user-supplied per-device value
+        if self.ref_power == 0:  # No user-supplied per-device value
             # use global default
             ref_power = self.conf_ref_power
         else:
             ref_power = self.ref_power
 
-        distance = rssi_to_metres(
-            self.rssi + self.conf_rssi_offset,
-            ref_power,
-            self.conf_attenuation
-        )
+        distance = rssi_to_metres(self.rssi + self.conf_rssi_offset, ref_power, self.conf_attenuation)
         self.rssi_distance_raw = distance
         if reading_is_new:
             # Add a new historical reading
@@ -391,7 +375,8 @@ class BermudaDeviceScanner(dict):
 
                         velocity = delta_d / delta_t
 
-                        if velocity > peak_velocity:  # noqa: PLR1730 - max() is slower.
+                        # Don't use max() as it's slower.
+                        if velocity > peak_velocity:
                             # but on subsequent comparisons we only care if they're faster retreats
                             peak_velocity = velocity
                 # we've been through the history and have peak velo retreat, or the most recent
@@ -418,7 +403,6 @@ class BermudaDeviceScanner(dict):
             else:
                 self.hist_distance_by_interval.insert(0, self.hist_distance_by_interval[0])
 
-            dist_count = len(self.hist_distance_by_interval)
             # trim the log to length
             if len(self.hist_distance_by_interval) > self.conf_smoothing_samples:
                 del self.hist_distance_by_interval[self.conf_smoothing_samples :]
