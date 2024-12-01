@@ -23,6 +23,7 @@ from homeassistant.const import EVENT_STATE_CHANGED
 from homeassistant.core import (
     Event,
     EventStateChangedData,
+    HassJob,
     HomeAssistant,
     ServiceCall,
     ServiceResponse,
@@ -47,6 +48,7 @@ from homeassistant.helpers.device_registry import (
     format_mac,
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import slugify
 from homeassistant.util.dt import get_age, now
@@ -221,7 +223,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         self.devices: dict[str, BermudaDevice] = {}
         # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
-
+        self._has_purged = False
+        self._purge_task = hass.loop.call_soon_threadsafe(hass.async_create_task, self.purge_redactions(hass))
         self.area_reg = ar.async_get(hass)
 
         # Restore the scanners saved in config entry data. We maintain
@@ -339,13 +342,19 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         _LOGGER.debug("Trigger updating of Scanner Listings")
                         self._do_full_scanner_init = True
             else:
-                _LOGGER.error("Received DR update/create but device id does not exist: %s", ev.data["device_id"])
+                _LOGGER.error(
+                    "Received DR update/create but device id does not exist: %s",
+                    ev.data["device_id"],
+                )
 
         elif ev.data["action"] == "remove":
             device_found = False
             for scanner in self.scanner_list:
                 if self.devices[scanner].entry_id == ev.data["device_id"]:
-                    _LOGGER.debug("Scanner %s removed, trigger update of scanners.", self.devices[scanner].name)
+                    _LOGGER.debug(
+                        "Scanner %s removed, trigger update of scanners.",
+                        self.devices[scanner].name,
+                    )
                     self._do_full_scanner_init = True
                     device_found = True
             if not device_found:
@@ -397,7 +406,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         """Checks if all platforms have finished loading a device's entities."""
         dev = self._get_device(address)
         if dev is not None:
-            if all([dev.create_sensor_done, dev.create_tracker_done, dev.create_number_done]):
+            if all(
+                [
+                    dev.create_sensor_done,
+                    dev.create_tracker_done,
+                    dev.create_number_done,
+                ]
+            ):
                 dev.create_all_done = True
 
     def sensor_created(self, address):
@@ -1273,8 +1288,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 out[address] = device.to_dict()
 
         if redact:
-            self.redaction_list_update()
+            _stamp_redact = MONOTONIC_TIME()
             out = cast(ServiceResponse, self.redact_data(out))
+            _stamp_redact_elapsed = MONOTONIC_TIME() - _stamp_redact
+            if _stamp_redact_elapsed > 3:  # It should be fast now.
+                _LOGGER.warning("Dump devices redaction took %2f seconds", _stamp_redact_elapsed)
+            else:
+                _LOGGER.debug("Dump devices redaction took %2f seconds", _stamp_redact_elapsed)
         return out
 
     def redaction_list_update(self):
@@ -1287,37 +1307,67 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         i = len(self.redactions)  # not entirely accurate but we don't care.
 
         # SCANNERS
-        for address in self.scanner_list:
-            if address.upper() not in self.redactions:
+        for non_lower_address in self.scanner_list:
+            address = non_lower_address.lower()
+            if address not in self.redactions:
                 i += 1
-                self.redactions[address.upper()] = f"{address[:2]}::SCANNER_{i}::{address[-2:]}"
+                self.redactions[address] = f"{address[:2]}::SCANNER_{i}::{address[-2:]}"
         # CONFIGURED DEVICES
-        for address in self.options.get(CONF_DEVICES, []):
-            if address.upper() not in self.redactions:
+        for non_lower_address in self.options.get(CONF_DEVICES, []):
+            address = non_lower_address.lower()
+            if address not in self.redactions:
                 i += 1
                 if address.count("_") == 2:
                     self.redactions[address] = f"{address[:4]}::CFG_iBea_{i}::{address[32:]}"
+                    # Raw uuid in advert
+                    self.redactions[address.split("_")[0]] = f"{address[:4]}::CFG_iBea_{i}_{address[32:]}::"
                 elif len(address) == 17:
                     self.redactions[address] = f"{address[:2]}::CFG_MAC_{i}::{address[-2:]}"
                 else:
                     # Don't know what it is, but not a mac.
                     self.redactions[address] = f"CFG_OTHER_{1}_{address}"
         # EVERYTHING ELSE
-        for address, device in self.devices.items():
-            if address.upper() not in self.redactions:
+        for non_lower_address, device in self.devices.items():
+            address = non_lower_address.lower()
+            if address not in self.redactions:
                 # Only add if they are not already there.
                 i += 1
                 if device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
-                    self.redactions[address] = f"{address[:2]}::IRK_DEV_{i}"
+                    self.redactions[address] = f"{address[:4]}::IRK_DEV_{i}"
                 elif address.count("_") == 2:
                     self.redactions[address] = f"{address[:4]}::OTHER_iBea_{i}::{address[32:]}"
+                    # Raw uuid in advert
+                    self.redactions[address.split("_")[0]] = f"{address[:4]}::OTHER_iBea_{i}_{address[32:]}::"
                 elif len(address) == 17:  # a MAC
                     self.redactions[address] = f"{address[:2]}::OTHER_MAC_{i}::{address[-2:]}"
                 else:
                     # Don't know what it is.
                     self.redactions[address] = f"OTHER_{1}_{address}"
 
-    def redact_data(self, data):
+    async def purge_redactions(self, hass: HomeAssistant):
+        """Empty redactions and free up some memory."""
+        self.redactions = {}
+        self._purge_task = async_call_later(
+            hass,
+            8 * 60 * 60,
+            lambda _: HassJob(
+                hass.loop.call_soon_threadsafe(hass.async_create_task, self.purge_redactions(hass)),
+                cancel_on_shutdown=True,
+            ),
+        )
+        self._has_purged = True
+
+    async def stop_purging(self):
+        """Stop purging. There might be a better way to do this?."""
+        if self._purge_task:
+            if self._has_purged:
+                self._purge_task()  # This cancels the async_call_later task
+                self._purge_task = None
+            else:
+                self._purge_task.cancel()
+                self._purge_task = None
+
+    def redact_data(self, data, first_run=True):
         """
         Wash any collection of data of any MAC addresses.
 
@@ -1325,19 +1375,29 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         washes any remaining mac-like addresses. This routine is recursive,
         so if you're changing it bear that in mind!
         """
-        if len(self.redactions) == 0:
-            # Initialise the list of addresses if not already done.
+        if first_run:
+            # On first/outer call, refresh the redaction list to ensure
+            # we don't let any new addresses slip through. Might be expensive
+            # on first call, but will be much cheaper for subsequent calls.
             self.redaction_list_update()
+            first_run = False
         if isinstance(data, str):
+            data = data.lower()
             # the end of the recursive wormhole, do the actual work:
-            for find, fix in self.redactions.items():
-                data = re.sub(find, fix, data, flags=re.IGNORECASE)
+            if data not in self.redactions:
+                for find, fix in list(self.redactions.items()):
+                    if find in data:
+                        self.redactions[data] = data.replace(find, fix)
+                        data = self.redactions[data]
+                        break
+            else:
+                data = self.redactions[data]
             # redactions done, now replace any remaining MAC addresses
             # We are only looking for xx:xx:xx... format.
             return self._redact_generic_re.sub(self._redact_generic_sub, data)
         elif isinstance(data, dict):
-            return {self.redact_data(k): self.redact_data(v) for k, v in data.items()}
+            return {self.redact_data(k, False): self.redact_data(v, False) for k, v in data.items()}
         elif isinstance(data, list):
-            return [self.redact_data(v) for v in data]
+            return [self.redact_data(v, False) for v in data]
         else:
             return data

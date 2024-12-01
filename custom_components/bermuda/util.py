@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 
+
+@lru_cache(1024)
 def rssi_to_metres(rssi, ref_power=None, attenuation=None):
     """
     Convert instant rssi value to a distance in metres.
@@ -15,11 +18,6 @@ def rssi_to_metres(rssi, ref_power=None, attenuation=None):
     ref_power:      db. measured rssi when at 1m distance from rx. The will
                     be affected by both receiver sensitivity and transmitter
                     calibration, antenna design and orientation etc.
-
-    TODO: the ref_power and attenuation figures can/should probably be mapped
-        against each receiver and transmitter for variances. We could also fine-
-        tune the attenuation in real time based on changing values coming from
-        known-fixed beacons (eg thermometers, window sensors etc)
     """
     if ref_power is None:
         return False
@@ -31,6 +29,7 @@ def rssi_to_metres(rssi, ref_power=None, attenuation=None):
     return 10 ** ((ref_power - rssi) / (10 * attenuation))
 
 
+@lru_cache(256)
 def clean_charbuf(instring: str | None) -> str:
     """
     Some people writing C on bluetooth devices seem to

@@ -264,3 +264,7 @@ class BermudaDevice(dict):
                 val = scanout  # noqa
             out[var] = val
         return out
+
+    def __repr__(self) -> str:
+        """Help debug devices and figure out what device it is at a glance."""
+        return self.prefname

@@ -41,15 +41,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry):
     coordinator = BermudaDataUpdateCoordinator(hass, entry)
     entry.runtime_data = BermudaData(coordinator)
 
-    await coordinator.async_refresh()
-
-    if not coordinator.last_update_success:
+    async def on_failure():
         _LOGGER.debug("Coordinator last update failed, rasing ConfigEntryNotReady")
+        await coordinator.stop_purging()
         raise ConfigEntryNotReady
+
+    try:
+        await coordinator.async_refresh()
+    except Exception as ex:  # noqa: BLE001
+        _LOGGER.exception(ex)
+        await on_failure()
+    if not coordinator.last_update_success:
+        await on_failure()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+
     return True
 
 
@@ -87,6 +95,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> 
     """Handle removal of an entry."""
     if unload_result := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         _LOGGER.debug("Unloaded platforms.")
+    await entry.runtime_data.coordinator.stop_purging()
     return unload_result
 
 

@@ -29,8 +29,7 @@ jobs:
 
       - name: Install Python modules
         run: |
-          pip install --constraint=.github/workflows/constraints.txt pre-commit black
-          # flake8 isort
+          pip install --constraint=.github/workflows/constraints.txt pre-commit
 
       - name: "Install requirements"
         run: python3 -m pip install -r requirements.txt
