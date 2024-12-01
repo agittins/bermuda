@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Bermuda BLE Trilateration",
-        "description": "Αν χρειάζεστε βοήθεια για τη διαμόρφωση, ρίξτε μια ματιά εδώ: https://github.com/agittins/bermuda",
+        "description": "Αν χρειάζεστε βοήθεια για τη διαμόρφωση, ρίξτε μια ματιά στη σελίδα [GitHub](https://github.com/agittins/bermuda)",
         "data": {
           "username": "Όνομα Χρήστη",
           "password": "Κωδικός Πρόσβασης"
@@ -18,11 +18,18 @@
     }
   },
   "options": {
+    "error": {
+      "some_active": "You have at least some active devices, this is good.",
+      "no_scanners": "You need to configure some bluetooth scanners before Bermuda will have anything to work with. \nAny one of esphome bluetooth_proxy, Shelly bluetooth proxy or local bluetooth adaptor should get you started.",
+      "no_devices": "No bluetooth devices are actively being reported from your scanners. \nYou will need to solve this before Bermuda can be of much help."
+    },
     "step": {
       "init": {
-        "description": "Το Bermuda βλέπει επί του παρόντος:\n- {device_count} συσκευές Bluetooth.\n- {scanner_count} συσκευές ανιχνευτή Bluetooth.\n\n{status}"
+        "title": "Bermuda configuration",
+        "description": "Το Bermuda βλέπει επί του παρόντος:\n- {device_counter_active} ενεργή στις {device_counter_devices} συσκευές Bluetooth.\n- {scanner_counter_active} ενεργή στις {scanner_counter_scanners} συσκευές ανιχνευτή Bluetooth.\n\n{status}"
       },
       "globalopts": {
+        "title": "Global settings",
         "data": {
           "max_area_radius": "Μέγιστη ακτίνα σε μέτρα για απλή ανίχνευση ΠΕΡΙΟΧΗΣ",
           "max_velocity": "Μέγιστη Ταχύτητα σε μέτρα ανά δευτερόλεπτο - αγνοεί μετρήσεις που υποδεικνύουν απομάκρυνση πιο γρήγορη από αυτό το όριο. 3m/s (10km/h) είναι καλό.",

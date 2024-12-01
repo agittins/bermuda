@@ -142,8 +142,11 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         active_devices = self.coordinator.count_active_devices()
         active_scanners = self.coordinator.count_active_scanners()
 
-        messages["device_count"] = f"{active_devices} active out of {len(self.devices)}"
-        messages["scanner_count"] = f"{active_scanners} active out of {len(self.coordinator.scanner_list)}"
+        messages["device_counter_active"] = f"{active_devices}"
+        messages["device_counter_devices"] = f"{len(self.devices)}"
+        messages["scanner_counter_active"] = f"{active_scanners}"
+        messages["scanner_counter_scanners"] = f"{len(self.coordinator.scanner_list)}"
+
         if len(self.coordinator.scanner_list) == 0:
             messages["status"] = (
                 "You need to configure some bluetooth scanners before Bermuda will have anything to work with. "
@@ -159,7 +162,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             messages["status"] = "You have at least some active devices, this is good."
 
         # Build a markdown table of scanners so the user can see what's up.
-        scanner_table = "\nStatus of scanners:\n\n|Scanner|Address|Last advertisement|\n|---|---|---:|\n"
+        scanner_table = "\n\nStatus of scanners:\n\n|Scanner|Address|Last advertisement|\n|---|---|---:|\n"
         # Use emoji to indicate if age is "good"
         for scanner in self.coordinator.get_active_scanner_summary():
             age = int(scanner.get("last_stamp_age", 999))
