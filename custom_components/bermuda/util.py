@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+
 @lru_cache(1024)
 def rssi_to_metres(rssi, ref_power=None, attenuation=None):
     """
