@@ -114,11 +114,11 @@ data structures that bermuda uses to track and calculate its state. This can be 
 for working out what's going on and troubleshooting, or to use if you have a very custom
 need that you can solve with template sensors etc.
 
-If called with no paramaters, the service will return all data. Paramaters are available
+If called with no parameters, the service will return all data. parameters are available
 which let you limit or reformat the resulting data to make it easier to work with. In particular
-the `addresses` paramater is helpful to only return data relevant for one or more MAC addresses
+the `addresses` parameter is helpful to only return data relevant for one or more MAC addresses
 (or iBeacon UUIDs).
-See the information on paramaters in the `Services` page in home assistant, under `Developer Tools`.
+See the information on parameters in the `Services` page in home assistant, under `Developer Tools`.
 
 Important: If you decide to use the results of this call for your own templates etc, bear in mind that
 the format might change in any release, and won't necessarily be considered a "breaking change".
@@ -130,7 +130,7 @@ items.
 
 The `bluetooth_tracker` and `ble_tracker` integrations are only built to give a "home/not home"
 determination, and don't do "Area" based location. (nb: "Zones" are places outside the
-home, while "Areas" are rooms/areas inside the home). I wanted to be free to experiement with
+home, while "Areas" are rooms/areas inside the home). I wanted to be free to experiment with
 this in ways that might not suit core, but hopefully at least some of this could find
 a home in the core codebase one day.
 
@@ -138,9 +138,9 @@ The "monitor" script uses standalone Pi's to gather bluetooth data and then pump
 MQTT. It doesn't use the `bluetooth_proxy` capabilities which I feel are the future of
 home bluetooth networking (well, it is for my home, anyway!).
 
-ESPrescence looks cool, but I don't want to dedicate my nodes to non-esphome use, and again
+ESPresense looks cool, but I don't want to dedicate my nodes to non-esphome use, and again
 it doesn't leverage the bluetooth proxy features now in HA. I am probably reinventing
-a fair amount of ESPrescense's wheel.
+a fair amount of ESPresense's wheel.
 
 ## Installation
 
