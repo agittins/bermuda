@@ -515,8 +515,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         mac = format_mac(address).lower()
         # format_mac tries to return a lower-cased, colon-separated mac address.
         # failing that, it returns the original unaltered.
-        if mac in self.devices:
-            return self.devices[mac]
+        if hasattr(self, devices):
+            if mac in self.devices:
+                return self.devices[mac]
         return None
 
     def _get_or_create_device(self, address: str) -> BermudaDevice:
