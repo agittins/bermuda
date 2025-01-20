@@ -145,7 +145,7 @@ a fair amount of ESPresense's wheel.
 ## Installation
 
 You can install Bermuda by opening HACS on your Home Assistant instance and searching for "Bermuda".
-Alternatively you can click The button below to be automatically redirected.
+Alternatively you can click the button below to be automatically redirected.
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=agittins&repository=bermuda&category=Integration)
 
