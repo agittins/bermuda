@@ -426,8 +426,12 @@ class BermudaMap():
 			self.area_mean[area] = mean / count if count else 0
 			DBG('MEAN {} COUNT {} for {}', self.area_mean[area], count, area)
 
-		self.area_count_mean = statistics.mean(self.area_count.values())
-		self.area_mean_mean = statistics.mean(self.area_mean.values())
+		if self.area_count:
+			self.area_count_mean = statistics.mean(self.area_count.values())
+			self.area_mean_mean = statistics.mean(self.area_mean.values())
+		else:
+			self.area_count_mean = 0
+			self.area_mean_mean = 0
 		DBG('MEAN MEAN {} COUNT {}', self.area_mean_mean, self.area_count_mean)
 		# for area in self.areas:
 			# self.area_mean[area] = self.area_mean_mean / self.area_mean[area]
