@@ -1,0 +1,117 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bermuda BLE Trilateration",
+        "description": "Se precisar de ajuda com a configuração, consulte a nossa [página no GitHub](https://github.com/agittins/bermuda)",
+        "data": {
+          "username": "Nome de utilizador",
+          "password": "Palavra-passe"
+        }
+      }
+    },
+    "error": {
+      "auth": "Nome de utilizador/palavra-passe incorretos."
+    },
+    "abort": {
+      "single_instance_allowed": "Apenas uma única instância é permitida."
+    }
+  },
+  "options": {
+    "error": {
+      "some_active": "Tem pelo menos alguns dispositivos ativos, isso é bom.",
+      "no_scanners": "Precisa de configurar alguns scanners Bluetooth antes de o Bermuda poder funcionar. Pode começar com dispositivos como esphome bluetooth_proxy, Shelly bluetooth proxy ou um adaptador Bluetooth local.",
+      "no_devices": "Nenhum dispositivo Bluetooth está a ser reportado ativamente pelos seus scanners. Resolva esta questão antes de o Bermuda ser útil."
+    },
+    "step": {
+      "init": {
+        "title": "Configurar o Bermuda",
+        "description": "Atualmente, o Bermuda consegue ver:\n- {device_counter_active} de {device_counter_devices} dispositivos Bluetooth ativos.\n- {scanner_counter_active} de {scanner_counter_scanners} scanners Bluetooth ativos.\n\n{status}"
+      },
+      "globalopts": {
+        "title": "Definições globais",
+        "data": {
+          "max_area_radius": "Raio máximo em metros para deteção simples de ÁREA",
+          "max_velocity": "Velocidade máxima em metros por segundo - ignorar leituras que indiquem movimento mais rápido que este limite (3m/s ou 10km/h é uma boa configuração).",
+          "devtracker_nothome_timeout": "Timeout do Devtracker em segundos para considerar um dispositivo como `Fora de Casa`.",
+          "update_interval": "Intervalo de atualização - frequência (em segundos) das atualizações dos sensores.",
+          "smoothing_samples": "Amostras de suavização - número de amostras usadas para suavizar as leituras de distância.",
+          "attenuation": "Atenuação - fator de atenuação do ambiente para cálculo/calibração de distância.",
+          "ref_power": "Potência de referência - RSSI padrão a 1 metro de distância, para calibração de distância.",
+          "configured_devices": "Dispositivos configurados - selecione os dispositivos ou beacons Bluetooth a monitorizar com sensores."
+        },
+        "data_description": {
+          "max_area_radius": "Na funcionalidade simples `ÁREA`, um dispositivo será marcado como estando na ÁREA do recetor mais próximo, se estiver dentro deste raio. Se definir um valor pequeno, os dispositivos podem ficar como `desconhecido` entre recetores; valores grandes sempre os mostrarão na ÁREA mais próxima.",
+          "max_velocity": "Se uma leitura indicar que um dispositivo se move mais rápido do que este limite, essa leitura será ignorada. Humanos normalmente caminham a 1.4m/s; com objetos rápidos, movem-se até 3m/s.",
+          "devtracker_nothome_timeout": "Tempo necessário para marcar entidades como `fora de casa` após cessarem anúncios Bluetooth. 30 a 300 segundos é recomendado.",
+          "update_interval": "Distâncias que encurtam ainda serão atualizadas imediatamente, mas distâncias que aumentam serão limitadas por este intervalo para reduzir o crescimento da base de dados.",
+          "smoothing_samples": "Quantas amostras usar para suavizar leituras de distância. Valores maiores tornam os aumentos de distância mais lentos. Reduções de distância não são afetadas.",
+          "attenuation": "Após definir ref_power a 1 metro, ajuste a atenuação para que outras distâncias sejam lidas corretamente.",
+          "ref_power": "Coloque o beacon mais comum a 1 metro do scanner mais usado e ajuste ref_power até que o sensor de distância mostre 1 metro."
+        }
+      },
+      "selectdevices": {
+        "title": "Selecionar dispositivos",
+        "description": "Escolha quais dispositivos deseja monitorizar. Se nenhum dispositivo aparecer abaixo, o Bermuda não está a receber dados de scanners Bluetooth. Certifique-se de que possui um dispositivo esphome ble_proxy, dispositivos Shelly configurados como proxy Bluetooth ou um adaptador Bluetooth local."
+      },
+      "calibration1_global": {
+        "title": "Calibração 1: Global",
+        "description": "Este passo é para estabelecer algumas predefinições globais para cálculos de distância.\n\n{details}\n{summary}\nExpanda para instruções!{summary_end}\n\nNos passos seguintes, pode definir substituições por dispositivo, por isso faz sentido escolher o hardware mais comum como 'par de referência' para este passo. Por exemplo, se a maioria dos seus scanners for ESPHome num modelo específico, escolha um desses como scanner de referência.\n\n- Escolha um dispositivo e um scanner abaixo para usar como 'par de referência'\n- Coloque fisicamente o dispositivo escolhido a 1m (um metro) do scanner escolhido. Certifique-se de que têm linha de visão clara e evite colocá-los próximos a seres vivos que possam interferir com o sinal.\n- Clique em 'ENVIAR' e anote os valores RSSI na tabela que aparecerá abaixo. Pode clicar em 'ENVIAR' novamente a qualquer momento para atualizar os valores.\n- Assim que tiver um sinal estável, insira esse valor no campo `ref_power` e clique em 'ENVIAR'.\n- Agora, mova o dispositivo para uma distância maior e meça essa distância com uma fita métrica.\n- Experimente diferentes valores para `attenuation` e clique em 'ENVIAR' até que as medições estimadas concordem com a distância física.\n- Quando estiver satisfeito com a calibração, marque 'Salvar e Fechar' e clique em 'ENVIAR'.\n{details_end}\n{suffix}",
+        "data": {
+          "configured_devices": "Dispositivo",
+          "configured_scanners": "Scanner",
+          "save_and_close": "Salvar e Fechar",
+          "attenuation": "Atenuação",
+          "ref_power": "Potência de Referência"
+        },
+        "data_description": {
+          "save_and_close": "Depois de estar satisfeito com a calibração, marque esta opção e clique em Enviar. As alterações serão salvas e pode prosseguir para o próximo passo de calibração. Deixe desmarcado enquanto ajusta e testa as configurações.",
+          "attenuation": "Após ajustar as definições acima para leituras de 1m, mova o dispositivo para mais longe e ajuste a atenuação até que a distância calculada corresponda à distância física.",
+          "ref_power": "Para calibrar esta definição, coloque o dispositivo a 1 metro do scanner e ajuste o valor até que as figuras acima reflitam essa distância de 1m."
+        }
+      },
+      "calibration2_scanners": {
+        "title": "Calibração 2: Compensações por Scanner",
+        "description": "Este passo é opcional, mas útil se os seus scanners tiverem sensibilidades ou desempenhos de antena diferentes. Ajuste a compensação RSSI para cada scanner até que a distância calculada para o dispositivo selecionado esteja correta.",
+        "data": {
+          "configured_devices": "Dispositivo",
+          "save_and_close": "Salvar e Fechar",
+          "scanner_info": "Compensações por Scanner"
+        },
+        "data_description": {
+          "scanner_info": "Deixe a zero para aceitar o padrão global, ou insira um número para ajustar o RSSI reportado por esse scanner. Ajuste até que a distância estimada corresponda à distância real."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "distance": {
+        "name": "Distância"
+      },
+      "area": {
+        "name": "Área"
+      }
+    }
+  },
+  "services": {
+    "dump_devices": {
+      "name": "Exportar Dispositivos",
+      "description": "Retorna a estrutura de dados interna, limitada opcionalmente aos endereços fornecidos. Inclui o RSSI e outras informações de cada scanner.",
+      "fields": {
+        "addresses": {
+          "name": "Endereços",
+          "description": "Uma lista opcional de endereços MAC separados por espaços para obter informações. Se em branco, retorna todos os endereços."
+        },
+        "configured_devices": {
+          "name": "Dispositivos Configurados",
+          "description": "Selecione para incluir apenas scanners e dispositivos configurados na saída."
+        },
+        "redact": {
+          "name": "Redigir",
+          "description": "Defina como VERDADEIRO para garantir que os endereços MAC sejam redigidos na saída, para maior privacidade."
+        }
+      }
+    }
+  }
+}
