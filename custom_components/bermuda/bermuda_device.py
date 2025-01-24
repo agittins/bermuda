@@ -61,6 +61,8 @@ class BermudaDevice(dict):
         self.address_type = BDADDR_TYPE_UNKNOWN
         self.area_id: str | None = None
         self.area_name: str | None = None
+        self.area_last_seen: str | None = None
+
         self.area_distance: float | None = None  # how far this dev is from that area
         self.area_rssi: float | None = None  # rssi from closest scanner
         self.area_scanner: str | None = None  # name of closest scanner
@@ -174,6 +176,7 @@ class BermudaDevice(dict):
             self.area_distance = closest_scanner.rssi_distance
             self.area_rssi = closest_scanner.rssi
             self.area_scanner = closest_scanner.name
+            self.area_last_seen = closest_scanner.area_name
         else:
             # Not close to any scanners!
             self.area_id = None
