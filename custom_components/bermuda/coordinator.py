@@ -1126,22 +1126,33 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # instead of trawling through the device registry first.
         #
         # scanner_ha: BaseHaScanner from HA's bluetooth backend
-        # scanner_devreg: DeviceEntry from HA's device_registry
+        # scanner_devreg_bt: DeviceEntry from HA's device_registry from Bluetooth integration
+        # scanner_devreg_mac: DeviceEntry from HA's *other* integrations, like ESPHome, Shelly.
         # scanner_b: BermudaDevice entry
-        #
+
         # Evil: We're acessing private members of bt manager to do it since there's no API call for it.
         self._hascanners = self._manager._connectable_scanners | self._manager._non_connectable_scanners  # noqa: SLF001
         for hascanner in self._hascanners:
             scanner_address = format_mac(hascanner.source).lower()
-            scanner_devreg = self._device_registry.async_get_device(
+            # As of 2025.2.0 The bluetooth integration creates its own device entries
+            # for all HaScanners, not just local adaptors. So since there are two integration
+            # pages where a user might apply an area setting (eg, the bluetooth page or the shelly or esphome page)
+            # we should check both to see if the user has applied an area anywhere, and prefer the bluetooth one
+            # if both are set.
+            scanner_devreg_bt = self._device_registry.async_get_device(
                 connections={
-                    ("mac", scanner_address),  # Matches ESPHome proxies, Shellys etc
-                    ("bluetooth", scanner_address.upper()),  # Matches local USB Bluetooth (hci0..)
+                    ("bluetooth", scanner_address.upper()),  # bluetooth, uppercase: matches bluetooth integration
                 }
             )
-            if scanner_devreg is None:
+            scanner_devreg_mac = self._device_registry.async_get_device(
+                connections={
+                    ("mac", scanner_address),  # mac, lowercase: matches ESPHome, Shellys integrations etc
+                }
+            )
+
+            if scanner_devreg_bt is None and scanner_devreg_mac is None:
                 _LOGGER_SPAM_LESS.error(
-                    "scanner_not_in_devreg",
+                    f"scanner_not_in_devreg_{scanner_address:s}",
                     "Failed to find scanner %s (%s) in Device Registry",
                     hascanner.name,
                     hascanner.source,
@@ -1163,15 +1174,37 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 scanner_b = self._get_or_create_device(scanner_address)
 
             # We found the device entry and have created our scannerdevice,
-            # now update any fields that might be new from the device reg:
-            scanner_b.area_id = scanner_devreg.area_id
-            scanner_b.entry_id = scanner_devreg.id
-            if scanner_devreg.name_by_user is not None:
-                scanner_b.name = scanner_devreg.name_by_user
-            else:
-                scanner_b.name = scanner_devreg.name
-            areas = self.area_reg.async_get_area(scanner_devreg.area_id) if scanner_devreg.area_id else None
-            if areas is not None and hasattr(areas, "name"):
+            # now update any fields that might be new from the device reg.
+            # First clear the existing to make prioritising the bt/mac matches
+            # easier (feel free to refactor, bear in mind we prefer bt first)
+            scanner_b.area_id = None
+            scanner_b.name = None
+
+            _bt_name = None
+
+            if scanner_devreg_bt is not None:
+                scanner_b.area_id = scanner_devreg_bt.area_id
+                scanner_b.entry_id = scanner_devreg_bt.id
+                scanner_b.name = scanner_devreg_bt.name_by_user  # might be None
+                _bt_name = scanner_devreg_bt.name
+            if scanner_devreg_mac is not None:
+                # Only apply if the bt device entry hasn't been applied:
+                scanner_b.area_id = scanner_b.area_id or scanner_devreg_mac.area_id
+                scanner_b.entry_id = scanner_b.entry_id or scanner_devreg_mac.id
+                # Name preference order:
+                # - bluetooth, user-supplied
+                # - other, user-supplied
+                # - other, default (because they pre-date bluetooth device)
+                # - bluetooth, default.
+                scanner_b.name = (
+                    scanner_b.name  # user-supplied in bluetooth integration (above)
+                    or scanner_devreg_mac.name_by_user  # user-supplied in esphome/shelly etc
+                    or scanner_devreg_mac.name
+                    or _bt_name
+                )
+
+            areas = self.area_reg.async_get_area(scanner_b.area_id) if scanner_b.area_id else None
+            if areas is not None and hasattr(areas, "name") and areas.name is not None:
                 scanner_b.area_name = areas.name
             else:
                 _LOGGER_SPAM_LESS.warning(
