@@ -1202,6 +1202,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     or scanner_devreg_mac.name
                     or _bt_name
                 )
+            else:
+                # there was no mac device, use the bt default name as last resort
+                # (this will mostly just happen with local bt usb adaptors)
+                scanner_b.name = _bt_name
 
             areas = self.area_reg.async_get_area(scanner_b.area_id) if scanner_b.area_id else None
             if areas is not None and hasattr(areas, "name") and areas.name is not None:
