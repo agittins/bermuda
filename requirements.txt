@@ -1,6 +1,6 @@
 colorlog==6.9.0
 homeassistant>=2024.6.0
-pip>=24.1.1,<24.4
+pip>=24.1.1,<25.1
 ruff==0.9.4
 pyudev
 pyserial-asyncio==0.6
