@@ -416,7 +416,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                 scanner = device.scanners[user_input[CONF_SCANNERS]]
             else:
                 return self.async_show_form(
-                    step_id="calibration_global",
+                    step_id="calibration1_global",
                     errors={"err_scanner_no_record": "The selected scanner hasn't (yet) seen this device."},
                     data_schema=vol.Schema(data_schema),
                     description_placeholders=_ugly_token_hack
