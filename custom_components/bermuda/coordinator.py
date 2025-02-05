@@ -160,6 +160,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self._entity_registry = er.async_get(self.hass)
         self._device_registry = dr.async_get(self.hass)
 
+        # Add storage for scanner entity IDs
+        self.scanner_entity_ids: dict[str, str] = {}
+
         # Track the list of Private BLE devices, noting their entity id
         # and current "last address".
         self.pb_state_sources: dict[str, str | None] = {}
@@ -1120,6 +1123,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         _previous_scannerlist = [device.address for device in self.devices.values() if device.is_scanner]
         _purge_scanners = _previous_scannerlist.copy()
 
+        # Clear existing mappings to ensure fresh start
+        self.scanner_entity_ids.clear()
+
         # _LOGGER.error("Preserving %d current scanner entries", len(_previous_scannerlist))
 
         # Find active HaBaseScanners in the backend, and only pay attention to those
@@ -1158,6 +1164,28 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     hascanner.source,
                 )
                 continue
+
+            if scanner_devreg:
+                _LOGGER.debug("Found device entry id: %s", scanner_devreg.id)
+
+                # Get all entities for this device
+                entities = list(self._entity_registry.entities.get_entries_for_device_id(scanner_devreg.id))
+
+                if len(entities) > 1:
+                    # Device must have multiple entities. Reduce search space
+                    entities = [entity for entity in entities if entity.domain in ("switch", "light")]
+                if entities:
+                    # Take the first valid entity
+                    self.scanner_entity_ids[scanner_address] = entities[0].entity_id
+                    _LOGGER.debug(
+                        "Mapped scanner %s (%s) to entity %s",
+                        scanner_devreg.name,
+                        scanner_address,
+                        entities[0].entity_id,
+                    )
+                else:
+                    _LOGGER.debug("No entity found for scanner %s", scanner_address)
+
             # _LOGGER.info("Great! Found scanner: %s (%s)", scanner_ha.name, scanner_ha.source)
             # Since this scanner still exists, we won't purge it
             if scanner_address in _purge_scanners:
