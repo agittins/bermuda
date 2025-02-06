@@ -24,6 +24,9 @@ ISSUE_URL = "https://github.com/agittins/bermuda/issues"
 # Icons
 ICON = "mdi:format-quote-close"
 
+# Issue/repair translation keys. If you change these you MUST also update the key in the translations/xx.json files.
+REPAIR_SCANNER_WITHOUT_AREA = "scanner_without_area"
+
 # Device classes
 BINARY_SENSOR_DEVICE_CLASS = "connectivity"
 

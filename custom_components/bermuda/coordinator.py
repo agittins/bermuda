@@ -42,6 +42,9 @@ from homeassistant.helpers import (
 from homeassistant.helpers import (
     entity_registry as er,
 )
+from homeassistant.helpers import (
+    issue_registry as ir,
+)
 from homeassistant.helpers.device_registry import (
     EVENT_DEVICE_REGISTRY_UPDATED,
     EventDeviceRegistryUpdatedData,
@@ -87,6 +90,7 @@ from .const import (
     PRUNE_TIME_DEFAULT,
     PRUNE_TIME_INTERVAL,
     PRUNE_TIME_IRK,
+    REPAIR_SCANNER_WITHOUT_AREA,
     SAVEOUT_COOLDOWN,
     SIGNAL_DEVICE_NEW,
     UPDATE_INTERVAL,
@@ -159,6 +163,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         self._entity_registry = er.async_get(self.hass)
         self._device_registry = dr.async_get(self.hass)
+
+        self._scanners_without_areas: list[str] | None = None  # Tracks any proxies that don't have an area assigned.
 
         # Track the list of Private BLE devices, noting their entity id
         # and current "last address".
@@ -1119,6 +1125,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         """
         _previous_scannerlist = [device.address for device in self.devices.values() if device.is_scanner]
         _purge_scanners = _previous_scannerlist.copy()
+        _scanners_without_areas = []
 
         # _LOGGER.error("Preserving %d current scanner entries", len(_previous_scannerlist))
 
@@ -1217,12 +1224,36 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     scanner_b.name,
                     areas,
                 )
+                _scanners_without_areas.append(scanner_b.name or scanner_b.address)
             scanner_b.is_scanner = True
 
         # Now un-tag any devices that are no longer scanners
         for address in _purge_scanners:
             self.devices[address].is_scanner = False
             update_scannerlist = True
+
+        if _scanners_without_areas != self._scanners_without_areas:
+            # the set has changed, or we have just started (since the one in self is defaulted to None)
+
+            # Clear any existing repair, because it's either resolved now (empty list) or we need to re-issue
+            # the repair in order to update the scanner list (re-calling doesn't update it).
+            ir.async_delete_issue(self.hass, DOMAIN, REPAIR_SCANNER_WITHOUT_AREA)
+
+            if len(_scanners_without_areas) != 0:
+                ir.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    REPAIR_SCANNER_WITHOUT_AREA,
+                    translation_key=REPAIR_SCANNER_WITHOUT_AREA,
+                    translation_placeholders={
+                        "scannerlist": "".join(f"- {name}\n" for name in _scanners_without_areas),
+                    },
+                    severity=ir.IssueSeverity.ERROR,
+                    is_fixable=False,
+                )
+
+            # copy to self so we don't re-raise unless something changes in future.
+            self._scanners_without_areas = _scanners_without_areas
 
         # Because of the quick check-time and the checks we have on saving the config_entry,
         # we'll update on every call:

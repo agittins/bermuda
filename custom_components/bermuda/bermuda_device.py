@@ -267,4 +267,4 @@ class BermudaDevice(dict):
 
     def __repr__(self) -> str:
         """Help debug devices and figure out what device it is at a glance."""
-        return self.prefname
+        return self.prefname or self.local_name or self.name or self.address
