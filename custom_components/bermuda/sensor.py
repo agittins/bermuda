@@ -59,7 +59,6 @@ async def async_setup_entry(
             entities.append(BermudaSensorScanner(coordinator, entry, address))
             entities.append(BermudaSensorRssi(coordinator, entry, address))
             entities.append(BermudaSensorAreaLastSeen(coordinator, entry, address))
-            entities.append(BermudaSensorLastSeen(coordinator, entry, address))
 
             for scanner in scanners:
                 entities.append(BermudaSensorScannerRange(coordinator, entry, address, scanner))
@@ -334,25 +333,6 @@ class BermudaSensorAreaLastSeen(BermudaSensor):
     @property
     def native_value(self):
         return self._device.area_last_seen
-
-class BermudaSensorLastSeen(BermudaSensor):
-    """Sensor for device last seen time."""
-
-    @property
-    def unique_id(self):
-        return f"{self._device.unique_id}_last_seen"
-
-    @property
-    def name(self):
-        return "Last Seen"
-
-    @property
-    def native_value(self):
-        return self.coordinator.dt_mono_to_datetime(self._device.last_seen)
-
-    @property
-    def device_class(self):
-        return "timestamp"
 
 class BermudaGlobalSensor(BermudaGlobalEntity, SensorEntity):
     """bermuda Global Sensor class."""
