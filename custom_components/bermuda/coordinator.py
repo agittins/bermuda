@@ -20,6 +20,8 @@ from homeassistant.components.bluetooth import (
 from homeassistant.components.bluetooth.api import _get_manager
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import EVENT_STATE_CHANGED
+from homeassistant.const import MAJOR_VERSION as HA_VERSION_MAJ
+from homeassistant.const import MINOR_VERSION as HA_VERSION_MIN
 from homeassistant.core import (
     Event,
     EventStateChangedData,
@@ -136,6 +138,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.config_entry = entry
 
         self.sensor_interval = entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+
+        # set some version flags
+        self.hass_version_min_2025_2 = HA_VERSION_MAJ > 2025 or (HA_VERSION_MAJ == 2025 and HA_VERSION_MIN >= 2)
 
         # match/replacement pairs for redacting addresses
         self.redactions: dict[str, str] = {}
@@ -1137,8 +1142,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # scanner_devreg_mac: DeviceEntry from HA's *other* integrations, like ESPHome, Shelly.
         # scanner_b: BermudaDevice entry
 
-        # Evil: We're acessing private members of bt manager to do it since there's no API call for it.
-        self._hascanners = self._manager._connectable_scanners | self._manager._non_connectable_scanners  # noqa: SLF001
+        # TODO: Eventually replace this with a minver requirement in hacs.json.
+        if self.hass_version_min_2025_2:
+            # New api
+            self._hascanners = set(self._manager.async_current_scanners())
+        else:
+            # Evil: We're acessing private members of bt manager to do it since there's no API call for it.
+            self._hascanners = self._manager._connectable_scanners | self._manager._non_connectable_scanners  # noqa: SLF001
+
         for hascanner in self._hascanners:
             scanner_address = format_mac(hascanner.source).lower()
             # As of 2025.2.0 The bluetooth integration creates its own device entries
