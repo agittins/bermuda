@@ -319,6 +319,7 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
             return round(distance, 3)
         return None
 
+
 class BermudaSensorAreaLastSeen(BermudaSensor):
     """Sensor for name of last seen area."""
 
@@ -334,6 +335,7 @@ class BermudaSensorAreaLastSeen(BermudaSensor):
     def native_value(self):
         return self._device.area_last_seen
 
+
 class BermudaGlobalSensor(BermudaGlobalEntity, SensorEntity):
     """bermuda Global Sensor class."""
 
@@ -348,6 +350,7 @@ class BermudaGlobalSensor(BermudaGlobalEntity, SensorEntity):
     def device_class(self):
         """Return de device class of the sensor."""
         return "bermuda__custom_device_class"
+
 
 class BermudaTotalProxyCount(BermudaGlobalSensor):
     """Counts the total number of proxies we have access to."""
