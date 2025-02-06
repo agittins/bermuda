@@ -376,7 +376,7 @@ class BermudaDeviceScanner(dict):
                         velocity = delta_d / delta_t
 
                         # Don't use max() as it's slower.
-                        if velocity > peak_velocity:
+                        if velocity > peak_velocity:  # noqa: PLR1730
                             # but on subsequent comparisons we only care if they're faster retreats
                             peak_velocity = velocity
                 # we've been through the history and have peak velo retreat, or the most recent
