@@ -1225,6 +1225,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     areas,
                 )
                 _scanners_without_areas.append(scanner_b.name or scanner_b.address)
+                scanner_b.area_name = f"Invalid Area for {scanner_b.name}"
             scanner_b.is_scanner = True
 
         # Now un-tag any devices that are no longer scanners
