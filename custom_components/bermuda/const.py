@@ -8,8 +8,8 @@ from typing import Final
 
 from .log_spam_less import BermudaLogSpamLess
 
-NAME = "Bermuda BLE Trilateration"
-DOMAIN = "bermuda"
+NAME = "Permuda BLE Mapping"
+DOMAIN = "permuda"
 DOMAIN_DATA = f"{DOMAIN}_data"
 # Version gets updated by github workflow during release.
 # The version in the repository should always be 0.0.0 to reflect
@@ -135,6 +135,8 @@ DOCS[CONF_REF_POWER] = "Default RSSI for signal at 1 metre."
 CONF_SAVE_AND_CLOSE = "save_and_close"
 CONF_SCANNER_INFO = "scanner_info"
 CONF_RSSI_OFFSETS = "rssi_offsets"
+
+CONF_BMAP = "bmap"
 
 CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL = "update_interval", 10
 DOCS[CONF_UPDATE_INTERVAL] = (

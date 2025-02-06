@@ -11,6 +11,7 @@ from homeassistant.config_entries import OptionsFlowWithConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import (
+    AreaSelector,
     DeviceSelector,
     DeviceSelectorConfig,
     ObjectSelector,
@@ -24,6 +25,7 @@ from .const import (
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     BDADDR_TYPE_PRIVATE_RESOLVABLE,
+    CONF_BMAP,
     CONF_ATTENUATION,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
@@ -130,6 +132,8 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         self.devices: dict[str, BermudaDevice]
         self._last_ref_power = None
         self._last_device = None
+        self._last_area = None
+        self._last_clear_points = False
         self._last_scanner = None
         self._last_attenuation = None
         self._last_scanner_info = None
@@ -188,6 +192,8 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                 "selectdevices": "Select Devices",
                 "calibration1_global": "Calibration 1: Global",
                 "calibration2_scanners": "Calibration 2: Scanner RSSI Offsets",
+                "calibration11_map": "Calibration 1: Map Management",
+                "calibration3_area_map": "Calibration 3: Area Mapping",
             },
             description_placeholders=messages,
         )
@@ -553,6 +559,139 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             data_schema=vol.Schema(data_schema),
             description_placeholders={"suffix": results_str},
         )
+
+    async def async_step_calibration11_map(self, user_input=None):
+        area_points = self.coordinator.bmap._area_points
+
+        if user_input is not None:
+            if user_input["clear"]:
+                for name, points in area_points.items():
+                    area_points[name] = []
+            else:
+                for name, points in area_points.items():
+                    if "clear " + name in user_input and user_input["clear " + name]:
+                        area_points[name] = []
+
+            self.coordinator.bmap._area_points = area_points
+
+            if user_input[CONF_SAVE_AND_CLOSE]:
+                self.coordinator.bmap_save()
+                self.options.update({ CONF_BMAP: self.coordinator.options[CONF_BMAP] })
+                # self.options.update({CONF_BMAP: area_points })
+                return await self._update_options()
+
+        data_schema = {
+            vol.Optional("clear", default = False) : vol.Coerce(bool)
+        }
+        for name, points in area_points.items():
+            data_schema[vol.Optional("clear " + name, default = False)] = vol.Coerce(bool);
+
+        data_schema[vol.Optional(CONF_SAVE_AND_CLOSE, default=False)] = vol.Coerce(bool);
+        # self.options.update({CONF_BMAP: area_points })
+
+        stats = "| Area | Point Count |\n|---|---|"
+        for name, points in area_points.items():
+            stats += f"\n| {name} | {len(points)} |"
+
+        return self.async_show_form(
+            step_id="calibration11_map",
+            data_schema=vol.Schema(data_schema),
+            description_placeholders={"suffix": stats},
+            )
+
+
+    async def async_step_calibration3_area_map(self, user_input=None):
+        CONF_AREA = "area"
+        CONF_DEVICE = "device"
+        CONF_CLEAR_POINTS = "clear_points"
+
+        if user_input is not None:
+            self._last_area = user_input[CONF_AREA]
+            self._last_device = user_input[CONF_DEVICE]
+
+            self._last_clear_points = user_input[CONF_CLEAR_POINTS]
+            #TODO handle
+
+            self.coordinator.cal = True
+            self.coordinator.cal_area = user_input[CONF_AREA]
+            self.coordinator.cal_device = self._get_bermuda_device_from_registry(user_input[CONF_DEVICE])
+            self.coordinator.cal_device_addr = self.coordinator.cal_device.address
+
+            # self.options.update({CONF_AREA: user_input[CONF_AREA]})
+            # self.options.update({CONF_DEVICE: user_input[CONF_DEVICE]})
+
+            if self.coordinator.cal:
+                return await self.async_step_calibration31_calibrating(user_input)
+                return self.async_show_menu(
+                    step_id="calibration31_calibrating",
+                    menu_options={
+                        "calibration31_calibrating": "Refresh",
+                        "calibration31_finish": "Finish",
+                        "calibration31_abort": "Abort",
+                        }
+                    )
+
+        data_schema = {
+            vol.Required(
+                CONF_DEVICE,
+                default=self._last_device if self._last_device is not None else vol.UNDEFINED,
+            ): DeviceSelector(DeviceSelectorConfig(integration=DOMAIN)),
+            vol.Required(
+                CONF_AREA,
+                default=self._last_area if self._last_area is not None else vol.UNDEFINED,
+            ): AreaSelector(),
+            vol.Optional(CONF_CLEAR_POINTS, default=self._last_clear_points): vol.Coerce(bool),
+        }
+
+        return self.async_show_form(
+            step_id="calibration3_area_map",
+            data_schema=vol.Schema(data_schema),
+            description_placeholders={"suffix": "After you click Submit, point capture will start."},
+        )
+
+    async def async_step_calibration31_calibrating(self, user_input=None):
+        if not self.coordinator.cal:
+            return self.async_create_entry(title=NAME)#abort/error?
+
+        #TODO make closing also abort!!! currently capture will be stuck on...!!!
+
+        area_points = self.coordinator.bmap._area_points
+
+        messages = {}
+        messages["area"] = self.coordinator.cal_area
+        messages["device"] = self.coordinator.cal_device.prefname
+
+        if self._last_area not in area_points:
+            messages["count"] = "0"
+            messages["point"] = ""
+        else:
+            messages["count"] = f"{len(area_points[self._last_area])}"
+            if area_points[self._last_area]:
+                messages["point"] = f"{area_points[self._last_area][-1].to_dict()}"
+            else:
+                messages["point"] = ""
+
+        return self.async_show_menu(
+            step_id="calibration31_calibrating",
+            menu_options={
+                "calibration31_calibrating": "Refresh",
+                "calibration31_finish": "Finish",
+                "calibration31_abort": "Abort",
+                },
+            description_placeholders=messages,
+            )
+
+    async def async_step_calibration31_finish(self, user_input=None):
+        self.coordinator.cal = False
+        self.coordinator.bmap_save()
+        self.options.update({ CONF_BMAP: self.coordinator.options[CONF_BMAP] })
+        return await self._update_options()
+
+    async def async_step_calibration31_abort(self, user_input=None):
+        self.coordinator.cal = False
+        #TODO make this actually work...
+        return self.async_create_entry(title=NAME, data=self.options)
+
 
     def _get_bermuda_device_from_registry(self, registry_id: str) -> BermudaDevice | None:
         """

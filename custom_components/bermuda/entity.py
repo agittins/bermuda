@@ -112,7 +112,7 @@ class BermudaEntity(CoordinatorEntity):
         model = None
 
         if self._device.is_scanner:
-            connection = {(dr.CONNECTION_NETWORK_MAC, self._device.address.lower())}
+            connection = {(dr.CONNECTION_NETWORK_MAC, DOMAIN + self._device.address.lower())}
         elif self._device.address_type == ADDR_TYPE_IBEACON:
             # ibeacon doesn't (yet) actually set a "connection", but
             # this "matches" what it stores for identifier.
@@ -121,7 +121,7 @@ class BermudaEntity(CoordinatorEntity):
         elif self._device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
             # Private BLE Device integration doesn't specify "connection" tuples,
             # so we use what it defines for the "identifier" instead.
-            connection = {("private_ble_device", self._device.address.lower())}
+            connection = {(DOMAIN_PRIVATE_BLE_DEVICE, self._device.address.lower())}
             # We don't set the model since the Private BLE integration should have
             # already named it nicely.
             # model = f"IRK: {self._device.address.lower()[:4]}"
@@ -135,6 +135,7 @@ class BermudaEntity(CoordinatorEntity):
             domain_name = DOMAIN_PRIVATE_BLE_DEVICE
         else:
             connection = {(dr.CONNECTION_BLUETOOTH, self._device.address.upper())}
+            # connection = {(DOMAIN_PRIVATE_BLE_DEVICE, self._device.address.upper())}
             # No need to set model, since MAC address will be shown via connection.
             # model = f"Bermuda: {self._device.address.lower()}"
 
@@ -201,6 +202,6 @@ class BermudaGlobalEntity(CoordinatorEntity):
     def device_info(self):
         """Implementing this creates an entry in the device registry."""
         return {
-            "identifiers": {(DOMAIN, "BERMUDA_GLOBAL")},
-            "name": "Bermuda Global",
+            "identifiers": {(DOMAIN, "PERMUDA_GLOBAL")},
+            "name": "Permuda Global",
         }

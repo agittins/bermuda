@@ -81,6 +81,57 @@
         "data_description": {
           "scanner_info": "Leave at zero to accept the global default, or enter a non-zero number to offset the rssi reported by that scanner. Adjust until the estimated distance above matches the actual distance between that scanner and the selected transmitting device. Negative values will increase the distance, positive values will decrease it."
         }
+      },
+      "calibration11_map": {
+        "title": "Calibration 11: Map Management",
+        "description": "Bla bla:\n{suffix}",
+        "data": {
+          "configured_devices": "Device",
+          "save_and_close": "Save and Close",
+          "scanner_info": "Per-Scanner RSSI Offsets"
+        },
+        "data_description": {
+          "scanner_info": "Leave at zero to accept the global default, or enter a non-zero number to offset the rssi reported by that scanner. Adjust until the estimated distance above matches the actual distance between that scanner and the selected transmitting device. Negative values will increase the distance, positive values will decrease it."
+        }
+      },
+      "calibration3_area_map": {
+        "title": "Calibration 3: Mapping Areas",
+        "description": "Bla bla:\n{suffix}",
+        "data": {
+          "configured_devices": "Device",
+          "save_and_close": "Save and Close",
+          "scanner_info": "Per-Scanner RSSI Offsets"
+        },
+        "data_description": {
+          "scanner_info": "Leave at zero to accept the global default, or enter a non-zero number to offset the rssi reported by that scanner. Adjust until the estimated distance above matches the actual distance between that scanner and the selected transmitting device. Negative values will increase the distance, positive values will decrease it."
+        }
+      },
+      "calibration31_calibrating": {
+        "description": "Device: {device}\nArea: {area}\nPoints: {count}\nLast: {point}"
+      },
+      "calibration31_finish": {
+        "title": "Calibration 3: finished",
+        "description": "Bla bla:\n{suffix}",
+        "data": {
+          "configured_devices": "Device",
+          "save_and_close": "Save and Close",
+          "scanner_info": "Per-Scanner RSSI Offsets"
+        },
+        "data_description": {
+          "scanner_info": "aoeuoaeu"
+        }
+      },
+      "calibration31_abort": {
+        "title": "Calibration 3: abort",
+        "description": "Bla bla:\n{suffix}",
+        "data": {
+          "configured_devices": "Device",
+          "save_and_close": "Save and Close",
+          "scanner_info": "Per-Scanner RSSI Offsets"
+        },
+        "data_description": {
+          "scanner_info": "aoeuoaeu"
+        }
       }
     }
   },

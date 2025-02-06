@@ -17,7 +17,7 @@ async def async_setup_entry(hass, entry, async_add_devices):
 
 
 class BermudaBinarySwitch(BermudaEntity, SwitchEntity):
-    """bermuda switch class."""
+    """permuda switch class."""
 
     async def async_turn_on(self, **kwargs):  # pylint: disable=unused-argument
         """Turn on the switch."""

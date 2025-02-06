@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import bisect
+import math
 import re
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -56,6 +58,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import slugify
 from homeassistant.util.dt import get_age, now
 
+from .common.point import BermudaPoint
+from .common.map import *
 from .bermuda_device import BermudaDevice
 from .const import (
     _LOGGER,
@@ -65,6 +69,7 @@ from .const import (
     BDADDR_TYPE_PRIVATE_RESOLVABLE,
     BEACON_IBEACON_SOURCE,
     BEACON_PRIVATE_BLE_SOURCE,
+    CONF_BMAP,
     CONF_ATTENUATION,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
@@ -134,6 +139,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         """Initialize."""
         self.platforms = []
         self.config_entry = entry
+
+        self.cal = False
+        self.cal_area = None
+        self.cal_device = None
+        self.cal_device_addr = None
+        self.cal_time = 0.0
 
         self.sensor_interval = entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
 
@@ -208,6 +219,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.options[CONF_SMOOTHING_SAMPLES] = DEFAULT_SMOOTHING_SAMPLES
         self.options[CONF_UPDATE_INTERVAL] = DEFAULT_UPDATE_INTERVAL
         self.options[CONF_RSSI_OFFSETS] = {}
+        self.options[CONF_BMAP] = {}
 
         if hasattr(entry, "options"):
             # Firstly, on some calls (specifically during reload after settings changes)
@@ -224,9 +236,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     CONF_REF_POWER,
                     CONF_SMOOTHING_SAMPLES,
                     CONF_RSSI_OFFSETS,
+                    CONF_BMAP,
                 ):
                     self.options[key] = val
 
+        self.bmap_load()
         self.devices: dict[str, BermudaDevice] = {}
         # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
         self._has_purged = False
@@ -507,17 +521,18 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         mac = format_mac(address).lower()
         # format_mac tries to return a lower-cased, colon-separated mac address.
         # failing that, it returns the original unaltered.
-        if mac in self.devices:
-            return self.devices[mac]
+        if hasattr(self, devices):
+            if mac in self.devices:
+                return self.devices[mac]
         return None
 
     def _get_or_create_device(self, address: str) -> BermudaDevice:
         device = self._get_device(address)
         if device is None:
             mac = format_mac(address).lower()
-            self.devices[mac] = device = BermudaDevice(address=mac, options=self.options)
+            self.devices[mac] = device = BermudaDevice(address=mac, coordinator=self)
             device.address = mac
-            device.unique_id = mac
+            device.unique_id = DOMAIN + mac
         return device
 
     async def _async_update_data(self):
@@ -687,6 +702,17 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         for device in self.devices.values():
             # Recalculate smoothed distances, last_seen etc
             device.calculate_data()
+
+        if self.cal:
+            beacon = self.cal_device
+
+            # point, stamp = beacon.get_point_fresh()
+            point = beacon.get_point()
+
+            if self.cal_area not in self.bmap._area_points:
+                self.bmap._area_points[self.cal_area] = []
+
+            self.bmap._area_points[self.cal_area].append(point)
 
         self._refresh_areas_by_min_distance()
 
@@ -1092,26 +1118,34 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             if device.is_scanner is not True:
                 self._refresh_area_by_min_distance(device)
 
+
     def _refresh_area_by_min_distance(self, device: BermudaDevice):
+        if not device.create_sensor:
+            return
         """Very basic Area setting by finding closest beacon to a given device."""
         closest_scanner: BermudaDeviceScanner | None = None
-        for scanner in device.scanners.values():
-            # Check each scanner and keep note of the closest one based on rssi_distance.
-            # Note that rssi_distance is smoothed/filtered, and might be None if the last
-            # reading was old enough that our algo decides it's "away".
-            if scanner.rssi_distance is not None and scanner.rssi_distance < self.options.get(
-                CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS
-            ):
-                # It's inside max_radius...
-                if closest_scanner is None:
-                    # no encumbent, we win!
-                    closest_scanner = scanner
-                elif closest_scanner.rssi_distance is None or scanner.rssi_distance < closest_scanner.rssi_distance:
-                    # We're closer than the last-closest, we win!
-                    closest_scanner = scanner
+        # for scanner in device.scanners.values():
+        #     # Check each scanner and keep note of the closest one based on rssi_distance.
+        #     # Note that rssi_distance is smoothed/filtered, and might be None if the last
+        #     # reading was old enough that our algo decides it's "away".
+        #     if scanner.rssi_distance is not None and scanner.rssi_distance < self.options.get(
+        #         CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS
+        #     ):
+        #         # It's inside max_radius...
+        #         if closest_scanner is None:
+        #             # no encumbent, we win!
+        #             closest_scanner = scanner
+        #         elif closest_scanner.rssi_distance is None or scanner.rssi_distance < closest_scanner.rssi_distance:
+        #             # We're closer than the last-closest, we win!
+        #             closest_scanner = scanner
 
-        # Apply the newly-found closest scanner (or apply None if we didn't find one)
-        device.apply_scanner_selection(closest_scanner)
+        # point, stamp = device.get_point_fresh()
+        point = device.get_point()
+
+        if not hasattr(device, 'maptrack'):
+            device.maptrack = BermudaMapTrack(self.bmap)
+
+        device.maptrack.map_point(device, point)
 
     def _refresh_scanners(self, scanners: list[BluetoothScannerDevice] | None = None):
         """
@@ -1469,3 +1503,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             return [self.redact_data(v, False) for v in data]
         else:
             return data
+
+    def bmap_save(self):
+        _LOGGER.debug("bmap_save")
+        self.options.update({ CONF_BMAP: self.bmap.to_dict() })
+
+    def bmap_load(self):
+        self.bmap = BermudaMap(self.options.get(CONF_BMAP))
+        self.bmap.bake()

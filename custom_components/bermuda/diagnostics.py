@@ -28,6 +28,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Bermuda
     data: dict[str, Any] = {
         "active_devices": f"{coordinator.count_active_devices()}/{len(coordinator.devices)}",
         "active_scanners": f"{coordinator.count_active_scanners()}/{len(coordinator.scanner_list)}",
+        "options": coordinator.options,
+        # "bmap": coordinator.bmap.to_dict(),
         "devices": await coordinator.service_dump_devices(call),
         "bt_manager": coordinator.redact_data(bt_diags),
     }
