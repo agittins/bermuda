@@ -144,9 +144,10 @@ a fair amount of ESPresense's wheel.
 
 ## Installation
 
-Definitely use the HACS interface! Once you have HACS installed, go to `Integrations`, click the
-meatballs menu in the top right, and choose `Custom Repositories`. Paste `agittins/bermuda` into
-the `Repository` field, and choose `Integration` for the `Category`. Click `Add`.
+You can install Bermuda by opening HACS on your Home Assistant instance and searching for "Bermuda".
+Alternatively you can click the button below to be automatically redirected.
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=agittins&repository=bermuda&category=Integration)
 
 You should now be able to add the `Bermuda BLE Trilateration` integration. Once you have done that,
 you need to restart Homeassistant, then in `Settings`, `Devices & Services` choose `Add Integration`
@@ -158,7 +159,7 @@ Once the integration is added, you need to set up your devices by clicking `Conf
 
 In the `Configuration` dialog, you can choose which bluetooth devices you would like the integration to track.
 
-The instructions below are the generic notes from the template:
+You can manually install Bermuda by doing the following:
 
 1. Using the tool of choice open the directory (folder) for your HA configuration (where you find `configuration.yaml`).
 2. If you do not have a `custom_components` directory (folder) there, you need to create it.
