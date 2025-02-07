@@ -401,7 +401,7 @@ class BermudaDeviceScanner(dict):
                 else:
                     self.hist_distance_by_interval.insert(0, self.hist_distance_by_interval[0])
             else:
-                self.hist_distance_by_interval.insert(0, self.hist_distance_by_interval[0])
+                self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
 
             # trim the log to length
             if len(self.hist_distance_by_interval) > self.conf_smoothing_samples:
@@ -427,6 +427,8 @@ class BermudaDeviceScanner(dict):
                 movavg = dist_total / _hist_dist_len
             else:
                 movavg = local_min
+
+            # Finally, set the new, smoothed rssi_distance value.
             # The average is only helpful if it's lower than the actual reading.
             if self.rssi_distance_raw is None or movavg < self.rssi_distance_raw:
                 self.rssi_distance = movavg
