@@ -142,8 +142,8 @@ class BermudaSensor(BermudaEntity, SensorEntity):
             ADDR_TYPE_IBEACON,
             ADDR_TYPE_PRIVATE_BLE_DEVICE,
         ]:
-            if len(self._device.beacon_sources) > 0:
-                current_mac = self._device.beacon_sources[0]
+            if len(self._device.metadevice_sources) > 0:
+                current_mac = self._device.metadevice_sources[0]
             else:
                 current_mac = STATE_UNAVAILABLE
 
