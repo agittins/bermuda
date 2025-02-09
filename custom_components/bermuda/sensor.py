@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import RestoreSensor, SensorEntity
 from homeassistant.components.sensor.const import SensorDeviceClass, SensorStateClass
 from homeassistant.const import (
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
@@ -320,7 +320,7 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
         return None
 
 
-class BermudaSensorAreaLastSeen(BermudaSensor):
+class BermudaSensorAreaLastSeen(BermudaSensor, RestoreSensor):
     """Sensor for name of last seen area."""
 
     @property
@@ -334,6 +334,13 @@ class BermudaSensorAreaLastSeen(BermudaSensor):
     @property
     def native_value(self):
         return self._device.area_last_seen
+
+    async def async_added_to_hass(self) -> None:
+        """Restore last saved value before adding to HASS."""
+        await super().async_added_to_hass()
+        if (sensor_data := await self.async_get_last_sensor_data()) is not None:
+            self._attr_native_value = str(sensor_data.native_value)
+            self._device.area_last_seen = str(sensor_data.native_value)
 
 
 class BermudaGlobalSensor(BermudaGlobalEntity, SensorEntity):
