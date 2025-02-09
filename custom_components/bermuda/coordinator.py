@@ -589,13 +589,19 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         # matching automations on attributes or a subset of
                         # devices), but if there are prominent use-cases we can
                         # alter our approach.
-                        #
 
-                        device.metadevice_type.add(METADEVICE_TYPE_IBEACON_SOURCE)
-                        device.beacon_uuid = man_data[2:18].hex().lower()
-                        device.beacon_major = str(int.from_bytes(man_data[18:20], byteorder="big"))
-                        device.beacon_minor = str(int.from_bytes(man_data[20:22], byteorder="big"))
-                        device.beacon_power = int.from_bytes([man_data[22]], signed=True)
+                        # At least one(!) iBeacon out there sends only 22 bytes (it has no tx_power field)
+                        # which is weird. So Let's just decode what we can that exists, and blindly proceed
+                        # otherwise. We could reject it, but it can still be useful, so...
+                        if len(man_data) >= 22:
+                            # Proper iBeacon packet has 23 bytes.
+                            device.metadevice_type.add(METADEVICE_TYPE_IBEACON_SOURCE)
+                            device.beacon_uuid = man_data[2:18].hex().lower()
+                            device.beacon_major = str(int.from_bytes(man_data[18:20], byteorder="big"))
+                            device.beacon_minor = str(int.from_bytes(man_data[20:22], byteorder="big"))
+                        if len(man_data) >= 23:
+                            # There really is at least one out there that lacks this! See #466
+                            device.beacon_power = int.from_bytes([man_data[22]], signed=True)
 
                         # So, the irony of having major/minor is that the
                         # UniversallyUniqueIDentifier is not even unique
