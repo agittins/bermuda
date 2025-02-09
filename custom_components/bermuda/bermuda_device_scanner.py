@@ -392,7 +392,7 @@ class BermudaDeviceScanner(dict):
                 if self.parent_device_address.upper() in self.options.get(CONF_DEVICES, []):
                     _LOGGER.debug(
                         "This sparrow %s flies too fast (%2fm/s), ignoring",
-                        self.parent_device_address,
+                        self.parent_device.name,
                         velocity,
                     )
                 # Discard the bogus reading by duplicating the last.
