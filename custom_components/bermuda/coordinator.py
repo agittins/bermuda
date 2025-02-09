@@ -63,8 +63,6 @@ from .const import (
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     BDADDR_TYPE_NOT_MAC48,
     BDADDR_TYPE_PRIVATE_RESOLVABLE,
-    BEACON_IBEACON_SOURCE,
-    BEACON_PRIVATE_BLE_SOURCE,
     CONF_ATTENUATION,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
@@ -86,6 +84,9 @@ from .const import (
     DOMAIN,
     DOMAIN_PRIVATE_BLE_DEVICE,
     HIST_KEEP_COUNT,
+    METADEVICE_SOURCETYPES,
+    METADEVICE_TYPE_IBEACON_SOURCE,
+    METADEVICE_TYPE_PRIVATE_BLE_SOURCE,
     PRUNE_MAX_COUNT,
     PRUNE_TIME_DEFAULT,
     PRUNE_TIME_INTERVAL,
@@ -322,12 +323,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         This catches area changes (on scanners) and any new/changed
         Private BLE Devices.
         """
-        # TODO: Ignore the below, and implement filtering. This gets
-        # called a "fair number" of times each time we get reloaded.
-        #
-        # We could try filtering on "updates" and "area" but I doubt
-        # this will fire all that often, and even when it does fire
-        # the difference in cycle time appears to be less than 1ms.
         _LOGGER.debug(
             "Device registry has changed. ev: %s",
             ev,
@@ -392,8 +387,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     @callback
     def async_handle_advert(
         self,
-        service_info: BluetoothServiceInfoBleak,
-        change: BluetoothChange,
+        _service_info: BluetoothServiceInfoBleak,
+        _change: BluetoothChange,
     ) -> None:
         """
         Handle an incoming advert callback from the bluetooth integration.
@@ -596,7 +591,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         # alter our approach.
                         #
 
-                        device.beacon_type.add(BEACON_IBEACON_SOURCE)
+                        device.metadevice_type.add(METADEVICE_TYPE_IBEACON_SOURCE)
                         device.beacon_uuid = man_data[2:18].hex().lower()
                         device.beacon_major = str(int.from_bytes(man_data[18:20], byteorder="big"))
                         device.beacon_minor = str(int.from_bytes(man_data[20:22], byteorder="big"))
@@ -738,11 +733,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         prune_list = []
         prunable_stamps = {}
 
-        # build a set of source devices that are still beacon_sources[0]
+        # build a set of source devices that are still metadevice_sources[0]
         metadevice_source_primos = set()
         for metadevice in self.metadevices.values():
-            if len(metadevice.beacon_sources) > 0:
-                metadevice_source_primos.add(metadevice.beacon_sources[0])
+            if len(metadevice.metadevice_sources) > 0:
+                metadevice_source_primos.add(metadevice.metadevice_sources[0])
 
         for device_address, device in self.devices.items():
             # Prune any devices that haven't been heard from for too long, but only
@@ -881,13 +876,16 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                             # Set up and tag the source device entry
                             source_device = self._get_or_create_device(pb_source_address)
-                            source_device.beacon_type.add(BEACON_PRIVATE_BLE_SOURCE)
+                            source_device.metadevice_type.add(METADEVICE_TYPE_PRIVATE_BLE_SOURCE)
 
                             # This should always be the latest known source address,
                             # since private ble device tells us so.
                             # So ensure it's listed, and listed first.
-                            if len(metadevice.beacon_sources) == 0 or metadevice.beacon_sources[0] != pb_source_address:
-                                metadevice.beacon_sources.insert(0, pb_source_address)
+                            if (
+                                len(metadevice.metadevice_sources) == 0
+                                or metadevice.metadevice_sources[0] != pb_source_address
+                            ):
+                                metadevice.metadevice_sources.insert(0, pb_source_address)
 
                             # Update state_sources so we can track when it changes
                             self.pb_state_sources[pb_entity.entity_id] = pb_source_address
@@ -909,7 +907,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         This does not update the beacon's details (distance etc), that is done
         in the update_metadevices function after all data has been gathered.
         """
-        if BEACON_IBEACON_SOURCE not in source_device.beacon_type:
+        if METADEVICE_TYPE_IBEACON_SOURCE not in source_device.metadevice_type:
             _LOGGER.error(
                 "Only IBEACON_SOURCE devices can be used to see a beacon metadevice. %s is not.",
                 source_device.name,
@@ -918,7 +916,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.error("Source device %s is not a valid iBeacon!", source_device.name)
         else:
             metadevice = self._get_or_create_device(source_device.beacon_unique_id)
-            if len(metadevice.beacon_sources) == 0:
+            if len(metadevice.metadevice_sources) == 0:
                 # #### NEW METADEVICE #####
                 # (do one-off init stuff here)
                 if metadevice.address not in self.metadevices:
@@ -945,12 +943,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # #### EXISTING METADEVICE ####
             # (only do things that might have to change when MAC address cycles etc)
 
-            if source_device.address not in metadevice.beacon_sources:
+            if source_device.address not in metadevice.metadevice_sources:
                 # We have a *new* source device.
                 # insert this device as a known source
-                metadevice.beacon_sources.insert(0, source_device.address)
+                metadevice.metadevice_sources.insert(0, source_device.address)
                 # and trim the list of sources
-                del metadevice.beacon_sources[HIST_KEEP_COUNT:]
+                del metadevice.metadevice_sources[HIST_KEEP_COUNT:]
 
                 # If we have a new / better name, use that..
                 metadevice.name_bt_serviceinfo = metadevice.name_bt_serviceinfo or source_device.name_bt_serviceinfo
@@ -980,8 +978,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # This is maintained by ibeacon or private_ble metadevice creation/update
             latest_source: str | None = None
             source_device: BermudaDevice | None = None
-            if len(metadev.beacon_sources) > 0:
-                latest_source = metadev.beacon_sources[0]
+            if len(metadev.metadevice_sources) > 0:
+                latest_source = metadev.metadevice_sources[0]
                 if latest_source is not None:
                     source_device = self._get_device(latest_source)
 
@@ -1105,7 +1103,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     def _refresh_areas_by_min_distance(self):
         """Set area for ALL devices based on closest beacon."""
         for device in self.devices.values():
-            if device.is_scanner is not True:
+            if (
+                device.is_scanner is not True  # exclude scanners.
+                or device.create_sensor  # include any devices we are tracking
+                or device.metadevice_type in METADEVICE_SOURCETYPES  # and any source devices for PBLE, ibeacon etc
+            ):
                 self._refresh_area_by_min_distance(device)
 
     def _refresh_area_by_min_distance(self, device: BermudaDevice):

@@ -74,8 +74,8 @@ class BermudaDevice(dict):
         self.manufacturer: str | None = None
         self.connectable: bool = False
         self.is_scanner: bool = False
-        self.beacon_type: set = set()
-        self.beacon_sources = []  # list of MAC addresses that have advertised this beacon
+        self.metadevice_type: set = set()
+        self.metadevice_sources = []  # list of MAC addresses that have advertised this beacon
         self.beacon_unique_id: str | None = None  # combined uuid_major_minor for *really* unique id
         self.beacon_uuid: str | None = None
         self.beacon_major: str | None = None
@@ -116,11 +116,11 @@ class BermudaDevice(dict):
                 if re.match("^[A-Fa-f0-9]{32}_[A-Fa-f0-9]*_[A-Fa-f0-9]*$", self.address):
                     # It's an iBeacon uuid_major_minor
                     self.address_type = ADDR_TYPE_IBEACON
-                    self.beacon_type.add(BEACON_IBEACON_DEVICE)
+                    self.metadevice_type.add(BEACON_IBEACON_DEVICE)
                     self.beacon_unique_id = self.address
                 elif re.match("^[A-Fa-f0-9]{32}$", self.address):
                     # 32-char hex-string is an IRK
-                    self.beacon_type.add(BEACON_PRIVATE_BLE_DEVICE)
+                    self.metadevice_type.add(BEACON_PRIVATE_BLE_DEVICE)
                     self.address_type = ADDR_TYPE_PRIVATE_BLE_DEVICE
                     self.beacon_unique_id = self.address
                 else:
@@ -200,7 +200,7 @@ class BermudaDevice(dict):
         # FIXME: This might need to check if it's a metadevice source or dest, and
         # ensure things are applied correctly. Might be a non-issue.
         old_area = self.area_name
-        if closest_scanner is not None:
+        if closest_scanner is not None and closest_scanner.rssi_distance is not None:
             # We found a winner
             self.area_scanner = closest_scanner
             self.area_id = closest_scanner.area_id
@@ -209,14 +209,14 @@ class BermudaDevice(dict):
             self.area_rssi = closest_scanner.rssi
             self.area_last_seen = closest_scanner.area_name
         else:
-            # Not close to any scanners!
+            # Not close to any scanners, or closest scanner has timed out!
             self.area_scanner = None
             self.area_id = None
             self.area_name = None
             self.area_distance = None
             self.area_rssi = None
+
         if (old_area != self.area_name) and self.create_sensor:
-            # Our area has changed!
             _LOGGER.debug(
                 "Device %s was in '%s', now '%s'",
                 self.name,
