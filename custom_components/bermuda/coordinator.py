@@ -186,9 +186,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # to stabilise. So set the stamp into the future.
         self.last_config_entry_update_request = MONOTONIC_TIME() + SAVEOUT_COOLDOWN  # Stamp for save-out requests
 
-        self.config_entry.async_on_unload(
-            self.hass.bus.async_listen(EVENT_STATE_CHANGED, self.handle_state_changes)
-        )
+        self.config_entry.async_on_unload(self.hass.bus.async_listen(EVENT_STATE_CHANGED, self.handle_state_changes))
 
         # First time around we freshen the restored scanner info by
         # forcing a scan of the captured info.
@@ -980,8 +978,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # flag is set.
         self.discover_private_ble_metadevices()
 
-        # iBeacon devices should already have their metadevices created.
-        # FIXME: irk and ibeacons will fight over their relative ref_power too.
+        # iBeacon devices should already have their metadevices created, so nothing more to
+        # set up for that.
 
         for metadev in self.metadevices.values():
             # We Expect the first beacon source to be the current one.
@@ -1128,7 +1126,19 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         if device.area_scanner is not None:
             closest_scanner = device.area_scanner  # The one to beat.
 
-        for scanner in device.scanners.values():
+        # Special case for metadevices, we pull in all their scanner entries
+        # from the older addresses, since it's possible that the closest scanner
+        # still had the old address, or that the new address is actually only
+        # transient, and the device will resume tx on an older address...
+        #
+        othersources: dict[str, BermudaDeviceScanner] = {}
+        for source in device.metadevice_sources:
+            if otherdev := self._get_device(source):
+                for otherscanner in otherdev.scanners.values():
+                    othersources["other_" + otherscanner.address] = otherscanner
+
+        # combine both current address scanners and the others...
+        for scanner in (device.scanners | othersources).values():
             # Check each scanner and keep note of the closest one based on rssi_distance.
             # Note that rssi_distance is smoothed/filtered, and might be None if the last
             # reading was old enough that our algo decides it's "away".
