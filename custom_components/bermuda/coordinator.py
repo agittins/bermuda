@@ -186,7 +186,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # to stabilise. So set the stamp into the future.
         self.last_config_entry_update_request = MONOTONIC_TIME() + SAVEOUT_COOLDOWN  # Stamp for save-out requests
 
-        self.hass.bus.async_listen(EVENT_STATE_CHANGED, self.handle_state_changes)
+        self.config_entry.async_on_unload(
+            self.hass.bus.async_listen(EVENT_STATE_CHANGED, self.handle_state_changes)
+        )
 
         # First time around we freshen the restored scanner info by
         # forcing a scan of the captured info.
@@ -198,7 +200,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         # Listen for changes to the device registry and handle them.
         # Primarily for changes to scanners and Private BLE Devices.
-        hass.bus.async_listen(EVENT_DEVICE_REGISTRY_UPDATED, self.handle_devreg_changes)
+        self.config_entry.async_on_unload(
+            self.hass.bus.async_listen(EVENT_DEVICE_REGISTRY_UPDATED, self.handle_devreg_changes)
+        )
 
         self.options = {}
 
