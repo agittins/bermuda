@@ -1262,7 +1262,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             scanner_b.name_devreg = _mac_name or _bt_name
             # Bluetooth device reg is newer, so use the user-given name there if it exists.
             scanner_b.name_by_user = _bt_name_by_user or _mac_name_by_user
+            # Apply any name changes.
+            scanner_b.make_name()
 
+            # Look up areas
             areas = self.area_reg.async_get_area(scanner_b.area_id) if scanner_b.area_id else None
             if areas is not None and hasattr(areas, "name") and areas.name is not None:
                 scanner_b.area_name = areas.name
@@ -1273,7 +1276,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     scanner_b.name,
                     areas,
                 )
-                _scanners_without_areas.append(scanner_b.name)
+                _scanners_without_areas.append(f"{scanner_b.name} [{scanner_b.address}]")
                 scanner_b.area_name = f"Invalid Area for {scanner_b.name}"
             scanner_b.is_scanner = True
 

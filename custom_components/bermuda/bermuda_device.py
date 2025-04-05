@@ -282,9 +282,19 @@ class BermudaDevice(dict):
             # On first creation, we also want to copy our ref_power to it (but not afterwards,
             # since a metadevice might take over that role later)
             device_scanner.ref_power = self.ref_power
+
         # Let's see if we should update our last_seen based on this...
         if device_scanner.stamp is not None and self.last_seen < device_scanner.stamp:
             self.last_seen = device_scanner.stamp
+
+        # Do we have a new name we should adopt?
+        if (
+            discoveryinfo.advertisement.local_name is not None
+            and discoveryinfo.advertisement.local_name != self.name_bt_local_name
+            ):
+            self.name_bt_local_name = discoveryinfo.advertisement.local_name
+            self.make_name()
+
 
     def to_dict(self):
         """Convert class to serialisable dict for dump_devices."""
