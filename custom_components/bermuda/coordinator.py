@@ -84,6 +84,8 @@ from .const import (
     DOMAIN,
     DOMAIN_PRIVATE_BLE_DEVICE,
     HIST_KEEP_COUNT,
+    METADEVICE_IBEACON_DEVICE,
+    METADEVICE_PRIVATE_BLE_DEVICE,
     METADEVICE_SOURCETYPES,
     METADEVICE_TYPE_IBEACON_SOURCE,
     METADEVICE_TYPE_PRIVATE_BLE_SOURCE,
@@ -801,6 +803,23 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 else:
                     # Device is static, not so old, but we might have to prune it anyway
                     prunable_stamps[device_address] = device.last_seen
+
+            # Prune metadevices and scanners
+            #
+            if (
+                device.is_scanner
+                or METADEVICE_PRIVATE_BLE_DEVICE in device.metadevice_type
+                or METADEVICE_IBEACON_DEVICE in device.metadevice_type
+            ):
+                # For scanners and metadevices we will want to prune their scanners entries, since
+                # they may fill up with dynamic addresses.
+                # create a list of keys so we can del items while iterating
+                nowstamp = MONOTONIC_TIME()
+                for scannerkey in list(device.scanners.keys()):
+                    scannerstamp = device.scanners[scannerkey].stamp
+                    if scannerstamp is None or scannerstamp < (nowstamp - PRUNE_TIME_IRK):
+                        del device.scanners[scannerkey]
+                        _LOGGER.debug("Pruning metadevice advert %s", scannerkey)
 
         prune_quota = len(self.devices) - len(prune_list) - PRUNE_MAX_COUNT
         if prune_quota > 0:

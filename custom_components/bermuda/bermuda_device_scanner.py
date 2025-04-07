@@ -25,7 +25,6 @@ from homeassistant.components.bluetooth import (
 from .const import (
     _LOGGER,
     CONF_ATTENUATION,
-    CONF_DEVICES,
     CONF_MAX_VELOCITY,
     CONF_REF_POWER,
     CONF_RSSI_OFFSETS,
@@ -78,20 +77,20 @@ class BermudaDeviceScanner(dict):
         self._device = parent_device
         self.device_address = parent_device.address
         self.options = options
-        self.stamp: float | None = 0
+        self.stamp: float = 0
         # Only remote scanners log timestamps, local usb adaptors do not.
         self.scanner_sends_stamps = isinstance(scanner_device, BaseHaRemoteScanner)
         self.new_stamp: float | None = None  # Set when a new advert is loaded from update
         self.rssi: float | None = None
         self.tx_power: float | None = None
         self.rssi_distance: float | None = None
-        self.rssi_distance_raw: float | None = None
+        self.rssi_distance_raw: float
         self.ref_power: float = 0  # Override of global, set from parent device.
         self.stale_update_count = 0  # How many times we did an update but no new stamps were found.
-        self.hist_stamp = []
-        self.hist_rssi = []
-        self.hist_distance = []
-        self.hist_distance_by_interval = []  # updated per-interval
+        self.hist_stamp: list[float] = []
+        self.hist_rssi: list[int] = []
+        self.hist_distance: list[float] = []
+        self.hist_distance_by_interval: list[float] = [] # updated per-interval
         self.hist_interval = []  # WARNING: This is actually "age of ad when we polled"
         self.hist_velocity = []  # Effective velocity versus previous stamped reading
         self.conf_rssi_offset = self.options.get(CONF_RSSI_OFFSETS, {}).get(self.scanner_address, 0)
@@ -194,7 +193,7 @@ class BermudaDeviceScanner(dict):
                 _interval = None
             self.hist_interval.insert(0, _interval)
 
-            self.stamp = new_stamp
+            self.stamp = new_stamp or 0
             self.hist_stamp.insert(0, self.stamp)
 
         # if self.tx_power is not None and scandata.advertisement.tx_power != self.tx_power:
@@ -336,7 +335,11 @@ class BermudaDeviceScanner(dict):
             self.rssi_distance = self.rssi_distance_raw
             # And ensure the smoothing history gets a fresh start
 
-            self.hist_distance_by_interval = [self.rssi_distance_raw]
+            if self.rssi_distance_raw is not None:
+                # clear tends to be more efficient than re-creating
+                # and might have fewer side-effects.
+                self.hist_distance_by_interval.clear()
+                self.hist_distance_by_interval.append(self.rssi_distance_raw)
 
         elif new_stamp is None and (self.stamp is None or self.stamp < MONOTONIC_TIME() - DISTANCE_TIMEOUT):
             # DEVICE IS AWAY!
@@ -394,17 +397,19 @@ class BermudaDeviceScanner(dict):
             self.hist_velocity.insert(0, velocity)
 
             if velocity > self.conf_max_velocity:
-                if self.device_address.upper() in self.options.get(CONF_DEVICES, []):
+                if self._device.create_sensor:
                     _LOGGER.debug(
                         "This sparrow %s flies too fast (%2fm/s), ignoring",
                         self._device.name,
                         velocity,
                     )
-                # Discard the bogus reading by duplicating the last.
-                if len(self.hist_distance_by_interval) == 0:
-                    self.hist_distance_by_interval = [self.rssi_distance_raw]
-                else:
+
+                # Discard the bogus reading by duplicating the last
+                if len(self.hist_distance_by_interval) > 0:
                     self.hist_distance_by_interval.insert(0, self.hist_distance_by_interval[0])
+                else:
+                    # If nothing to duplicate, just plug in the raw distance.
+                    self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
             else:
                 self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
 

@@ -29,8 +29,8 @@ from .const import (
     BDADDR_TYPE_OTHER,
     BDADDR_TYPE_PRIVATE_RESOLVABLE,
     BDADDR_TYPE_UNKNOWN,
-    BEACON_IBEACON_DEVICE,
-    BEACON_PRIVATE_BLE_DEVICE,
+    METADEVICE_IBEACON_DEVICE,
+    METADEVICE_PRIVATE_BLE_DEVICE,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
     DEFAULT_DEVTRACK_TIMEOUT,
@@ -118,11 +118,11 @@ class BermudaDevice(dict):
                 if re.match("^[A-Fa-f0-9]{32}_[A-Fa-f0-9]*_[A-Fa-f0-9]*$", self.address):
                     # It's an iBeacon uuid_major_minor
                     self.address_type = ADDR_TYPE_IBEACON
-                    self.metadevice_type.add(BEACON_IBEACON_DEVICE)
+                    self.metadevice_type.add(METADEVICE_IBEACON_DEVICE)
                     self.beacon_unique_id = self.address
                 elif re.match("^[A-Fa-f0-9]{32}$", self.address):
                     # 32-char hex-string is an IRK
-                    self.metadevice_type.add(BEACON_PRIVATE_BLE_DEVICE)
+                    self.metadevice_type.add(METADEVICE_PRIVATE_BLE_DEVICE)
                     self.address_type = ADDR_TYPE_PRIVATE_BLE_DEVICE
                     self.beacon_unique_id = self.address
                 else:
