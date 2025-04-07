@@ -140,6 +140,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         # set some version flags
         self.hass_version_min_2025_2 = HA_VERSION_MAJ > 2025 or (HA_VERSION_MAJ == 2025 and HA_VERSION_MIN >= 2)
+        # when habasescanner.discovered_device_timestamps became a public method.
+        self.hass_version_min_2025_4 = HA_VERSION_MAJ > 2025 or (HA_VERSION_MAJ == 2025 and HA_VERSION_MIN >= 4)
 
         # match/replacement pairs for redacting addresses
         self.redactions: dict[str, str] = {}
@@ -498,9 +500,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             scannerdev = self.devices[scanner]
             last_stamp: float = 0
             for device in self.devices.values():
-                record = device.scanners.get(scanner, None)
-                if record is not None and record.stamp is not None:
-                    last_stamp = max(record.stamp, last_stamp)
+                for record in device.scanners.values():
+                    if record.scanner_address == scanner and record.stamp is not None:
+                        last_stamp = max(record.stamp, last_stamp)
             results.append(
                 {
                     "name": scannerdev.name,
@@ -692,6 +694,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             for _source_address in self.options.get(CONF_DEVICES, []):
                 self._get_or_create_device(_source_address)
 
+        # Set up metadevice sources
+        #
+        # set up any beacons and update their data. We do this after all the devices
+        # have had their updates done since any beacon inherits data from its source
+        # device(s). We do this *before* sensor creation, though.
+        self.update_metadevices()
+
+        # Calculate per-device data
+        #
         # Scanner entries have been loaded up with latest data, now we can
         # process data for all devices over all scanners.
         for device in self.devices.values():
@@ -710,11 +721,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # self.last_update_success = False
                 pass
 
-        # set up any beacons and update their data. We do this after all the devices
-        # have had their updates done since any beacon inherits data from its source
-        # device(s). We do this *before* sensor creation, though.
-        self.update_metadevices()
-
+        # Trigger creation of any new entities
+        #
         # The devices are all updated now (and any new scanners and beacons seen have been added),
         # so let's ensure any devices that we create sensors for are set up ready to go.
         # We don't do this sooner because we need to ensure we have every active scanner
@@ -727,6 +735,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # called by _run in events.py, so pretty sure we are "in the event loop".
                     async_dispatcher_send(self.hass, SIGNAL_DEVICE_NEW, address, self.scanner_list)
 
+        # Device Pruning
+        #
         if self.stamp_last_prune < MONOTONIC_TIME() - PRUNE_TIME_INTERVAL:
             # (periodically) prune any stale device entries...
             self.prune_devices()
@@ -889,6 +899,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                             # This should always be the latest known source address,
                             # since private ble device tells us so.
                             # So ensure it's listed, and listed first.
+                            # Don't remove any existing addresses as IRK devices might alternate
+                            # back and forth.
                             if (
                                 len(metadevice.metadevice_sources) == 0
                                 or metadevice.metadevice_sources[0] != pb_source_address
@@ -917,7 +929,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         """
         if METADEVICE_TYPE_IBEACON_SOURCE not in source_device.metadevice_type:
             _LOGGER.error(
-                "Only IBEACON_SOURCE devices can be used to see a beacon metadevice. %s is not.",
+                "Only IBEACON_SOURCE devices can be used to see a beacon metadevice. %s is not",
                 source_device.name,
             )
         if source_device.beacon_unique_id is None:
@@ -986,16 +998,21 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # This is maintained by ibeacon or private_ble metadevice creation/update
             latest_source: str | None = None
             source_device: BermudaDevice | None = None
+
             if len(metadev.metadevice_sources) > 0:
                 latest_source = metadev.metadevice_sources[0]
                 if latest_source is not None:
                     source_device = self._get_device(latest_source)
 
-            if latest_source is not None and source_device is not None:
-                # Map the source device's scanner list into ours
-                metadev.scanners = source_device.scanners
+            # Find each known source (address) for adverts...
+            for source_address in metadev.metadevice_sources:
+                # Get the BermudaDevice holding those adverts
+                source_device = self._get_or_create_device(source_address)
+                # And copy them into our metadevice
+                for scanneradvert in source_device.scanners.values():
+                    metadev.scanners[source_device.address, scanneradvert.scanner_address] = scanneradvert
 
-                # Set the source device's ref_power from our own. This will cause
+                # If not done already, set the source device's ref_power from our own. This will cause
                 # the source device and all its scanner entries to update their
                 # distance measurements. This won't affect Area wins though, because
                 # they are "relative", not absolute.
@@ -1019,9 +1036,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # Defaults:
                 for attribute in [
                     # "create_sensor",  # don't copy this, maybe we're tracking the device alone
-                    "name",
-                    "name_by_user",
-                    "name_devreg",
+                    # "name",
+                    # "name_by_user",
+                    # "name_devreg",
                     "name_bt_local_name",
                     "name_bt_serviceinfo",
                     "manufacturer",
@@ -1041,18 +1058,18 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # Anything that's VERY interesting, overwrite it regardless of what's already there:
                 # INTERESTING:
                 for attribute in [
-                    "area_distance",
-                    "area_id",
-                    "area_name",
-                    "area_rssi",
-                    "area_scanner",
+                    # "area_distance",
+                    # "area_id",
+                    # "area_name",
+                    # "area_rssi",
+                    # "area_scanner",
                     "beacon_major",
                     "beacon_minor",
                     "beacon_power",
                     "beacon_unique_id",
                     "beacon_uuid",
                     "connectable",
-                    "zone",
+                    # "zone",
                 ]:
                     if hasattr(metadev, attribute):
                         setattr(metadev, attribute, getattr(source_device, attribute))
@@ -1062,29 +1079,29 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                             attribute,
                         )
 
-                if source_device.last_seen > metadev.last_seen:
-                    # Source is newer than the latest recorded, update last_seen
-                    metadev.last_seen = source_device.last_seen
-
-                elif source_device.last_seen == 0:
-                    # _LOGGER.debug(
-                    #     "New source %s for %s has no stamp yet. This is"
-                    #     " expected if it's a fresh Private BLE source.",
-                    #     source_device.address,
-                    #     metadev.name
-                    # )
-                    pass
-                elif source_device.last_seen < metadev.last_seen:
-                    # We should not have a source device that is older than the
-                    # current metadevice, so flag this if it occurs.
-                    # This caught bug #138, not that I realised it at the time!
-                    # (https://github.com/agittins/bermuda/issues/138)
-                    _LOGGER.debug(
-                        "Using freshest advert from %s for %s but it's still %s seconds too old!",
-                        source_device.address,
-                        metadev.name,
-                        metadev.last_seen - source_device.last_seen,
-                    )
+                metadev.last_seen = max(metadev.last_seen, source_device.last_seen)
+                # if source_device.last_seen > metadev.last_seen:
+                #     # Source is newer than the latest recorded, update last_seen
+                #     metadev.last_seen = source_device.last_seen
+                # elif source_device.last_seen == 0:
+                #     # _LOGGER.debug(
+                #     #     "New source %s for %s has no stamp yet. This is"
+                #     #     " expected if it's a fresh Private BLE source.",
+                #     #     source_device.address,
+                #     #     metadev.name
+                #     # )
+                #     pass
+                # elif source_device.last_seen < metadev.last_seen:
+                #     # We should not have a source device that is older than the
+                #     # current metadevice, so flag this if it occurs.
+                #     # This caught bug #138, not that I realised it at the time!
+                #     # (https://github.com/agittins/bermuda/issues/138)
+                #     _LOGGER.debug(
+                #         "Using freshest advert from %s for %s but it's still %s seconds too old!",
+                #         source_device.address,
+                #         metadev.name,
+                #         metadev.last_seen - source_device.last_seen,
+                #     )
                 # else the stamps are equal, which is perfectly OK.
 
     def dt_mono_to_datetime(self, stamp) -> datetime:
@@ -1123,22 +1140,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         closest_scanner: BermudaDeviceScanner | None = None
         _max_radius = self.options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS)
 
+        nowstamp = MONOTONIC_TIME()
+
         if device.area_scanner is not None:
             closest_scanner = device.area_scanner  # The one to beat.
 
-        # Special case for metadevices, we pull in all their scanner entries
-        # from the older addresses, since it's possible that the closest scanner
-        # still had the old address, or that the new address is actually only
-        # transient, and the device will resume tx on an older address...
-        #
-        othersources: dict[str, BermudaDeviceScanner] = {}
-        for source in device.metadevice_sources:
-            if otherdev := self._get_device(source):
-                for otherscanner in otherdev.scanners.values():
-                    othersources["other_" + otherscanner.address] = otherscanner
-
-        # combine both current address scanners and the others...
-        for scanner in (device.scanners | othersources).values():
+        for scanner in device.scanners.values():
             # Check each scanner and keep note of the closest one based on rssi_distance.
             # Note that rssi_distance is smoothed/filtered, and might be None if the last
             # reading was old enough that our algo decides it's "away".
@@ -1226,13 +1233,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             # Populate the local copy of timestamps, if applicable
             if isinstance(hascanner, BaseHaRemoteScanner):
-                self._hascanner_timestamps[hascanner.source.lower()] = hascanner._discovered_device_timestamps  # noqa: SLF001
+                # New API in 2023.4.0 - remove check after updating minver to that+.
+                if self.hass_version_min_2025_4:
+                    self._hascanner_timestamps[hascanner.source.lower()] = hascanner.discovered_device_timestamps
+                else:
+                    self._hascanner_timestamps[hascanner.source.lower()] = hascanner._discovered_device_timestamps  # noqa: SLF001
 
-            scanner_b = self._get_device(scanner_address)
-            if scanner_b is None:
-                # It's a new scanner, we will need to update our saved config.
-                # _LOGGER.debug("New Scanner: %s", scanner_ha.name)
-                scanner_b = self._get_or_create_device(scanner_address)
+            scanner_b = self._get_or_create_device(scanner_address)
+            #scanner_b.create_sensor = True
 
             # We found the device entry and have created our scannerdevice,
             # now update any fields that might be new from the device reg.

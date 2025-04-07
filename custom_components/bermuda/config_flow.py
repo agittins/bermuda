@@ -412,9 +412,8 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         results_str = ""
         device = self._get_bermuda_device_from_registry(user_input[CONF_DEVICES])
         if device is not None:
-            if user_input[CONF_SCANNERS] in device.scanners:
-                scanner = device.scanners[user_input[CONF_SCANNERS]]
-            else:
+            scanner = device.get_scanner(user_input[CONF_SCANNERS])
+            if scanner is None:
                 return self.async_show_form(
                     step_id="calibration1_global",
                     errors={"err_scanner_no_record": "The selected scanner hasn't (yet) seen this device."},
@@ -527,14 +526,14 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             for scanner in self.coordinator.scanner_list:
                 scanner_name = self.coordinator.devices[scanner].name
                 cur_offset = self._last_scanner_info.get(scanner_name, 0)
-                if scanner in device.scanners:
+                if (scanneradvert := device.get_scanner(scanner)) is not None:
                     results[scanner_name] = [
                         rssi_to_metres(
                             historical_rssi + cur_offset,
                             self.options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
                             self.options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
                         )
-                        for historical_rssi in device.scanners[scanner].hist_rssi
+                        for historical_rssi in scanneradvert.hist_rssi
                     ]
             # Format the results for display (HA has full markdown support!)
             results_str = "| Scanner | 0 | 1 | 2 | 3 | 4 |\n|---|---:|---:|---:|---:|---:|"

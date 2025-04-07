@@ -172,8 +172,9 @@ class BermudaSensorScanner(BermudaSensor):
 
     @property
     def native_value(self):
-        return self._device.area_scanner
-
+        if self._device.area_scanner is not None:
+            return self._device.area_scanner.name
+        return None
 
 class BermudaSensorRssi(BermudaSensor):
     """Sensor for RSSI of closest scanner."""
@@ -274,8 +275,9 @@ class BermudaSensorScannerRange(BermudaSensorRange):
 
         Don't break if that scanner's never heard of us!
         """
-        devscanner = self._device.scanners.get(self._scanner.address, {})
-        distance = getattr(devscanner, "rssi_distance", None)
+        distance = None
+        if (scanner := self._device.get_scanner(self._scanner.address)) is not None:
+            distance = scanner.rssi_distance
         if distance is not None:
             return self._cached_ratelimit(round(distance, 3))
         return None
@@ -283,7 +285,7 @@ class BermudaSensorScannerRange(BermudaSensorRange):
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
         """We need to reimplement this, since the attributes need to be scanner-specific."""
-        devscanner = self._device.scanners.get(self._scanner.address, {})
+        devscanner = self._device.get_scanner(self._scanner.address)
         if hasattr(devscanner, "source"):
             return {
                 "area_id": self._scanner.area_id,
@@ -313,7 +315,7 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
 
         Don't break if that scanner's never heard of us!
         """
-        devscanner = self._device.scanners.get(self._scanner.address, {})
+        devscanner = self._device.get_scanner(self._scanner.address)
         distance = getattr(devscanner, "rssi_distance_raw", None)
         if distance is not None:
             return round(distance, 3)
