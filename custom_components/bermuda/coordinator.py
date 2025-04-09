@@ -500,17 +500,17 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         results = []
         for scanner in self.scanner_list:
             scannerdev = self.devices[scanner]
-            last_stamp: float = 0
-            for device in self.devices.values():
-                for record in device.scanners.values():
-                    if record.scanner_address == scanner and record.stamp is not None:
-                        last_stamp = max(record.stamp, last_stamp)
+            # last_stamp: float = 0
+            # for device in self.devices.values():
+            #     for record in device.scanners.values():
+            #         if record.scanner_address == scanner and record.stamp is not None:
+            #             last_stamp = max(record.stamp, last_stamp)
             results.append(
                 {
                     "name": scannerdev.name,
                     "address": scanner,
-                    "last_stamp": last_stamp,
-                    "last_stamp_age": stamp - last_stamp,
+                    "last_stamp": scannerdev.last_seen,
+                    "last_stamp_age": stamp - scannerdev.last_seen,
                 }
             )
         return results
@@ -1156,11 +1156,42 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         """Set area for ALL devices based on closest beacon."""
         for device in self.devices.values():
             if (
-                device.is_scanner is not True  # exclude scanners.
-                or device.create_sensor  # include any devices we are tracking
-                or device.metadevice_type in METADEVICE_SOURCETYPES  # and any source devices for PBLE, ibeacon etc
+                #device.is_scanner is not True  # exclude scanners.
+                device.create_sensor  # include any devices we are tracking
+                #or device.metadevice_type in METADEVICE_SOURCETYPES  # and any source devices for PBLE, ibeacon etc
             ):
                 self._refresh_area_by_min_distance(device)
+
+    @dataclass
+    class AreaTests:
+        scannername: tuple[str, str] = ("", "")
+        percentage_difference: float = 0  # distance percentage difference.
+        same_area: bool = False  # The old scanner is in the same area as us.
+        last_detection: tuple[float, float] = (0, 0)  # bt manager's last_detection field. Compare with ours.
+        last_ad_age: tuple[float, float] = (0, 0)  # seconds since we last got *any* ad from scanner
+        this_ad_age: tuple[float, float] = (0, 0)  # how old the *current* advert is on this scanner
+        distance: tuple[float, float] = (0, 0)
+        velocity: tuple[float, float] = (0, 0)
+        last_closer: tuple[float, float] = (0, 0)  # since old was closer and how long new has been closer
+        reason: str | None = None  # reason/result
+
+        def __str__(self) -> str:
+            out = ""
+            for var, val in vars(self).items():
+                out += f"** {var:20} "
+                if isinstance(val, tuple):
+                    for v in val:
+                        if isinstance(v, float):
+                            out += f"{v:.2f} "
+                        else:
+                            out += f"{v} "
+                    out += "\n"
+                elif var == "percentage_difference":
+                    out += f"{val:.2f}\n"
+                else:
+                    out += f"{val}\n"
+            return out
+
 
     def _refresh_area_by_min_distance(self, device: BermudaDevice):
         """Very basic Area setting by finding closest proxy to a given device."""
@@ -1170,37 +1201,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         _max_radius = self.options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS)
         nowstamp = MONOTONIC_TIME()
 
-        @dataclass
-        class AreaTests:
-            scannername: tuple[str, str] = ("", "")
-            percentage_difference: float = 0  # distance percentage difference.
-            same_area: bool = False  # The old scanner is in the same area as us.
-            last_detection: tuple[float, float] = (0, 0)  # bt manager's last_detection field. Compare with ours.
-            last_ad_age: tuple[float, float] = (0, 0)  # seconds since we last got *any* ad from scanner
-            this_ad_age: tuple[float, float] = (0, 0)  # how old the *current* advert is on this scanner
-            distance: tuple[float, float] = (0, 0)
-            velocity: tuple[float, float] = (0, 0)
-            last_closer: tuple[float, float] = (0, 0)  # since old was closer and how long new has been closer
-            reason: str | None = None  # reason/result
 
-            def __str__(self) -> str:
-                out = ""
-                for var, val in vars(self).items():
-                    out += f"** {var:20} "
-                    if isinstance(val, tuple):
-                        for v in val:
-                            if isinstance(v, float):
-                                out += f"{v:.2f} "
-                            else:
-                                out += f"{v} "
-                        out += "\n"
-                    elif var == "percentage_difference":
-                        out += f"{val:.2f}\n"
-                    else:
-                        out += f"{val}\n"
-                return out
-
-        tests = AreaTests()
+        tests = self.AreaTests()
 
         _superchatty = False  # Set to true for very verbose logging about area wins
         if device.name == "Ash Pixel IRK":
@@ -1266,44 +1268,45 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             tests.same_area = closest_scanner.area_id == scanner.area_id
             tests.scannername = (closest_scanner.name, scanner.name)
             tests.distance = (closest_scanner.rssi_distance, scanner.rssi_distance)
-            tests.velocity = (
-                next((val for val in closest_scanner.hist_velocity), 0),
-                next((val for val in scanner.hist_velocity), 0),
-            )
+            # tests.velocity = (
+            #     next((val for val in closest_scanner.hist_velocity), 0),
+            #     next((val for val in scanner.hist_velocity), 0),
+            # )
 
-            _old_last_detection = 999.9
-            _new_last_detection = 999.9
-            if (_closest_hascanner := self.devices[closest_scanner.scanner_address]._hascanner) is not None:
-                _old_last_detection = _closest_hascanner.time_since_last_detection() or 999
+            # _old_last_detection = 999.9
+            # _new_last_detection = 999.9
+            # if (_closest_hascanner := self.devices[closest_scanner.scanner_address]._hascanner) is not None:
+            #     _old_last_detection = _closest_hascanner.time_since_last_detection() or 999
 
-            if (_new_hascanner := self.devices[scanner.scanner_address]._hascanner) is not None:
-                _new_last_detection = _new_hascanner.time_since_last_detection() or 999.0
+            # if (_new_hascanner := self.devices[scanner.scanner_address]._hascanner) is not None:
+            #     _new_last_detection = _new_hascanner.time_since_last_detection() or 999.0
 
-            tests.last_detection = (_old_last_detection, _new_last_detection)
+            # tests.last_detection = (_old_last_detection, _new_last_detection)
+
             tests.last_ad_age = (
                 nowstamp - closest_scanner._scanner_device.last_seen,
                 nowstamp - scanner._scanner_device.last_seen,
             )
             tests.this_ad_age = (nowstamp - closest_scanner.stamp, nowstamp - scanner.stamp)
 
-            when_old_was_last_this_close = 999.9
-            for seconds, old_dist in enumerate(closest_scanner.hist_distance_by_interval):
-                if old_dist >= scanner.rssi_distance:
-                    when_old_was_last_this_close = seconds
-                    continue
+            # when_old_was_last_this_close = 999.9
+            # for seconds, old_dist in enumerate(closest_scanner.hist_distance_by_interval):
+            #     if old_dist >= scanner.rssi_distance:
+            #         when_old_was_last_this_close = seconds
+            #         continue
 
-            time_new_has_been_closer_for = 999.9
-            for seconds, old_dist in enumerate(closest_scanner.hist_distance_by_interval):
-                if old_dist >= max(scanner.hist_distance_by_interval[0 : seconds + 1]):
-                    time_new_has_been_closer_for = seconds
-                    continue
+            # time_new_has_been_closer_for = 999.9
+            # for seconds, old_dist in enumerate(closest_scanner.hist_distance_by_interval):
+            #     if old_dist >= max(scanner.hist_distance_by_interval[0 : seconds + 1]):
+            #         time_new_has_been_closer_for = seconds
+            #         continue
 
-            tests.last_closer = (
-                # How recently closest_scanner was as close as new scanner is now
-                when_old_was_last_this_close,
-                # How long new scanner has been closer
-                time_new_has_been_closer_for,
-            )
+            # tests.last_closer = (
+            #     # How recently closest_scanner was as close as new scanner is now
+            #     when_old_was_last_this_close,
+            #     # How long new scanner has been closer
+            #     time_new_has_been_closer_for,
+            # )
 
             if False:  # tests.last_closer[0] < 3:
                 # Our worst hasn't yet beat its best, we're out.
