@@ -1172,15 +1172,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         @dataclass
         class AreaTests:
-            scannername: tuple[str, str] = ("","")
+            scannername: tuple[str, str] = ("", "")
             percentage_difference: float = 0  # distance percentage difference.
             same_area: bool = False  # The old scanner is in the same area as us.
-            last_detection: tuple[float, float] = (0,0)  # bt manager's last_detection field. Compare with ours.
-            last_ad_age: tuple[float, float] = (0,0)  # seconds since we last got *any* ad from scanner
-            this_ad_age: tuple[float, float] = (0,0)  # how old the *current* advert is on this scanner
-            distance: tuple[float, float] = (0,0)
-            velocity: tuple[float, float] = (0,0)
-            last_closer: tuple[float, float] = (0,0)  # since old was closer and how long new has been closer
+            last_detection: tuple[float, float] = (0, 0)  # bt manager's last_detection field. Compare with ours.
+            last_ad_age: tuple[float, float] = (0, 0)  # seconds since we last got *any* ad from scanner
+            this_ad_age: tuple[float, float] = (0, 0)  # how old the *current* advert is on this scanner
+            distance: tuple[float, float] = (0, 0)
+            velocity: tuple[float, float] = (0, 0)
+            last_closer: tuple[float, float] = (0, 0)  # since old was closer and how long new has been closer
             reason: str | None = None  # reason/result
 
             def __str__(self) -> str:
@@ -1199,7 +1199,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     else:
                         out += f"{val}\n"
                 return out
-
 
         tests = AreaTests()
 
@@ -1264,10 +1263,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 continue
 
             tests.reason = None  # ensure we don't trigger logging if no decision was made.
-            tests.same_area = (closest_scanner.area_id == scanner.area_id)
+            tests.same_area = closest_scanner.area_id == scanner.area_id
             tests.scannername = (closest_scanner.name, scanner.name)
             tests.distance = (closest_scanner.rssi_distance, scanner.rssi_distance)
-            tests.velocity = (next((val for val in closest_scanner.hist_velocity),0), next((val for val in scanner.hist_velocity),0))
+            tests.velocity = (
+                next((val for val in closest_scanner.hist_velocity), 0),
+                next((val for val in scanner.hist_velocity), 0),
+            )
 
             _old_last_detection = 999.9
             _new_last_detection = 999.9
@@ -1277,36 +1279,33 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             if (_new_hascanner := self.devices[scanner.scanner_address]._hascanner) is not None:
                 _new_last_detection = _new_hascanner.time_since_last_detection() or 999.0
 
-            tests.last_detection=(_old_last_detection, _new_last_detection)
-            tests.last_ad_age=(
+            tests.last_detection = (_old_last_detection, _new_last_detection)
+            tests.last_ad_age = (
                 nowstamp - closest_scanner._scanner_device.last_seen,
-                nowstamp - scanner._scanner_device.last_seen
+                nowstamp - scanner._scanner_device.last_seen,
             )
-            tests.this_ad_age = (
-                nowstamp - closest_scanner.stamp,
-                nowstamp - scanner.stamp
-            )
+            tests.this_ad_age = (nowstamp - closest_scanner.stamp, nowstamp - scanner.stamp)
 
-            when_old_was_last_this_close=999.9
+            when_old_was_last_this_close = 999.9
             for seconds, old_dist in enumerate(closest_scanner.hist_distance_by_interval):
                 if old_dist >= scanner.rssi_distance:
-                    when_old_was_last_this_close=seconds
+                    when_old_was_last_this_close = seconds
                     continue
 
-            time_new_has_been_closer_for=999.9
+            time_new_has_been_closer_for = 999.9
             for seconds, old_dist in enumerate(closest_scanner.hist_distance_by_interval):
-                if old_dist >= max(scanner.hist_distance_by_interval[0:seconds+1]):
-                    time_new_has_been_closer_for=seconds
+                if old_dist >= max(scanner.hist_distance_by_interval[0 : seconds + 1]):
+                    time_new_has_been_closer_for = seconds
                     continue
 
             tests.last_closer = (
                 # How recently closest_scanner was as close as new scanner is now
                 when_old_was_last_this_close,
                 # How long new scanner has been closer
-                time_new_has_been_closer_for
+                time_new_has_been_closer_for,
             )
 
-            if False: #tests.last_closer[0] < 3:
+            if False:  # tests.last_closer[0] < 3:
                 # Our worst hasn't yet beat its best, we're out.
                 if _superchatty:
                     _LOGGER.debug(
@@ -1314,7 +1313,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         device.name,
                         scanner.name,
                         closest_scanner.name,
-                        tests
+                        tests,
                     )
                 continue
 
@@ -1322,11 +1321,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             _pdb = closest_scanner.rssi_distance
             tests.percentage_difference = abs(_pda - _pdb) / (_pda + _pdb) / 2
 
-
             # Same area. Confirm freshness and distance.
             if (
                 tests.same_area
-                and (tests.this_ad_age[0] > tests.this_ad_age[1] +1)
+                and (tests.this_ad_age[0] > tests.this_ad_age[1] + 1)
                 and tests.distance[0] >= tests.distance[1]
             ):
                 tests.reason = "WIN awarded for same area, newer, closer advert"
@@ -1338,13 +1336,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             max_seconds = 5
             if (
                 len(scanner.hist_distance_by_interval) > min_seconds
-                and max(scanner.hist_distance_by_interval[:max_seconds]) < min(closest_scanner.hist_distance_by_interval[:max_seconds])
+                and max(scanner.hist_distance_by_interval[:max_seconds])
+                < min(closest_scanner.hist_distance_by_interval[:max_seconds])
                 and tests.percentage_difference > 0.10
             ):
                 tests.reason = "WIN for our historical max being better than the old historical min"
                 closest_scanner = scanner
                 continue
-
 
             if tests.percentage_difference < 0.18:
                 # Didn't make the cut. We're not "different enough" given how
@@ -1447,7 +1445,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         scanner_devreg_mac_address = conn[1]
 
             if devreg_count not in (1, 2):
-                _LOGGER_SPAM_LESS.warning(f"multimatch_devreg_{hascanner.source}", "Unexpectedly got %d device registry matches for %s:\n", devreg_count, hascanner.name, devreg_stringlist)
+                _LOGGER_SPAM_LESS.warning(
+                    f"multimatch_devreg_{hascanner.source}",
+                    "Unexpectedly got %d device registry matches for %s:\n",
+                    devreg_count,
+                    hascanner.name,
+                    devreg_stringlist,
+                )
 
             # scanner_devreg_bt = self._device_registry.async_get_device(
             #     connections={
@@ -1518,7 +1522,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             scanner_b.unique_id = scanner_devreg_mac_address or scanner_devreg_bt_address or hascanner.source
             scanner_b.address_ble_mac = scanner_devreg_bt_address or scanner_devreg_mac_address or hascanner.source
             scanner_b.address_wifi_mac = scanner_devreg_mac_address
-
 
             # Bluetooth integ names scanners by address, so prefer the source integration's
             # autogenerated name over that.
