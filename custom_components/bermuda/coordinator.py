@@ -737,19 +737,26 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # called by _run in events.py, so pretty sure we are "in the event loop".
                     async_dispatcher_send(self.hass, SIGNAL_DEVICE_NEW, address, self.scanner_list)
 
-        # Device Pruning
-        #
-        if self.stamp_last_prune < MONOTONIC_TIME() - PRUNE_TIME_INTERVAL:
-            # (periodically) prune any stale device entries...
-            self.prune_devices()
-            self.stamp_last_prune = MONOTONIC_TIME()
+        # Device Pruning (only runs periodically)
+        self.prune_devices()
 
         # end of async update
         self.stamp_last_update = MONOTONIC_TIME()
         self.last_update_success = True
 
-    def prune_devices(self):
-        """Scan through all collected devices, and remove those that meet Pruning criteria."""
+    def prune_devices(self, force_pruning=False):
+        """
+        Scan through all collected devices, and remove those that meet Pruning criteria.
+
+        By default no pruning will be done if it has been performed within the last
+        PRUNE_TIME_INTERVAL, unless the force_pruning flag is set to True.
+        """
+        if self.stamp_last_prune > MONOTONIC_TIME() - PRUNE_TIME_INTERVAL and not force_pruning:
+            # We ran recently enough, bail out.
+            return
+        # stamp the run.
+        self.stamp_last_prune = MONOTONIC_TIME()
+
         prune_list = []
         prunable_stamps = {}
 
@@ -827,7 +834,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # in a busy train station, or are under some sort of BLE-MAC
             # DOS-attack.
             sorted_addresses = sorted([(v, k) for k, v in prunable_stamps.items()])
-            _LOGGER.info("Having to prune %s extra devices to make quota.", prune_quota)
+            _LOGGER.info("Having to prune %s extra devices to make quota", prune_quota)
             # pylint: disable-next=unused-variable
             for _stamp, address in sorted_addresses[:prune_quota]:
                 prune_list.append(address)
