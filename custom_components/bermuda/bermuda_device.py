@@ -14,9 +14,13 @@ from __future__ import annotations
 
 import re
 
-from homeassistant.components.bluetooth import MONOTONIC_TIME, BluetoothScannerDevice
+from homeassistant.components.bluetooth import (
+    MONOTONIC_TIME,
+    BaseHaRemoteScanner,
+    BaseHaScanner,
+    BluetoothScannerDevice,
+)
 from homeassistant.const import STATE_HOME, STATE_NOT_HOME, STATE_UNAVAILABLE
-from homeassistant.helpers.device_registry import format_mac
 from homeassistant.util import slugify
 
 from .bermuda_device_scanner import BermudaDeviceScanner
@@ -29,13 +33,14 @@ from .const import (
     BDADDR_TYPE_OTHER,
     BDADDR_TYPE_PRIVATE_RESOLVABLE,
     BDADDR_TYPE_UNKNOWN,
-    METADEVICE_IBEACON_DEVICE,
-    METADEVICE_PRIVATE_BLE_DEVICE,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
     DEFAULT_DEVTRACK_TIMEOUT,
     DOMAIN,
+    METADEVICE_IBEACON_DEVICE,
+    METADEVICE_PRIVATE_BLE_DEVICE,
 )
+from .util import mac_norm
 
 
 class BermudaDevice(dict):
@@ -58,6 +63,8 @@ class BermudaDevice(dict):
         self.name_devreg: str | None = None  # From device registry, for other integrations like scanners, pble devices
         self.name_by_user: str | None = None  # Any user-defined (in the HA UI) name discovered for a device.
         self.address: str = address
+        self.address_ble_mac: str = address
+        self.address_wifi_mac: str | None = None
         self.ref_power: float = 0  # If non-zero, use in place of global ref_power.
         self.ref_power_changed: float = 0  # Stamp for last change to ref_power, for cache zapping.
         self.options = options
@@ -74,6 +81,7 @@ class BermudaDevice(dict):
         self.manufacturer: str | None = None
         self.connectable: bool = False
         self.is_scanner: bool = False
+        self._hascanner: BaseHaRemoteScanner | BaseHaScanner | None = None  # HA's scanner
         self.metadevice_type: set = set()
         self.metadevice_sources: list[str] = []  # list of MAC addresses that have advertised this beacon
         self.beacon_unique_id: str | None = None  # combined uuid_major_minor for *really* unique id
@@ -284,7 +292,7 @@ class BermudaDevice(dict):
         with calculate_data()
 
         """
-        scanner_address = format_mac(scanner_device.address).lower()
+        scanner_address = mac_norm(scanner_device.address)
 
         if (self.address, scanner_address) in self.scanners:
             # Device already exists, update it
@@ -321,6 +329,8 @@ class BermudaDevice(dict):
         """Convert class to serialisable dict for dump_devices."""
         out = {}
         for var, val in vars(self).items():
+            if var == "_hascanner":
+                continue
             if var == "scanners":
                 scanout = {}
                 for scanner in self.scanners.values():

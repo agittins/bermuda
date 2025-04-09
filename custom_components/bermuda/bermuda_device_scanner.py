@@ -90,9 +90,9 @@ class BermudaDeviceScanner(dict):
         self.hist_stamp: list[float] = []
         self.hist_rssi: list[int] = []
         self.hist_distance: list[float] = []
-        self.hist_distance_by_interval: list[float] = [] # updated per-interval
+        self.hist_distance_by_interval: list[float] = []  # updated per-interval
         self.hist_interval = []  # WARNING: This is actually "age of ad when we polled"
-        self.hist_velocity = []  # Effective velocity versus previous stamped reading
+        self.hist_velocity: list[float] = []  # Effective velocity versus previous stamped reading
         self.conf_rssi_offset = self.options.get(CONF_RSSI_OFFSETS, {}).get(self.scanner_address, 0)
         self.conf_ref_power = self.options.get(CONF_REF_POWER)
         self.conf_attenuation = self.options.get(CONF_ATTENUATION)
@@ -168,6 +168,10 @@ class BermudaDeviceScanner(dict):
                 new_stamp = MONOTONIC_TIME()
             else:
                 new_stamp = None
+
+        if new_stamp is not None:
+            # Update the last_seen on the parent scanner device, too.
+            self._scanner_device.last_seen = max(self._scanner_device.last_seen, new_stamp)
 
         if len(self.hist_stamp) == 0 or new_stamp is not None:
             # this is the first entry or a new one, bring in the new reading

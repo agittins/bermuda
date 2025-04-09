@@ -12,17 +12,17 @@ from typing import TYPE_CHECKING
 
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.device_registry import DeviceEntry, format_mac
 
 from .const import _LOGGER, DOMAIN, PLATFORMS, STARTUP_MESSAGE
 from .coordinator import BermudaDataUpdateCoordinator
+from .util import mac_norm
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.device_registry import DeviceEntry
 
 type BermudaConfigEntry = ConfigEntry[BermudaData]
-
 
 @dataclass
 class BermudaData:
@@ -34,7 +34,7 @@ class BermudaData:
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry):
+async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> bool:
     """Set up this integration using UI."""
     if hass.data.get(DOMAIN) is None:
         _LOGGER.info(STARTUP_MESSAGE)
@@ -78,7 +78,7 @@ async def async_remove_config_entry_device(
             pass
     if address is not None:
         try:
-            coordinator.devices[format_mac(address)].create_sensor = False
+            coordinator.devices[mac_norm(address)].create_sensor = False
         except KeyError:
             _LOGGER.warning("Failed to locate device entry for %s", address)
         return True

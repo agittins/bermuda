@@ -49,7 +49,6 @@ from homeassistant.helpers import (
 from homeassistant.helpers.device_registry import (
     EVENT_DEVICE_REGISTRY_UPDATED,
     EventDeviceRegistryUpdatedData,
-    format_mac,
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_call_later
@@ -98,7 +97,7 @@ from .const import (
     SIGNAL_DEVICE_NEW,
     UPDATE_INTERVAL,
 )
-from .util import clean_charbuf
+from .util import clean_charbuf, mac_math_offset, mac_norm
 
 if TYPE_CHECKING:
     from habluetooth import BluetoothServiceInfoBleak
@@ -371,7 +370,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             for scanner in self.scanner_list:
                 if self.devices[scanner].entry_id == ev.data["device_id"]:
                     _LOGGER.debug(
-                        "Scanner %s removed, trigger update of scanners.",
+                        "Scanner %s removed, trigger update of scanners",
                         self.devices[scanner].name,
                     )
                     self._do_full_scanner_init = True
@@ -517,21 +516,22 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
     def _get_device(self, address: str) -> BermudaDevice | None:
         """Search for a device entry based on mac address."""
-        mac = format_mac(address).lower()
-        # format_mac tries to return a lower-cased, colon-separated mac address.
-        # failing that, it returns the original unaltered.
-        if mac in self.devices:
-            return self.devices[mac]
-        return None
+        # mac_norm tries to return a lower-cased, colon-separated mac address.
+        # failing that, it returns the original, lower-cased.
+        try:
+            return self.devices[mac_norm(address)]
+        except KeyError:
+            return None
 
     def _get_or_create_device(self, address: str) -> BermudaDevice:
-        device = self._get_device(address)
-        if device is None:
-            mac = format_mac(address).lower()
+        mac = mac_norm(address)
+        try:
+            return self.devices[mac]
+        except KeyError:
             self.devices[mac] = device = BermudaDevice(address=mac, options=self.options)
             device.address = mac
             device.unique_id = mac
-        return device
+            return device
 
     async def _async_update_data(self):
         """
@@ -1071,7 +1071,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                 metadev.make_name()
                     else:
                         _LOGGER.error(
-                            "Devices don't have a '%s' attribute, this is a bug.",
+                            "Devices don't have a '%s' attribute, this is a bug",
                             attribute,
                         )
                 # Anything that's VERY interesting, overwrite it regardless of what's already there:
@@ -1094,7 +1094,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         setattr(metadev, attribute, getattr(source_device, attribute))
                     else:
                         _LOGGER.error(
-                            "Devices don't have a '%s' attribute, this is a bug.",
+                            "Devices don't have a '%s' attribute, this is a bug",
                             attribute,
                         )
 
@@ -1220,22 +1220,69 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             self._hascanners = self._manager._connectable_scanners | self._manager._non_connectable_scanners  # noqa: SLF001
 
         for hascanner in self._hascanners:
-            scanner_address = format_mac(hascanner.source).lower()
+            scanner_address = mac_norm(hascanner.source)
             # As of 2025.2.0 The bluetooth integration creates its own device entries
             # for all HaScanners, not just local adaptors. So since there are two integration
             # pages where a user might apply an area setting (eg, the bluetooth page or the shelly or esphome page)
             # we should check both to see if the user has applied an area anywhere, and prefer the bluetooth one
             # if both are set.
-            scanner_devreg_bt = self._device_registry.async_get_device(
-                connections={
-                    ("bluetooth", scanner_address.upper()),  # bluetooth, uppercase: matches bluetooth integration
-                }
-            )
-            scanner_devreg_mac = self._device_registry.async_get_device(
-                connections={
-                    ("mac", scanner_address),  # mac, lowercase: matches ESPHome, Shellys integrations etc
-                }
-            )
+
+            # espressif devices have a base_mac
+            # https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/misc_system_api.html#local-mac-addresses
+            # base_mac (WiFi STA), +1 (AP), +2 (BLE), +3 (Ethernet)
+            # Also possible for them to use LocalMAC, where the AP and Ether MACs are derived from STA and BLE
+            # MACs, with first octet having bitvalue0x2 set, or if it was already, bitvalue0x4 XORd
+            #
+            # core Bluetooth now reports the BLE MAC address, while ESPHome (and maybe Shelly?) use
+            # the ethernet MAC for their connection links. We want both devices (if present) so that
+            # we can let the user apply name and area settings to either device.
+
+            connlist = set()
+            maclist = set()
+
+            # The device registry devices for the bluetooth and ESPHome/Shelly devices.
+            scanner_devreg_bt = None
+            scanner_devreg_mac = None
+            scanner_devreg_mac_address = None
+            scanner_devreg_bt_address = None
+
+            for offset in range(-3, 3):
+                if (altmac := mac_math_offset(scanner_address, offset)) is not None:
+                    connlist.add(("bluetooth", altmac.upper()))
+                    connlist.add(("mac", altmac))
+                    maclist.add(altmac)
+
+            devreg_devices = self._device_registry.devices.get_entries(None, connections=connlist)
+            devreg_count = 0
+            devreg_stringlist = ""
+            for devreg_device in devreg_devices:
+                devreg_count += 1
+                # _LOGGER.debug("DevregScanner: %s", devreg_device)
+                devreg_stringlist += f"** {devreg_device}\n"
+                for conn in devreg_device.connections:
+                    if conn[0] == "bluetooth":
+                        # Bluetooth component's device!
+                        scanner_devreg_bt = devreg_device
+                        scanner_devreg_bt_address = conn[1].lower()
+                    if conn[0] == "mac":
+                        # ESPHome, Shelly
+                        scanner_devreg_mac = devreg_device
+                        scanner_devreg_mac_address = conn[1]
+
+            if devreg_count not in (1, 2):
+                _LOGGER_SPAM_LESS.warning(f"multimatch_devreg_{hascanner.source}", "Unexpectedly got %d device registry matches for %s:\n", devreg_count, hascanner.name, devreg_stringlist)
+
+            # scanner_devreg_bt = self._device_registry.async_get_device(
+            #     connections={
+            #         ("bluetooth", scanner_address.upper()),  # bluetooth, uppercase: matches bluetooth integration
+            #     }
+            # )
+            # scanner_devreg_bt = [i for i in devreg_devices.values() if
+            # scanner_devreg_mac = self._device_registry.async_get_device(
+            #     connections={
+            #         ("mac", scanner_address),  # mac, lowercase: matches ESPHome, Shellys integrations etc
+            #     }
+            # )
 
             if scanner_devreg_bt is None and scanner_devreg_mac is None:
                 _LOGGER_SPAM_LESS.error(
@@ -1259,7 +1306,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     self._hascanner_timestamps[hascanner.source.lower()] = hascanner._discovered_device_timestamps  # noqa: SLF001
 
             scanner_b = self._get_or_create_device(scanner_address)
-            #scanner_b.create_sensor = True
+            # scanner_b.create_sensor = True
+
+            scanner_b._hascanner = hascanner
 
             # We found the device entry and have created our scannerdevice,
             # now update any fields that might be new from the device reg.
@@ -1283,6 +1332,16 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 scanner_b.entry_id = scanner_b.entry_id or scanner_devreg_mac.id
                 _mac_name = scanner_devreg_mac.name
                 _mac_name_by_user = scanner_devreg_mac.name_by_user
+
+            # As of ESPHome 2025.3.0 (via aioesphomeapi 29.3.1) ESPHome proxies now
+            # report their BLE MAC address instead of their WIFI MAC in the hascanner
+            # details.
+            # To work around breaking the existing distance_to entities, retain the
+            # ESPHome / Shelly integration's MAC as the unique_id
+            scanner_b.unique_id = scanner_devreg_mac_address or scanner_devreg_bt_address or hascanner.source
+            scanner_b.address_ble_mac = scanner_devreg_bt_address or scanner_devreg_mac_address or hascanner.source
+            scanner_b.address_wifi_mac = scanner_devreg_mac_address
+
 
             # Bluetooth integ names scanners by address, so prefer the source integration's
             # autogenerated name over that.

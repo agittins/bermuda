@@ -76,7 +76,7 @@ async def async_setup_entry(
         coordinator.sensor_created(address)
 
     # Connect device_new to a signal so the coordinator can call it
-    _LOGGER.debug("Registering device_new callback.")
+    _LOGGER.debug("Registering device_new callback")
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, device_new))
     async_add_devices(
         (
@@ -172,9 +172,13 @@ class BermudaSensorScanner(BermudaSensor):
 
     @property
     def native_value(self):
+        # Don't use area_scanner.name because it comes from the advert
+        # entry. Instead refer to the BermudaDevice, which takes trouble
+        # to use user-given names etc.
         if self._device.area_scanner is not None:
-            return self._device.area_scanner.name
+            return self.coordinator.devices[self._device.area_scanner.scanner_address].name
         return None
+
 
 class BermudaSensorRssi(BermudaSensor):
     """Sensor for RSSI of closest scanner."""
@@ -302,7 +306,10 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
 
     @property
     def unique_id(self):
-        return f"{self._device.unique_id}_{self._scanner.address}_range_raw"
+        # Using address_wifi_mac as a legacy action, because esphome changed from
+        # sending WIFI MAC to BLE MAC as its source address, in ESPHome 2025.3.0
+        #
+        return f"{self._device.unique_id}_{self._scanner.address_wifi_mac or self._scanner.address}_range_raw"
 
     @property
     def name(self):
