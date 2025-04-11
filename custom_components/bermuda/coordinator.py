@@ -86,7 +86,6 @@ from .const import (
     HIST_KEEP_COUNT,
     METADEVICE_IBEACON_DEVICE,
     METADEVICE_PRIVATE_BLE_DEVICE,
-    METADEVICE_SOURCETYPES,
     METADEVICE_TYPE_IBEACON_SOURCE,
     METADEVICE_TYPE_PRIVATE_BLE_SOURCE,
     PRUNE_MAX_COUNT,
@@ -166,7 +165,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
         self._manager: HomeAssistantBluetoothManager = _get_manager(hass)  # instance of the bluetooth manager
-        self._hascanners: set[BaseHaScanner]  # Links to the backend scanners
+        self._hascanners: set[BaseHaScanner] = set()  # Links to the backend scanners
         self._hascanner_timestamps: dict[str, dict[str, float]] = {}  # scanner_address, device_address, stamp
 
         self._entity_registry = er.async_get(self.hass)
@@ -1156,14 +1155,21 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         """Set area for ALL devices based on closest beacon."""
         for device in self.devices.values():
             if (
-                #device.is_scanner is not True  # exclude scanners.
+                # device.is_scanner is not True  # exclude scanners.
                 device.create_sensor  # include any devices we are tracking
-                #or device.metadevice_type in METADEVICE_SOURCETYPES  # and any source devices for PBLE, ibeacon etc
+                # or device.metadevice_type in METADEVICE_SOURCETYPES  # and any source devices for PBLE, ibeacon etc
             ):
                 self._refresh_area_by_min_distance(device)
 
     @dataclass
     class AreaTests:
+        """
+        Holds the results of Area-based tests.
+
+        Likely to become a stand-alone class for performing the whole area-selection
+        process.
+        """
+
         scannername: tuple[str, str] = ("", "")
         percentage_difference: float = 0  # distance percentage difference.
         same_area: bool = False  # The old scanner is in the same area as us.
@@ -1176,6 +1182,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         reason: str | None = None  # reason/result
 
         def __str__(self) -> str:
+            """
+            Create string representation for easy debug logging/dumping
+            and potentially a sensor for logging Area decisions.
+            """
             out = ""
             for var, val in vars(self).items():
                 out += f"** {var:20} "
@@ -1192,7 +1202,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     out += f"{val}\n"
             return out
 
-
     def _refresh_area_by_min_distance(self, device: BermudaDevice):
         """Very basic Area setting by finding closest proxy to a given device."""
         # The current area_scanner (which might be None) is the one to beat.
@@ -1200,7 +1209,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         _max_radius = self.options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS)
         nowstamp = MONOTONIC_TIME()
-
 
         tests = self.AreaTests()
 
@@ -1284,8 +1292,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # tests.last_detection = (_old_last_detection, _new_last_detection)
 
             tests.last_ad_age = (
-                nowstamp - closest_scanner._scanner_device.last_seen,
-                nowstamp - scanner._scanner_device.last_seen,
+                nowstamp - closest_scanner.scanner_device.last_seen,
+                nowstamp - scanner.scanner_device.last_seen,
             )
             tests.this_ad_age = (nowstamp - closest_scanner.stamp, nowstamp - scanner.stamp)
 
@@ -1366,6 +1374,44 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # Apply the newly-found closest scanner (or apply None if we didn't find one)
         device.apply_scanner_selection(closest_scanner)
 
+    def _ha_ble_scanners_changed(self) -> bool:
+        """
+        Queries the HA bluetooth backend for new scanners.
+
+        If the list of scanners is different to what we had previously saved in self._hascanners,
+        update our list (and our list of timestamp references) it and return true.
+        If the list has not changed, return False.
+        These are HA's bluetooth backend representation of proxies/scanners.
+        """
+        _new_ha_scanners = set[BaseHaScanner]
+        # Use new API in 2025.2 if available...
+        # if self.hass_version_min_2025_2:
+        # New api
+        _new_ha_scanners = set(self._manager.async_current_scanners())
+        # else:
+        #     # Evil: We're acessing private members of bt manager
+        #     # to do it since there's no API call for it.
+        #     _new_ha_scanners = (
+        #         self._manager._connectable_scanners  # noqa: SLF001
+        #         | self._manager._non_connectable_scanners  # noqa: SLF001
+        #     )
+
+        if _new_ha_scanners != self._hascanners:
+            _LOGGER.debug("*** HA Base Scanner Set has changed")
+            self._hascanners = _new_ha_scanners
+
+            # Populate the local copy of timestamps, if applicable
+            for hascanner in self._hascanners:
+                # Only Remote ha scanners provide explicit timestamps...
+                if isinstance(hascanner, BaseHaRemoteScanner):
+                    # New API in 2025.4.0
+                    if self.hass_version_min_2025_4:
+                        self._hascanner_timestamps[hascanner.source.lower()] = hascanner.discovered_device_timestamps
+                    else:
+                        self._hascanner_timestamps[hascanner.source.lower()] = hascanner._discovered_device_timestamps  # noqa: SLF001
+            return True
+        return False
+
     def _refresh_scanners(self):
         """
         Refresh our local (and saved) list of scanners (BLE Proxies).
@@ -1389,21 +1435,16 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # scanner_devreg_mac: DeviceEntry from HA's *other* integrations, like ESPHome, Shelly.
         # scanner_b: BermudaDevice entry
 
-        # TODO: Eventually replace this with a minver requirement in hacs.json.
-        if self.hass_version_min_2025_2:
-            # New api
-            self._hascanners = set(self._manager.async_current_scanners())
-        else:
-            # Evil: We're acessing private members of bt manager to do it since there's no API call for it.
-            self._hascanners = self._manager._connectable_scanners | self._manager._non_connectable_scanners  # noqa: SLF001
+        # Update the list of backend bluetooth scanners and timestamps.
+        self._ha_ble_scanners_changed()
 
         for hascanner in self._hascanners:
             scanner_address = mac_norm(hascanner.source)
             # As of 2025.2.0 The bluetooth integration creates its own device entries
             # for all HaScanners, not just local adaptors. So since there are two integration
-            # pages where a user might apply an area setting (eg, the bluetooth page or the shelly or esphome page)
-            # we should check both to see if the user has applied an area anywhere, and prefer the bluetooth one
-            # if both are set.
+            # pages where a user might apply an area setting (eg, the bluetooth page or the shelly/esphome pages)
+            # we should check both to see if the user has applied an area (or name) anywhere, and
+            # prefer the bluetooth one if both are set.
 
             # espressif devices have a base_mac
             # https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/misc_system_api.html#local-mac-addresses
@@ -1430,9 +1471,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     connlist.add(("mac", altmac))
                     maclist.add(altmac)
 
+            # Requires 2025.3
             devreg_devices = self._device_registry.devices.get_entries(None, connections=connlist)
             devreg_count = 0
-            devreg_stringlist = ""
+            devreg_stringlist = ""  # for debug logging
             for devreg_device in devreg_devices:
                 devreg_count += 1
                 # _LOGGER.debug("DevregScanner: %s", devreg_device)
@@ -1481,18 +1523,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             if scanner_address in _purge_scanners:
                 _purge_scanners.remove(scanner_address)
 
-            # Populate the local copy of timestamps, if applicable
-            if isinstance(hascanner, BaseHaRemoteScanner):
-                # New API in 2023.4.0 - remove check after updating minver to that+.
-                if self.hass_version_min_2025_4:
-                    self._hascanner_timestamps[hascanner.source.lower()] = hascanner.discovered_device_timestamps
-                else:
-                    self._hascanner_timestamps[hascanner.source.lower()] = hascanner._discovered_device_timestamps  # noqa: SLF001
-
             scanner_b = self._get_or_create_device(scanner_address)
             # scanner_b.create_sensor = True
 
-            scanner_b._hascanner = hascanner
+            scanner_b.hascanner = hascanner
 
             # We found the device entry and have created our scannerdevice,
             # now update any fields that might be new from the device reg.
@@ -1679,7 +1713,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         if redact:
             _stamp_redact = MONOTONIC_TIME()
-            out = cast(ServiceResponse, self.redact_data(out))
+            out = cast("ServiceResponse", self.redact_data(out))
             _stamp_redact_elapsed = MONOTONIC_TIME() - _stamp_redact
             if _stamp_redact_elapsed > 3:  # It should be fast now.
                 _LOGGER.warning("Dump devices redaction took %2f seconds", _stamp_redact_elapsed)

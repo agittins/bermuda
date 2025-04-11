@@ -68,7 +68,7 @@ class BermudaDeviceScanner(dict):
         # I am declaring these just to control their order in the dump,
         # which is a bit silly, I suspect.
         self.name: str = scanner_device.name or scandata.scanner.name
-        self._scanner_device = scanner_device  # links to the source device
+        self.scanner_device = scanner_device  # links to the source device
         self.adapter: str = scandata.scanner.adapter  # a helpful name, like hci0 or prox-test
         self.scanner_address = scanner_device.address
         self.source: str = scandata.scanner.source
@@ -122,8 +122,8 @@ class BermudaDeviceScanner(dict):
         # calls if necessary, rather than re-doing it every cycle.
         scanner = scandata.scanner
         self.name = scanner.name
-        self.area_id = self._scanner_device.area_id
-        self.area_name = self._scanner_device.area_name
+        self.area_id = self.scanner_device.area_id
+        self.area_name = self.scanner_device.area_name
         new_stamp: float | None = None
 
         if self.scanner_sends_stamps:
@@ -171,7 +171,7 @@ class BermudaDeviceScanner(dict):
 
         if new_stamp is not None:
             # Update the last_seen on the parent scanner device, too.
-            self._scanner_device.last_seen = max(self._scanner_device.last_seen, new_stamp)
+            self.scanner_device.last_seen = max(self.scanner_device.last_seen, new_stamp)
 
         if len(self.hist_stamp) == 0 or new_stamp is not None:
             # this is the first entry or a new one, bring in the new reading
@@ -470,7 +470,7 @@ class BermudaDeviceScanner(dict):
                     for ad_data in adarray:
                         if adtype in ["manufacturer_data", "service_data"]:
                             for ad_key, ad_value in ad_data.items():
-                                out_adarray.append({ad_key: cast(bytes, ad_value).hex()})
+                                out_adarray.append({ad_key: cast("bytes", ad_value).hex()})
                         else:
                             out_adarray.append(ad_data)
                     adout[adtype] = out_adarray
