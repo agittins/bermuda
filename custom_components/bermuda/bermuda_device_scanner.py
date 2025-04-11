@@ -1,7 +1,12 @@
 """
-Bermuda's internal representation of a device's scanner entry.
+Bermuda's internal representation of a device to scanner relationship.
 
-Every bluetooth scanner gets its own BermudaDevice, but this class
+This can also be thought of as the representation of an advertisement
+received by a given scanner, in that it's the advert that links the
+device to a scanner. Multiple scanners will receive a given advert, but
+each receiver experiences it (well, the rssi) uniquely.
+
+Every bluetooth scanner is a BermudaDevice, but this class
 is the nested entry that gets attached to each device's `scanners`
 dict. It is a sub-set of a 'device' and will have attributes specific
 to the combination of the scanner and the device it is reporting.
@@ -20,7 +25,6 @@ from homeassistant.components.bluetooth import (
 from .const import (
     _LOGGER,
     CONF_ATTENUATION,
-    CONF_DEVICES,
     CONF_MAX_VELOCITY,
     CONF_REF_POWER,
     CONF_RSSI_OFFSETS,
@@ -65,31 +69,31 @@ class BermudaDeviceScanner(dict):
         # which is a bit silly, I suspect.
         self.name: str = scanner_device.name or scandata.scanner.name
         self.scanner_device = scanner_device  # links to the source device
-        self.adapter: str = scandata.scanner.adapter
-        self.address = scanner_device.address
+        self.adapter: str = scandata.scanner.adapter  # a helpful name, like hci0 or prox-test
+        self.scanner_address = scanner_device.address
         self.source: str = scandata.scanner.source
         self.area_id: str | None = scanner_device.area_id
         self.area_name: str | None = scanner_device.area_name
-        self.parent_device = parent_device
-        self.parent_device_address = parent_device.address
+        self._device = parent_device
+        self.device_address = parent_device.address
         self.options = options
-        self.stamp: float | None = 0
+        self.stamp: float = 0
         # Only remote scanners log timestamps, local usb adaptors do not.
         self.scanner_sends_stamps = isinstance(scanner_device, BaseHaRemoteScanner)
         self.new_stamp: float | None = None  # Set when a new advert is loaded from update
         self.rssi: float | None = None
         self.tx_power: float | None = None
         self.rssi_distance: float | None = None
-        self.rssi_distance_raw: float | None = None
+        self.rssi_distance_raw: float
         self.ref_power: float = 0  # Override of global, set from parent device.
         self.stale_update_count = 0  # How many times we did an update but no new stamps were found.
-        self.hist_stamp = []
-        self.hist_rssi = []
-        self.hist_distance = []
-        self.hist_distance_by_interval = []  # updated per-interval
+        self.hist_stamp: list[float] = []
+        self.hist_rssi: list[int] = []
+        self.hist_distance: list[float] = []
+        self.hist_distance_by_interval: list[float] = []  # updated per-interval
         self.hist_interval = []  # WARNING: This is actually "age of ad when we polled"
-        self.hist_velocity = []  # Effective velocity versus previous stamped reading
-        self.conf_rssi_offset = self.options.get(CONF_RSSI_OFFSETS, {}).get(self.address, 0)
+        self.hist_velocity: list[float] = []  # Effective velocity versus previous stamped reading
+        self.conf_rssi_offset = self.options.get(CONF_RSSI_OFFSETS, {}).get(self.scanner_address, 0)
         self.conf_ref_power = self.options.get(CONF_REF_POWER)
         self.conf_attenuation = self.options.get(CONF_ATTENUATION)
         self.conf_max_velocity = self.options.get(CONF_MAX_VELOCITY)
@@ -130,7 +134,7 @@ class BermudaDeviceScanner(dict):
             stamps = scanner._discovered_device_timestamps  # type: ignore #noqa
 
             # In this dict all MAC address keys are upper-cased
-            uppermac = self.parent_device_address.upper()
+            uppermac = self.device_address.upper()
             if uppermac in stamps:
                 if self.stamp is None or (stamps[uppermac] is not None and stamps[uppermac] > self.stamp):
                     new_stamp = stamps[uppermac]
@@ -142,9 +146,9 @@ class BermudaDeviceScanner(dict):
                 # This shouldn't happen, as we shouldn't have got a record
                 # of this scanner if it hadn't seen this device.
                 _LOGGER.error(
-                    "Scanner %s has no stamp for %s - very odd.",
+                    "Scanner %s has no stamp for %s - very odd",
                     scanner.source,
-                    self.parent_device_address,
+                    self.device_address,
                 )
                 new_stamp = None
         else:
@@ -164,6 +168,10 @@ class BermudaDeviceScanner(dict):
                 new_stamp = MONOTONIC_TIME()
             else:
                 new_stamp = None
+
+        if new_stamp is not None:
+            # Update the last_seen on the parent scanner device, too.
+            self.scanner_device.last_seen = max(self.scanner_device.last_seen, new_stamp)
 
         if len(self.hist_stamp) == 0 or new_stamp is not None:
             # this is the first entry or a new one, bring in the new reading
@@ -189,7 +197,7 @@ class BermudaDeviceScanner(dict):
                 _interval = None
             self.hist_interval.insert(0, _interval)
 
-            self.stamp = new_stamp
+            self.stamp = new_stamp or 0
             self.hist_stamp.insert(0, self.stamp)
 
         # if self.tx_power is not None and scandata.advertisement.tx_power != self.tx_power:
@@ -331,7 +339,11 @@ class BermudaDeviceScanner(dict):
             self.rssi_distance = self.rssi_distance_raw
             # And ensure the smoothing history gets a fresh start
 
-            self.hist_distance_by_interval = [self.rssi_distance_raw]
+            if self.rssi_distance_raw is not None:
+                # clear tends to be more efficient than re-creating
+                # and might have fewer side-effects.
+                self.hist_distance_by_interval.clear()
+                self.hist_distance_by_interval.append(self.rssi_distance_raw)
 
         elif new_stamp is None and (self.stamp is None or self.stamp < MONOTONIC_TIME() - DISTANCE_TIMEOUT):
             # DEVICE IS AWAY!
@@ -389,17 +401,19 @@ class BermudaDeviceScanner(dict):
             self.hist_velocity.insert(0, velocity)
 
             if velocity > self.conf_max_velocity:
-                if self.parent_device_address.upper() in self.options.get(CONF_DEVICES, []):
+                if self._device.create_sensor:
                     _LOGGER.debug(
                         "This sparrow %s flies too fast (%2fm/s), ignoring",
-                        self.parent_device.name,
+                        self._device.name,
                         velocity,
                     )
-                # Discard the bogus reading by duplicating the last.
-                if len(self.hist_distance_by_interval) == 0:
-                    self.hist_distance_by_interval = [self.rssi_distance_raw]
-                else:
+
+                # Discard the bogus reading by duplicating the last
+                if len(self.hist_distance_by_interval) > 0:
                     self.hist_distance_by_interval.insert(0, self.hist_distance_by_interval[0])
+                else:
+                    # If nothing to duplicate, just plug in the raw distance.
+                    self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
             else:
                 self.hist_distance_by_interval.insert(0, self.rssi_distance_raw)
 
@@ -456,7 +470,7 @@ class BermudaDeviceScanner(dict):
                     for ad_data in adarray:
                         if adtype in ["manufacturer_data", "service_data"]:
                             for ad_key, ad_value in ad_data.items():
-                                out_adarray.append({ad_key: cast(bytes, ad_value).hex()})
+                                out_adarray.append({ad_key: cast("bytes", ad_value).hex()})
                         else:
                             out_adarray.append(ad_data)
                     adout[adtype] = out_adarray
@@ -467,4 +481,4 @@ class BermudaDeviceScanner(dict):
 
     def __repr__(self) -> str:
         """Help debugging by giving it a clear name instead of empty dict."""
-        return self.address
+        return f"{self.device_address}__{self.scanner_address}"

@@ -23,7 +23,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Bermuda
     bt_diags = await coordinator._manager.async_diagnostics()  # noqa
 
     # Param structure for service call
-    call = ServiceCall(DOMAIN, "dump_devices", {"redact": True})
+    call = ServiceCall(hass, DOMAIN, "dump_devices", {"redact": True})
 
     data: dict[str, Any] = {
         "active_devices": f"{coordinator.count_active_devices()}/{len(coordinator.devices)}",
