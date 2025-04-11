@@ -372,6 +372,7 @@ class BermudaTotalProxyCount(BermudaGlobalSensor):
     """Counts the total number of proxies we have access to."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
     def unique_id(self):
@@ -396,6 +397,7 @@ class BermudaActiveProxyCount(BermudaGlobalSensor):
     """Counts the number of proxies that are active."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
     def unique_id(self):
@@ -420,6 +422,7 @@ class BermudaTotalDeviceCount(BermudaGlobalSensor):
     """Counts the total number of devices we can see."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
     def unique_id(self):
@@ -444,6 +447,7 @@ class BermudaVisibleDeviceCount(BermudaGlobalSensor):
     """Counts the number of devices that are active."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
     def unique_id(self):
