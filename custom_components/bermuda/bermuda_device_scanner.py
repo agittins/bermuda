@@ -67,7 +67,7 @@ class BermudaDeviceScanner(dict):
     ) -> None:
         # I am declaring these just to control their order in the dump,
         # which is a bit silly, I suspect.
-        self.name: str = scanner_device.name or scandata.scanner.name
+        self.name: str = scanner_device.name  # or scandata.scanner.name
         self.scanner_device = scanner_device  # links to the source device
         self.adapter: str = scandata.scanner.adapter  # a helpful name, like hci0 or prox-test
         self.scanner_address = scanner_device.address

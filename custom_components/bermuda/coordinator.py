@@ -1144,14 +1144,16 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         """
 
         scannername: tuple[str, str] = ("", "")
-        percentage_difference: float = 0  # distance percentage difference.
+        areas: tuple[str, str] = ("", "")
+        pcnt_diff: float = 0  # distance percentage difference.
         same_area: bool = False  # The old scanner is in the same area as us.
-        last_detection: tuple[float, float] = (0, 0)  # bt manager's last_detection field. Compare with ours.
+        # last_detection: tuple[float, float] = (0, 0)  # bt manager's last_detection field. Compare with ours.
         last_ad_age: tuple[float, float] = (0, 0)  # seconds since we last got *any* ad from scanner
         this_ad_age: tuple[float, float] = (0, 0)  # how old the *current* advert is on this scanner
         distance: tuple[float, float] = (0, 0)
-        velocity: tuple[float, float] = (0, 0)
-        last_closer: tuple[float, float] = (0, 0)  # since old was closer and how long new has been closer
+        hist_min_max: tuple[float, float] = (0, 0)  # min/max distance from history
+        # velocity: tuple[float, float] = (0, 0)
+        # last_closer: tuple[float, float] = (0, 0)  # since old was closer and how long new has been closer
         reason: str | None = None  # reason/result
 
         def __str__(self) -> str:
@@ -1247,6 +1249,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             tests.reason = None  # ensure we don't trigger logging if no decision was made.
             tests.same_area = closest_scanner.area_id == scanner.area_id
+            tests.areas = (closest_scanner.area_name, scanner.area_name)
             tests.scannername = (closest_scanner.name, scanner.name)
             tests.distance = (closest_scanner.rssi_distance, scanner.rssi_distance)
             # tests.velocity = (
@@ -1303,7 +1306,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             _pda = scanner.rssi_distance
             _pdb = closest_scanner.rssi_distance
-            tests.percentage_difference = abs(_pda - _pdb) / (_pda + _pdb) / 2
+            tests.pcnt_diff = abs(_pda - _pdb) / (_pda + _pdb) / 2
 
             # Same area. Confirm freshness and distance.
             if (
@@ -1318,17 +1321,20 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # Win by historical min/max. Confirm available history and sufficient %diff.
             min_seconds = 3
             max_seconds = 5
-            if (
-                len(scanner.hist_distance_by_interval) > min_seconds
-                and max(scanner.hist_distance_by_interval[:max_seconds])
-                < min(closest_scanner.hist_distance_by_interval[:max_seconds])
-                and tests.percentage_difference > 0.10
-            ):
-                tests.reason = "WIN for our historical max being better than the old historical min"
-                closest_scanner = scanner
-                continue
+            if len(scanner.hist_distance_by_interval) > min_seconds:
+                tests.hist_min_max = (
+                    min(closest_scanner.hist_distance_by_interval[:max_seconds]),  # Oldest min
+                    max(scanner.hist_distance_by_interval[:max_seconds]),  # Newest max
+                )
+                if (
+                    tests.hist_min_max[1] < tests.hist_min_max[0]
+                    and tests.pcnt_diff > 0.10  # and we're significantly closer.
+                ):
+                    tests.reason = "WIN for our historical max being better than the old historical min"
+                    closest_scanner = scanner
+                    continue
 
-            if tests.percentage_difference < 0.18:
+            if tests.pcnt_diff < 0.18:
                 # Didn't make the cut. We're not "different enough" given how
                 # recently the previous nearest was updated.
                 tests.reason = "LOSS We were not convincingly close - failed on percentage_difference"
