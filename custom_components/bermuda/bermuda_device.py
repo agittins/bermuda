@@ -329,7 +329,7 @@ class BermudaDevice(dict):
         """Convert class to serialisable dict for dump_devices."""
         out = {}
         for var, val in vars(self).items():
-            if var == "_hascanner":
+            if var == "hascanner":
                 continue
             if var == "scanners":
                 scanout = {}

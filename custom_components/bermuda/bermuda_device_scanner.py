@@ -217,6 +217,10 @@ class BermudaDeviceScanner(dict):
 
         # Track each advertisement element as or if they change.
         for key, data in self.adverts.items():
+            if key == "platform_data":
+                # This duplicates the other keys and doesn't encode to JSON without
+                # extra work.
+                continue
             new_data = getattr(scandata.advertisement, key, {})
             if len(new_data) > 0:
                 if len(data) == 0 or data[0] != new_data:
