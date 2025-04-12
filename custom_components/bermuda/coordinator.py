@@ -499,11 +499,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         results = []
         for scanner in self.scanner_list:
             scannerdev = self.devices[scanner]
-            # last_stamp: float = 0
-            # for device in self.devices.values():
-            #     for record in device.scanners.values():
-            #         if record.scanner_address == scanner and record.stamp is not None:
-            #             last_stamp = max(record.stamp, last_stamp)
             results.append(
                 {
                     "name": scannerdev.name,
@@ -1105,30 +1100,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                             attribute,
                         )
 
-                metadev.last_seen = max(metadev.last_seen, source_device.last_seen)
-                # if source_device.last_seen > metadev.last_seen:
-                #     # Source is newer than the latest recorded, update last_seen
-                #     metadev.last_seen = source_device.last_seen
-                # elif source_device.last_seen == 0:
-                #     # _LOGGER.debug(
-                #     #     "New source %s for %s has no stamp yet. This is"
-                #     #     " expected if it's a fresh Private BLE source.",
-                #     #     source_device.address,
-                #     #     metadev.name
-                #     # )
-                #     pass
-                # elif source_device.last_seen < metadev.last_seen:
-                #     # We should not have a source device that is older than the
-                #     # current metadevice, so flag this if it occurs.
-                #     # This caught bug #138, not that I realised it at the time!
-                #     # (https://github.com/agittins/bermuda/issues/138)
-                #     _LOGGER.debug(
-                #         "Using freshest advert from %s for %s but it's still %s seconds too old!",
-                #         source_device.address,
-                #         metadev.name,
-                #         metadev.last_seen - source_device.last_seen,
-                #     )
-                # else the stamps are equal, which is perfectly OK.
+                if metadev.last_seen < source_device.last_seen:  # noqa: PLR1730
+                    metadev.last_seen = source_device.last_seen
 
     def dt_mono_to_datetime(self, stamp) -> datetime:
         """Given a monotonic timestamp, convert to datetime object."""
@@ -1384,17 +1357,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         These are HA's bluetooth backend representation of proxies/scanners.
         """
         _new_ha_scanners = set[BaseHaScanner]
-        # Use new API in 2025.2 if available...
-        # if self.hass_version_min_2025_2:
-        # New api
+        # Using new API in 2025.2
         _new_ha_scanners = set(self._manager.async_current_scanners())
-        # else:
-        #     # Evil: We're acessing private members of bt manager
-        #     # to do it since there's no API call for it.
-        #     _new_ha_scanners = (
-        #         self._manager._connectable_scanners  # noqa: SLF001
-        #         | self._manager._non_connectable_scanners  # noqa: SLF001
-        #     )
 
         if _new_ha_scanners != self._hascanners:
             _LOGGER.debug("*** HA Base Scanner Set has changed")

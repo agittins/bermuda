@@ -121,9 +121,9 @@ class BermudaDeviceScanner(dict):
         # FIXME: This should probably be a separate function that the refresh_scanners
         # calls if necessary, rather than re-doing it every cycle.
         scanner = scandata.scanner
-        self.name = scanner.name
-        self.area_id = self.scanner_device.area_id
-        self.area_name = self.scanner_device.area_name
+        # self.name = scanner.name
+        # self.area_id = self.scanner_device.area_id
+        # self.area_name = self.scanner_device.area_name
         new_stamp: float | None = None
 
         if self.scanner_sends_stamps:
@@ -171,7 +171,9 @@ class BermudaDeviceScanner(dict):
 
         if new_stamp is not None:
             # Update the last_seen on the parent scanner device, too.
-            self.scanner_device.last_seen = max(self.scanner_device.last_seen, new_stamp)
+            # (we don't use max() because it's slower)
+            if new_stamp > self.scanner_device.last_seen:  # noqa: PLR1730
+                self.scanner_device.last_seen = new_stamp
 
         if len(self.hist_stamp) == 0 or new_stamp is not None:
             # this is the first entry or a new one, bring in the new reading
