@@ -108,6 +108,12 @@ if TYPE_CHECKING:
 
 Cancellable = Callable[[], None]
 
+# The if instead of min/max triggers PLR1730, but when
+# split over two lines, ruff removes it, then complains again.
+# so we're just disabling it for the whole file.
+# https://github.com/astral-sh/ruff/issues/4244
+# ruff: noqa: PLR1730
+
 
 class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     """
@@ -148,7 +154,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.redactions: dict[str, str] = {}
         # Any remaining MAC addresses will be replaced with this. We define it here
         # so we can compile it once. MAC addresses may have [:_-] separators.
-        self._redact_generic_re = re.compile(r"(?P<start>[0-9A-Fa-f]{2})[:_-]([0-9A-Fa-f]{2}[:_-]){4}(?P<end>[0-9A-Fa-f]{2})")
+        self._redact_generic_re = re.compile(
+            r"(?P<start>[0-9A-Fa-f]{2})[:_-]([0-9A-Fa-f]{2}[:_-]){4}(?P<end>[0-9A-Fa-f]{2})"
+        )
         self._redact_generic_sub = r"\g<start>:xx:xx:xx:xx:\g<end>"
 
         self.stamp_last_update: float = 0  # Last time we ran an update, from MONOTONIC_TIME()
@@ -1099,8 +1107,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                             "Devices don't have a '%s' attribute, this is a bug",
                             attribute,
                         )
-
-                if metadev.last_seen < source_device.last_seen:  # noqa: PLR1730
+                if metadev.last_seen < source_device.last_seen:
                     metadev.last_seen = source_device.last_seen
 
     def dt_mono_to_datetime(self, stamp) -> datetime:

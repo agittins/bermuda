@@ -40,6 +40,12 @@ from .util import rssi_to_metres
 if TYPE_CHECKING:
     from .bermuda_device import BermudaDevice
 
+# The if instead of min/max triggers PLR1730, but when
+# split over two lines, ruff removes it, then complains again.
+# so we're just disabling it for the whole file.
+# https://github.com/astral-sh/ruff/issues/4244
+# ruff: noqa: PLR1730
+
 
 class BermudaDeviceScanner(dict):
     """
@@ -172,7 +178,7 @@ class BermudaDeviceScanner(dict):
         if new_stamp is not None:
             # Update the last_seen on the parent scanner device, too.
             # (we don't use max() because it's slower)
-            if new_stamp > self.scanner_device.last_seen:  # noqa: PLR1730
+            if new_stamp > self.scanner_device.last_seen:
                 self.scanner_device.last_seen = new_stamp
 
         if len(self.hist_stamp) == 0 or new_stamp is not None:

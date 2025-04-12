@@ -57,6 +57,7 @@ def mac_norm(mac: str) -> str:
     # Not sure how formatted, return original
     return mac.lower()
 
+
 @lru_cache(2048)
 def mac_explode_formats(mac):
     """
@@ -70,6 +71,7 @@ def mac_explode_formats(mac):
         mac.replace(":", "_"),
         mac.replace(":", "."),
     ]
+
 
 @lru_cache(1024)
 def rssi_to_metres(rssi, ref_power=None, attenuation=None):
