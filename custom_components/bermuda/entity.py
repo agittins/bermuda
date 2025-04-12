@@ -122,16 +122,23 @@ class BermudaEntity(CoordinatorEntity):
         model = None
 
         if self._device.is_scanner:
-            connection = {(dr.CONNECTION_NETWORK_MAC, self._device.address.lower())}
+            # ESPHome proxies prior to 2025.3 report their WIFI MAC for any address,
+            # except for received iBeacons.
+            connections = {
+                # Keeps the distance_to entities the same across pre/post 2025.3
+                (dr.CONNECTION_NETWORK_MAC, (self._device.address_wifi_mac or self._device.address).lower()),
+                # Ensures we can also match the Bluetooth integration entities.
+                (dr.CONNECTION_BLUETOOTH, (self._device.address_ble_mac or self._device.address).upper()),
+            }
         elif self._device.address_type == ADDR_TYPE_IBEACON:
             # ibeacon doesn't (yet) actually set a "connection", but
             # this "matches" what it stores for identifier.
-            connection = {("ibeacon", self._device.address.lower())}
+            connections = {("ibeacon", self._device.address.lower())}
             model = f"iBeacon: {self._device.address.lower()}"
         elif self._device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
             # Private BLE Device integration doesn't specify "connection" tuples,
             # so we use what it defines for the "identifier" instead.
-            connection = {("private_ble_device", self._device.address.lower())}
+            connections = {("private_ble_device", self._device.address.lower())}
             # We don't set the model since the Private BLE integration should have
             # already named it nicely.
             # model = f"IRK: {self._device.address.lower()[:4]}"
@@ -144,13 +151,13 @@ class BermudaEntity(CoordinatorEntity):
             #    existing_device_id = dr_device.id
             domain_name = DOMAIN_PRIVATE_BLE_DEVICE
         else:
-            connection = {(dr.CONNECTION_BLUETOOTH, self._device.address.upper())}
+            connections = {(dr.CONNECTION_BLUETOOTH, self._device.address.upper())}
             # No need to set model, since MAC address will be shown via connection.
             # model = f"Bermuda: {self._device.address.lower()}"
 
         device_info = {
             "identifiers": {(domain_name, self._device.unique_id)},
-            "connections": connection,
+            "connections": connections,
             "name": self._device.name,
         }
         if model is not None:

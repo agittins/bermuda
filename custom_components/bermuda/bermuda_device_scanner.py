@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, cast
 
 from homeassistant.components.bluetooth import (
     MONOTONIC_TIME,
-    BaseHaRemoteScanner,
     BluetoothScannerDevice,
 )
 
@@ -85,7 +84,9 @@ class BermudaDeviceScanner(dict):
         self.options = options
         self.stamp: float = 0
         # Only remote scanners log timestamps, local usb adaptors do not.
-        self.scanner_sends_stamps = isinstance(scanner_device, BaseHaRemoteScanner)
+        self.scanner_sends_stamps = hasattr(scandata.scanner, "discovered_device_timestamps") or hasattr(
+            scandata.scanner, "_discovered_device_timestamps"
+        )
         self.new_stamp: float | None = None  # Set when a new advert is loaded from update
         self.rssi: float | None = None
         self.tx_power: float | None = None
@@ -134,10 +135,11 @@ class BermudaDeviceScanner(dict):
 
         if self.scanner_sends_stamps:
             # Found a remote scanner which has timestamp history...
-            # There's no API for this, so we somewhat sneakily are accessing
-            # what is intended to be a protected dict.
-            # pylint: disable-next=protected-access
-            stamps = scanner._discovered_device_timestamps  # type: ignore #noqa
+            # Check can be removed when we require 2025.4+
+            if hasattr(scanner, "discovered_device_timestamps"):
+                stamps = scanner.discovered_device_timestamps
+            else:
+                stamps = scanner._discovered_device_timestamps  # #noqa
 
             # In this dict all MAC address keys are upper-cased
             uppermac = self.device_address.upper()
@@ -157,29 +159,16 @@ class BermudaDeviceScanner(dict):
                     self.device_address,
                 )
                 new_stamp = None
+        elif self.rssi != scandata.advertisement.rssi:
+            # If the rssi has changed from last time, consider it "new". Since this scanner does
+            # not send stamps, this is probably a USB bluetooth adaptor.
+            new_stamp = MONOTONIC_TIME()
         else:
-            # Not a bluetooth_proxy device / remote scanner, but probably a USB Bluetooth adaptor.
-            # We don't get advertisement timestamps from bluez, so the stamps in our history
-            # won't be terribly accurate, and the advert might actually be rather old.
-            # All we can do is check if it has changed and assume it's fresh from that.
+            new_stamp = None
 
-            self.scanner_sends_stamps = False
-            # If the rssi has changed from last time, consider it "new"
-            if self.rssi != scandata.advertisement.rssi:
-                # 2024-03-16: We're going to treat it as fresh for now and see how that goes.
-                # We can do that because we smooth distances now every update_interval, regardless
-                # of when the last advertisement was received, so we shouldn't see bluez trumping
-                # proxies with stale adverts. Hopefully.
-                # new_stamp = MONOTONIC_TIME() - (ADVERT_FRESHTIME * 4)
-                new_stamp = MONOTONIC_TIME()
-            else:
-                new_stamp = None
-
-        if new_stamp is not None:
-            # Update the last_seen on the parent scanner device, too.
-            # (we don't use max() because it's slower)
-            if new_stamp > self.scanner_device.last_seen:
-                self.scanner_device.last_seen = new_stamp
+        # Update our parent scanner's last_seen if we have a new stamp.
+        if new_stamp is not None and new_stamp > self.scanner_device.last_seen:
+            self.scanner_device.last_seen = new_stamp
 
         if len(self.hist_stamp) == 0 or new_stamp is not None:
             # this is the first entry or a new one, bring in the new reading

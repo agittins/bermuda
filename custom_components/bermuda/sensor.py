@@ -266,7 +266,8 @@ class BermudaSensorScannerRange(BermudaSensorRange):
 
     @property
     def unique_id(self):
-        return f"{self._device.unique_id}_{self._scanner.address}_range"
+        # Retaining legacy wifi mac for unique_id
+        return f"{self._device.unique_id}_{self._scanner.address_wifi_mac or self._scanner.address}_range"
 
     @property
     def name(self):
