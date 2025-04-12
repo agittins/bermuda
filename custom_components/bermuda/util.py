@@ -57,6 +57,19 @@ def mac_norm(mac: str) -> str:
     # Not sure how formatted, return original
     return mac.lower()
 
+@lru_cache(2048)
+def mac_explode_formats(mac):
+    """
+    Take a formatted mac address and return the formats
+    likely to be found in our device info, adverts etc.
+    """
+    return [
+        mac,
+        mac.replace(":", ""),
+        mac.replace(":", "-"),
+        mac.replace(":", "_"),
+        mac.replace(":", "."),
+    ]
 
 @lru_cache(1024)
 def rssi_to_metres(rssi, ref_power=None, attenuation=None):

@@ -97,7 +97,7 @@ from .const import (
     SIGNAL_DEVICE_NEW,
     UPDATE_INTERVAL,
 )
-from .util import clean_charbuf, mac_math_offset, mac_norm
+from .util import clean_charbuf, mac_explode_formats, mac_math_offset, mac_norm
 
 if TYPE_CHECKING:
     from habluetooth import BluetoothServiceInfoBleak
@@ -147,8 +147,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # match/replacement pairs for redacting addresses
         self.redactions: dict[str, str] = {}
         # Any remaining MAC addresses will be replaced with this. We define it here
-        # so we can compile it once.
-        self._redact_generic_re = re.compile(r"(?P<start>[0-9A-Fa-f]{2}):([0-9A-Fa-f]{2}:){4}(?P<end>[0-9A-Fa-f]{2})")
+        # so we can compile it once. MAC addresses may have [:_-] separators.
+        self._redact_generic_re = re.compile(r"(?P<start>[0-9A-Fa-f]{2})[:_-]([0-9A-Fa-f]{2}[:_-]){4}(?P<end>[0-9A-Fa-f]{2})")
         self._redact_generic_sub = r"\g<start>:xx:xx:xx:xx:\g<end>"
 
         self.stamp_last_update: float = 0  # Last time we ran an update, from MONOTONIC_TIME()
@@ -1808,14 +1808,18 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         if isinstance(data, str):
             data = data.lower()
             # the end of the recursive wormhole, do the actual work:
-            if data not in self.redactions:
-                for find, fix in list(self.redactions.items()):
-                    if find in data:
-                        self.redactions[data] = data.replace(find, fix)
-                        data = self.redactions[data]
-                        break
-            else:
+            if data in self.redactions:
+                # Full string match, easy...
                 data = self.redactions[data]
+            else:
+                # Search for any of the redaction strings in the data.
+                for find_mac, fix in list(self.redactions.items()):
+                    # Include variants of MAC address
+                    for find in mac_explode_formats(find_mac):
+                        if find in data:
+                            self.redactions[data] = data.replace(find, fix)
+                            data = self.redactions[data]
+                            break
             # redactions done, now replace any remaining MAC addresses
             # We are only looking for xx:xx:xx... format.
             return self._redact_generic_re.sub(self._redact_generic_sub, data)
