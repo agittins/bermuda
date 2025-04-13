@@ -137,9 +137,9 @@ class BermudaDeviceScanner(dict):
             # Found a remote scanner which has timestamp history...
             # Check can be removed when we require 2025.4+
             if hasattr(scanner, "discovered_device_timestamps"):
-                stamps = scanner.discovered_device_timestamps
+                stamps = scanner.discovered_device_timestamps  # type: ignore
             else:
-                stamps = scanner._discovered_device_timestamps  # #noqa
+                stamps = scanner._discovered_device_timestamps  # type: ignore #noqa
 
             # In this dict all MAC address keys are upper-cased
             uppermac = self.device_address.upper()

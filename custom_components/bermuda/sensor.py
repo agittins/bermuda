@@ -337,7 +337,6 @@ class BermudaSensorAreaSwitchReason(BermudaSensor):
     # _attr_entity_registry_enabled_default = False
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-
     @property
     def entity_registry_enabled_default(self) -> bool:
         """Declare if entity should be automatically enabled on adding."""

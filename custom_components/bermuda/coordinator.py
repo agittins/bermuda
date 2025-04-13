@@ -159,7 +159,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         )
         self._redact_generic_sub = r"\g<start>:xx:xx:xx:xx:\g<end>"
 
+        self.update_in_progress: bool = False  # A lock to guard against huge backlogs / slow processing
         self.stamp_last_update: float = 0  # Last time we ran an update, from MONOTONIC_TIME()
+        self.stamp_last_update_started: float = 0
         self.stamp_last_prune: float = 0  # When we last pruned device list
 
         self.member_uuids = {}
@@ -548,10 +550,28 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         (no network requests made etc).
 
         """
+        if self.update_in_progress:
+            # Eeep!
+            _LOGGER_SPAM_LESS.warning("update_still_running", "Previous update still running, skipping this cycle.")
+            return False
+        self.update_in_progress = True
+
+        nowstamp = MONOTONIC_TIME()
+        _timestamp_cutoff = nowstamp - min(PRUNE_TIME_DEFAULT, PRUNE_TIME_IRK)
+
         for service_info in bluetooth.async_discovered_service_info(self.hass, False):
             # Note that some of these entries are restored from storage,
             # so we won't necessarily find (immediately, or perhaps ever)
             # scanner entries for any given device.
+
+            if self.stamp_last_update == 0 and service_info.time < _timestamp_cutoff:
+                # It's our first run and we want to seed the lists a bit.
+                # So let through anything that would not have already been pruned
+                continue
+            if service_info.time < (self.stamp_last_update_started - 3):  # some arbitrary lee-way.
+                # If it's older than this, skip it (since we will have already
+                # recorded it on at least the previous run)
+                continue
 
             _got_new_name = False
             if service_info.address not in self.devices:
@@ -748,8 +768,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.prune_devices()
 
         # end of async update
+        self.stamp_last_update_started = nowstamp
         self.stamp_last_update = MONOTONIC_TIME()
+        self.update_in_progress = False
         self.last_update_success = True
+        return True
 
     def prune_devices(self, force_pruning=False):
         """
@@ -764,7 +787,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # stamp the run.
         self.stamp_last_prune = MONOTONIC_TIME()
 
-        prune_list = []
+        prune_list: list[str] = []
         prunable_stamps = {}
 
         # build a set of source devices that are still metadevice_sources[0]
@@ -786,9 +809,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # should totally be pruned if it's no longer around.
             if (
                 device_address not in metadevice_source_primos
+                and device_address not in self.scanner_list
                 and (not device.create_sensor)  # Not if we track the device
                 and (not device.is_scanner)
-                and (device.last_seen > 0)  # Don't prune if we haven't initialised yet!
+                # and (device.last_seen > 0)  # Don't prune if we haven't initialised yet!
                 and device.address_type != BDADDR_TYPE_NOT_MAC48
             ):
                 if device.address_type == BDADDR_TYPE_PRIVATE_RESOLVABLE:
@@ -798,14 +822,20 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                     if device.last_seen < MONOTONIC_TIME() - PRUNE_TIME_IRK:
                         _LOGGER.debug(
-                            "Marking stale IRK address for pruning: %s",
+                            "Marking stale IRK address for pruning: [%s] %s",
+                            device_address,
                             device.name,
                         )
                         prune_list.append(device_address)
                     else:
                         # It's not stale, but we will prune it if we have to later to fit
                         # into PRUNE_MAX_COUNT
-                        prunable_stamps[device_address] = device.last_seen
+                        # prunable_stamps[device_address] = device.last_seen
+
+                        # Actually, let's keep it. A more recent stamp implies
+                        # that it's probably still in the advert cache of BlueZ
+                        # or BaseHaRemoteScanner, so we'd just create churn.
+                        pass
 
                 elif device.last_seen < MONOTONIC_TIME() - PRUNE_TIME_DEFAULT:
                     # It's a static address, and stale.
@@ -834,6 +864,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     if scannerstamp is None or scannerstamp < (nowstamp - PRUNE_TIME_IRK):
                         del device.scanners[scannerkey]
                         _LOGGER.debug("Pruning metadevice advert %s", scannerkey)
+
+            # Clean up the device.metadevices lists (otherwise update_metadevices will re-populate)
+            for metadevice in self.metadevices.values():
+                for source_address in prune_list:
+                    if source_address in metadevice.metadevice_sources:
+                        metadevice.metadevice_sources.remove(source_address)
 
         prune_quota = len(self.devices) - len(prune_list) - PRUNE_MAX_COUNT
         if prune_quota > 0:
@@ -1001,6 +1037,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # insert this device as a known source
                 metadevice.metadevice_sources.insert(0, source_device.address)
                 # and trim the list of sources
+                # Note that scanner devices might have metadevice sources because they
+                # might be sending ibeacons etc, but since their addresses are static
+                # they should never run into an issue here.
                 del metadevice.metadevice_sources[HIST_KEEP_COUNT:]
 
                 # If we have a new / better name, use that..

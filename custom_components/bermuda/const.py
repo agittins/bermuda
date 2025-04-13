@@ -96,7 +96,7 @@ ADDR_TYPE_PRIVATE_BLE_DEVICE: Final = "addr_type_private_ble_device"
 # expires adverts at 195 seconds to avoid churning.
 #
 PRUNE_MAX_COUNT = 1000  # How many device entries to allow at maximum
-PRUNE_TIME_INTERVAL = 310  # Every 5m10s, prune stale devices
+PRUNE_TIME_INTERVAL = 180  # Every 3m, prune stale devices
 PRUNE_TIME_DEFAULT = 86400  # Max age of regular device entries (1day)
 PRUNE_TIME_IRK = 240  # Resolvable Private addresses change often, prune regularly
 
