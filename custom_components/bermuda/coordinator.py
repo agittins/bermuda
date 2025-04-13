@@ -506,7 +506,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         stamp = MONOTONIC_TIME()
         results = []
         for scanner in self.scanner_list:
-            scannerdev = self.devices[scanner]
+            try:
+                scannerdev = self.devices[scanner]
+            except KeyError:
+                # Scanner is not set up yet, we might be initialising.
+                continue
             results.append(
                 {
                     "name": scannerdev.name,
