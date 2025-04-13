@@ -1154,6 +1154,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         process.
         """
 
+        device: str = ""
         scannername: tuple[str, str] = ("", "")
         areas: tuple[str, str] = ("", "")
         pcnt_diff: float = 0  # distance percentage difference.
@@ -1166,6 +1167,24 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # velocity: tuple[float, float] = (0, 0)
         # last_closer: tuple[float, float] = (0, 0)  # since old was closer and how long new has been closer
         reason: str | None = None  # reason/result
+
+        def sensortext(self) -> str:
+            out = ""
+            for var, val in vars(self).items():
+                out += f"{var}|"
+                if isinstance(val, tuple):
+                    for v in val:
+                        if isinstance(v, float):
+                            out += f"{v:.2f}|"
+                        else:
+                            out += f"{v}"
+                    # out += "\n"
+                elif var == "pcnt_diff":
+                    out += f"{val:.3f}"
+                else:
+                    out += f"{val}"
+                out += "\n"
+            return out[:255]
 
         def __str__(self) -> str:
             """
@@ -1182,8 +1201,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         else:
                             out += f"{v} "
                     out += "\n"
-                elif var == "percentage_difference":
-                    out += f"{val:.2f}\n"
+                elif var == "pcnt_diff":
+                    out += f"{val:.3f}\n"
                 else:
                     out += f"{val}\n"
             return out
@@ -1197,10 +1216,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         nowstamp = MONOTONIC_TIME()
 
         tests = self.AreaTests()
+        tests.device = device.name
 
         _superchatty = False  # Set to true for very verbose logging about area wins
-        if device.name == "Ash Pixel IRK":
-            _superchatty = True
+        # if device.name in ("Ash Pixel IRK", "Garage", "Melinda iPhone"):
+        #     _superchatty = True
 
         for scanner in device.scanners.values():
             # Check each scanner and any time one is found to be closer / better than
@@ -1227,7 +1247,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # Default Instawin!
                 closest_scanner = scanner
                 if _superchatty:
-                    _LOGGER.debug("%s IS closesr to %s: Encumbant is invalid", device.name, scanner.name)
+                    _LOGGER.debug(
+                        "%s IS closesr to %s: Encumbant is invalid",
+                        device.name,
+                        scanner.name,
+                    )
                 continue
 
             # NOTE:
@@ -1260,7 +1284,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             tests.reason = None  # ensure we don't trigger logging if no decision was made.
             tests.same_area = closest_scanner.area_id == scanner.area_id
-            tests.areas = (closest_scanner.area_name, scanner.area_name)
+            tests.areas = (closest_scanner.area_name or "", scanner.area_name or "")
             tests.scannername = (closest_scanner.name, scanner.name)
             tests.distance = (closest_scanner.rssi_distance, scanner.rssi_distance)
             # tests.velocity = (
@@ -1282,7 +1306,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 nowstamp - closest_scanner.scanner_device.last_seen,
                 nowstamp - scanner.scanner_device.last_seen,
             )
-            tests.this_ad_age = (nowstamp - closest_scanner.stamp, nowstamp - scanner.stamp)
+            tests.this_ad_age = (
+                nowstamp - closest_scanner.stamp,
+                nowstamp - scanner.stamp,
+            )
 
             # when_old_was_last_this_close = 999.9
             # for seconds, old_dist in enumerate(closest_scanner.hist_distance_by_interval):
@@ -1339,16 +1366,16 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 )
                 if (
                     tests.hist_min_max[1] < tests.hist_min_max[0]
-                    and tests.pcnt_diff > 0.10  # and we're significantly closer.
+                    and tests.pcnt_diff > 0.15  # and we're significantly closer.
                 ):
-                    tests.reason = "WIN for our historical max being better than the old historical min"
+                    tests.reason = "WIN on historical min/max"
                     closest_scanner = scanner
                     continue
 
             if tests.pcnt_diff < 0.18:
                 # Didn't make the cut. We're not "different enough" given how
                 # recently the previous nearest was updated.
-                tests.reason = "LOSS We were not convincingly close - failed on percentage_difference"
+                tests.reason = "LOSS - failed on percentage_difference"
                 continue
 
             # If we made it through all of that, we're winning, so far!
@@ -1357,9 +1384,16 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             closest_scanner = scanner
 
         if _superchatty and tests.reason is not None:
-            _LOGGER.info("***************\n**************** %s *******************\n%s", tests.reason, tests)
+            _LOGGER.info(
+                "***************\n**************** %s *******************\n%s",
+                tests.reason,
+                tests,
+            )
 
         _superchatty = False
+
+        if device.area_scanner != closest_scanner and tests.reason is not None:
+            device.diag_area_switch = tests.sensortext()
 
         # Apply the newly-found closest scanner (or apply None if we didn't find one)
         device.apply_scanner_selection(closest_scanner)

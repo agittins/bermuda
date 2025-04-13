@@ -59,6 +59,7 @@ async def async_setup_entry(
             entities.append(BermudaSensorScanner(coordinator, entry, address))
             entities.append(BermudaSensorRssi(coordinator, entry, address))
             entities.append(BermudaSensorAreaLastSeen(coordinator, entry, address))
+            entities.append(BermudaSensorAreaSwitchReason(coordinator, entry, address))
 
             for scanner in scanners:
                 entities.append(BermudaSensorScannerRange(coordinator, entry, address, scanner))
@@ -327,6 +328,33 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
         distance = getattr(devscanner, "rssi_distance_raw", None)
         if distance is not None:
             return round(distance, 3)
+        return None
+
+
+class BermudaSensorAreaSwitchReason(BermudaSensor):
+    """Sensor for area switch reason."""
+
+    # _attr_entity_registry_enabled_default = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        """Declare if entity should be automatically enabled on adding."""
+        return False
+
+    @property
+    def name(self):
+        return "Area Switch Diagnostic"
+
+    @property
+    def unique_id(self):
+        return f"{self._device.unique_id}_area_switch_reason"
+
+    @property
+    def native_value(self):
+        if self._device.diag_area_switch is not None:
+            return self._device.diag_area_switch[:255]
         return None
 
 
