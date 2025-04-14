@@ -1094,7 +1094,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # is altered, the old ibeacon device will timeout in DEVTRACK_TIMEOUT,
                     # but for devices that keep the same MAC, it should immediately `away`
                     # the old iBeacon and `home` the new one.
-                    for (key_address, key_scanner) in metadev.scanners:
+                    for key_address, key_scanner in metadev.scanners:
                         if key_address == source_device.address:
                             del metadev.scanners[(key_address, key_scanner)]
                     continue  # to next metadevice_source
