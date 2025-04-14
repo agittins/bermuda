@@ -991,7 +991,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         This should be called each time we discover a new address advertising
         an iBeacon. This might happen only once at startup, but will also
-        happen each time a new MAC address is used by a given iBeacon.
+        happen each time a new MAC address is used by a given iBeacon,
+        or each time an existing MAC sends a *new* iBeacon(!)
 
         This does not update the beacon's details (distance etc), that is done
         in the update_metadevices function after all data has been gathered.
@@ -1064,7 +1065,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         # iBeacon devices should already have their metadevices created, so nothing more to
         # set up for that.
-
         for metadev in self.metadevices.values():
             # We Expect the first beacon source to be the current one.
             # This is maintained by ibeacon or private_ble metadevice creation/update
@@ -1080,6 +1080,25 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             for source_address in metadev.metadevice_sources:
                 # Get the BermudaDevice holding those adverts
                 source_device = self._get_or_create_device(source_address)
+
+                # iBeacons (specifically Bluecharms) that change uuid on movement...
+                if (
+                    metadev.metadevice_type == METADEVICE_IBEACON_DEVICE
+                    and metadev.beacon_unique_id != source_device.beacon_unique_id
+                ):
+                    # This source device has changed uuid, so we won't track it against
+                    # this metadevice any more (it will appear on the new one instead).
+                    # Remove it if found, then skip to the next.
+                    #
+                    # For devices (like android15) that change their MAC whenever the uuid
+                    # is altered, the old ibeacon device will timeout in DEVTRACK_TIMEOUT,
+                    # but for devices that keep the same MAC, it should immediately `away`
+                    # the old iBeacon and `home` the new one.
+                    for (key_address, key_scanner) in metadev.scanners:
+                        if key_address == source_device.address:
+                            del metadev.scanners[(key_address, key_scanner)]
+                    continue  # to next metadevice_source
+
                 # And copy them into our metadevice
                 for scanneradvert in source_device.scanners.values():
                     metadev.scanners[source_device.address, scanneradvert.scanner_address] = scanneradvert
