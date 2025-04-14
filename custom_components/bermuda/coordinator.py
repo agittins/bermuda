@@ -537,7 +537,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             return self.devices[mac]
         except KeyError:
-            self.devices[mac] = device = BermudaDevice(address=mac, options=self.options)
+            self.devices[mac] = device = BermudaDevice(mac, self)
             device.address = mac
             device.unique_id = mac
             return device

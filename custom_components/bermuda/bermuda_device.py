@@ -13,6 +13,7 @@ for them, so we can use them to contribute towards measurements.
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from homeassistant.components.bluetooth import (
     MONOTONIC_TIME,
@@ -42,6 +43,9 @@ from .const import (
 )
 from .util import mac_norm
 
+if TYPE_CHECKING:
+    from .coordinator import BermudaDataUpdateCoordinator
+
 
 class BermudaDevice(dict):
     """
@@ -55,7 +59,7 @@ class BermudaDevice(dict):
     become entities in homeassistant, since there might be a _lot_ of them.
     """
 
-    def __init__(self, address, options) -> None:
+    def __init__(self, address: str, coordinator: BermudaDataUpdateCoordinator) -> None:
         """Initial (empty) data."""
         self.name: str = f"{DOMAIN}_{slugify(address)}"  # "preferred" name built by Bermuda.
         self.name_bt_serviceinfo: str | None = None  # From serviceinfo.device.name
@@ -65,9 +69,11 @@ class BermudaDevice(dict):
         self.address: str = address
         self.address_ble_mac: str = address
         self.address_wifi_mac: str | None = None
+        # We use a weakref to avoid any possible GC issues (only likely if we add a __del__ method, but *shrug*)
+        self._coordinator: BermudaDataUpdateCoordinator = coordinator
         self.ref_power: float = 0  # If non-zero, use in place of global ref_power.
         self.ref_power_changed: float = 0  # Stamp for last change to ref_power, for cache zapping.
-        self.options = options
+        self.options = self._coordinator.options
         self.unique_id: str | None = None  # mac address formatted.
         self.address_type = BDADDR_TYPE_UNKNOWN
         self.area_id: str | None = None
@@ -330,7 +336,7 @@ class BermudaDevice(dict):
         """Convert class to serialisable dict for dump_devices."""
         out = {}
         for var, val in vars(self).items():
-            if var == "hascanner":
+            if var in ("hascanner", "_coordinator"):
                 continue
             if var == "scanners":
                 scanout = {}

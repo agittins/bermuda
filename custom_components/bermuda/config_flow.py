@@ -475,7 +475,9 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                 rssi_offset_by_address = {}
                 for address in self.coordinator.scanner_list:
                     scanner_name = self.coordinator.devices[address].name
-                    rssi_offset_by_address[address] = user_input[CONF_SCANNER_INFO][scanner_name]
+                    val = user_input[CONF_SCANNER_INFO][scanner_name]
+                    # Clip to keep in sensible range, fixes #497
+                    rssi_offset_by_address[address] = max(min(val, 127), -127)
 
                 self.options.update({CONF_RSSI_OFFSETS: rssi_offset_by_address})
                 # Per previous step, returning elsewhere in the flow after updating the entry doesn't
