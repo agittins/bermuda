@@ -86,8 +86,9 @@ class BermudaDevice(dict):
         self.zone: str = STATE_UNAVAILABLE  # STATE_HOME or STATE_NOT_HOME
         self.manufacturer: str | None = None
         self.connectable: bool = False
-        self.is_scanner: bool = False
         self.hascanner: BaseHaRemoteScanner | BaseHaScanner | None = None  # HA's scanner
+        self.is_scanner: bool = False
+        self.is_remote_scanner: bool | None = None
         self.metadevice_type: set = set()
         self.metadevice_sources: list[str] = []  # list of MAC addresses that have advertised this beacon
         self.beacon_unique_id: str | None = None  # combined uuid_major_minor for *really* unique id

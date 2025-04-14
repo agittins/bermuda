@@ -56,7 +56,13 @@ async def async_setup_entry(
             # Bail out until we get called with some scanners to work with!
             return
         for scanner in scanners:
-            if coordinator.devices[scanner].address_wifi_mac is None:
+            if (
+                coordinator.devices[scanner].is_remote_scanner is None  # usb/HCI scanner's are fine.
+                or (
+                    coordinator.devices[scanner].is_remote_scanner  # usb/HCI scanner's are fine.
+                    and coordinator.devices[scanner].address_wifi_mac is None
+                )
+            ):
                 # This scanner doesn't have a wifi mac yet, bail out
                 # until they are all filled out.
                 return

@@ -1600,6 +1600,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # scanner_b.create_sensor = True
 
             scanner_b.hascanner = hascanner
+            scanner_b.is_remote_scanner = isinstance(scanner_b.hascanner, BaseHaRemoteScanner)
 
             # We found the device entry and have created our scannerdevice,
             # now update any fields that might be new from the device reg.
