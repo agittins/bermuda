@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: BermudaConfigEntry,
-    async_add_devices: AddEntitiesCallback,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Setup sensor platform."""
     coordinator: BermudaDataUpdateCoordinator = entry.runtime_data.coordinator
@@ -52,6 +52,15 @@ async def async_setup_entry(
         facility from HA.
         Make sure you have a full list of scanners ready before calling this.
         """
+        if len(scanners) == 0:
+            # Bail out until we get called with some scanners to work with!
+            return
+        for scanner in scanners:
+            if coordinator.devices[scanner].address_wifi_mac is None:
+                # This scanner doesn't have a wifi mac yet, bail out
+                # until they are all filled out.
+                return
+
         if address not in created_devices:
             entities = []
             entities.append(BermudaSensor(coordinator, entry, address))
@@ -67,7 +76,7 @@ async def async_setup_entry(
             # _LOGGER.debug("Sensor received new_device signal for %s", address)
             # We set update before add to False because we are being
             # call(back(ed)) from the update, so causing it to call another would be... bad.
-            async_add_devices(entities, False)
+            async_add_entities(entities, False)
             created_devices.append(address)
         else:
             # We've already created this one.
@@ -79,7 +88,7 @@ async def async_setup_entry(
     # Connect device_new to a signal so the coordinator can call it
     _LOGGER.debug("Registering device_new callback")
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, device_new))
-    async_add_devices(
+    async_add_entities(
         (
             BermudaTotalProxyCount(coordinator, entry),
             BermudaActiveProxyCount(coordinator, entry),
@@ -87,10 +96,6 @@ async def async_setup_entry(
             BermudaVisibleDeviceCount(coordinator, entry),
         )
     )
-    # Now we must tell the co-ord to do initial refresh, so that it will call our callback.
-    # This runs inside the event loop so should be fine as-is.
-    # Disabling as it seems to work ok without, and it might be cause of async race.
-    # await coordinator.async_config_entry_first_refresh()
 
 
 class BermudaSensor(BermudaEntity, SensorEntity):
@@ -136,6 +141,7 @@ class BermudaSensor(BermudaEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
+        """Provide state_attributes for the sensor entity."""
         # By default, it's the device's MAC
         current_mac = self._device.address
         # But metadevices have source_devices
@@ -143,10 +149,13 @@ class BermudaSensor(BermudaEntity, SensorEntity):
             ADDR_TYPE_IBEACON,
             ADDR_TYPE_PRIVATE_BLE_DEVICE,
         ]:
-            if len(self._device.metadevice_sources) > 0:
-                current_mac = self._device.metadevice_sources[0]
-            else:
-                current_mac = STATE_UNAVAILABLE
+            # Check the current sources and find the latest
+            current_mac: str = STATE_UNAVAILABLE
+            _best_stamp = 0
+            for source_ad in self._device.scanners.values():
+                if source_ad.stamp > _best_stamp:  # It's a valid ad
+                    current_mac = source_ad.device_address
+                    _best_stamp = source_ad.stamp
 
         # Limit how many attributes we list - prefer new sensors instead
         # since oft-changing attribs cause more db writes than sensors
