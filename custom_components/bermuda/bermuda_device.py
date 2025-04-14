@@ -13,10 +13,15 @@ for them, so we can use them to contribute towards measurements.
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
-from homeassistant.components.bluetooth import MONOTONIC_TIME, BluetoothScannerDevice
+from homeassistant.components.bluetooth import (
+    MONOTONIC_TIME,
+    BaseHaRemoteScanner,
+    BaseHaScanner,
+    BluetoothScannerDevice,
+)
 from homeassistant.const import STATE_HOME, STATE_NOT_HOME, STATE_UNAVAILABLE
-from homeassistant.helpers.device_registry import format_mac
 from homeassistant.util import slugify
 
 from .bermuda_device_scanner import BermudaDeviceScanner
@@ -29,13 +34,17 @@ from .const import (
     BDADDR_TYPE_OTHER,
     BDADDR_TYPE_PRIVATE_RESOLVABLE,
     BDADDR_TYPE_UNKNOWN,
-    BEACON_IBEACON_DEVICE,
-    BEACON_PRIVATE_BLE_DEVICE,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
     DEFAULT_DEVTRACK_TIMEOUT,
     DOMAIN,
+    METADEVICE_IBEACON_DEVICE,
+    METADEVICE_PRIVATE_BLE_DEVICE,
 )
+from .util import mac_norm
+
+if TYPE_CHECKING:
+    from .coordinator import BermudaDataUpdateCoordinator
 
 
 class BermudaDevice(dict):
@@ -50,7 +59,7 @@ class BermudaDevice(dict):
     become entities in homeassistant, since there might be a _lot_ of them.
     """
 
-    def __init__(self, address, options) -> None:
+    def __init__(self, address: str, coordinator: BermudaDataUpdateCoordinator) -> None:
         """Initial (empty) data."""
         self.name: str = f"{DOMAIN}_{slugify(address)}"  # "preferred" name built by Bermuda.
         self.name_bt_serviceinfo: str | None = None  # From serviceinfo.device.name
@@ -58,9 +67,13 @@ class BermudaDevice(dict):
         self.name_devreg: str | None = None  # From device registry, for other integrations like scanners, pble devices
         self.name_by_user: str | None = None  # Any user-defined (in the HA UI) name discovered for a device.
         self.address: str = address
+        self.address_ble_mac: str = address
+        self.address_wifi_mac: str | None = None
+        # We use a weakref to avoid any possible GC issues (only likely if we add a __del__ method, but *shrug*)
+        self._coordinator: BermudaDataUpdateCoordinator = coordinator
         self.ref_power: float = 0  # If non-zero, use in place of global ref_power.
         self.ref_power_changed: float = 0  # Stamp for last change to ref_power, for cache zapping.
-        self.options = options
+        self.options = self._coordinator.options
         self.unique_id: str | None = None  # mac address formatted.
         self.address_type = BDADDR_TYPE_UNKNOWN
         self.area_id: str | None = None
@@ -73,9 +86,11 @@ class BermudaDevice(dict):
         self.zone: str = STATE_UNAVAILABLE  # STATE_HOME or STATE_NOT_HOME
         self.manufacturer: str | None = None
         self.connectable: bool = False
+        self.hascanner: BaseHaRemoteScanner | BaseHaScanner | None = None  # HA's scanner
         self.is_scanner: bool = False
+        self.is_remote_scanner: bool | None = None
         self.metadevice_type: set = set()
-        self.metadevice_sources = []  # list of MAC addresses that have advertised this beacon
+        self.metadevice_sources: list[str] = []  # list of MAC addresses that have advertised this beacon
         self.beacon_unique_id: str | None = None  # combined uuid_major_minor for *really* unique id
         self.beacon_uuid: str | None = None
         self.beacon_major: str | None = None
@@ -90,7 +105,10 @@ class BermudaDevice(dict):
         self.create_button_done: bool = False
         self.create_all_done: bool = False  # All platform entities are done and ready.
         self.last_seen: float = 0  # stamp from most recent scanner spotting. MONOTONIC_TIME
-        self.scanners: dict[str, BermudaDeviceScanner] = {}
+        self.diag_area_switch: str | None = None  # saves output of AreaTests
+        self.scanners: dict[
+            tuple[str, str], BermudaDeviceScanner
+        ] = {}  # str will be a scanner address OR a deviceaddress__scanneraddress
 
         # BLE MAC addresses (https://www.bluetooth.com/specifications/core54-html/) can
         # be differentiated by the top two MSBs of the 48bit MAC address. At our end at
@@ -116,11 +134,11 @@ class BermudaDevice(dict):
                 if re.match("^[A-Fa-f0-9]{32}_[A-Fa-f0-9]*_[A-Fa-f0-9]*$", self.address):
                     # It's an iBeacon uuid_major_minor
                     self.address_type = ADDR_TYPE_IBEACON
-                    self.metadevice_type.add(BEACON_IBEACON_DEVICE)
+                    self.metadevice_type.add(METADEVICE_IBEACON_DEVICE)
                     self.beacon_unique_id = self.address
                 elif re.match("^[A-Fa-f0-9]{32}$", self.address):
                     # 32-char hex-string is an IRK
-                    self.metadevice_type.add(BEACON_PRIVATE_BLE_DEVICE)
+                    self.metadevice_type.add(METADEVICE_PRIVATE_BLE_DEVICE)
                     self.address_type = ADDR_TYPE_PRIVATE_BLE_DEVICE
                     self.beacon_unique_id = self.address
                 else:
@@ -224,6 +242,24 @@ class BermudaDevice(dict):
                 self.area_name,
             )
 
+    def get_scanner(self, scanner_address) -> BermudaDeviceScanner | None:
+        """
+        Given a scanner address, return the most recent BermudaDeviceScanner that matches.
+
+        This is required as the list of device.scanners is keyed by [address, scanner], and
+        a device might switch back and forth between multiple addresses.
+        """
+        _stamp = 0
+        _found_scanner = None
+        for scanner in self.scanners.values():
+            if scanner.scanner_address == scanner_address:
+                # we have matched the scanner, but is it the most recent address?
+                if _stamp == 0 or (scanner.stamp is not None and scanner.stamp > _stamp):
+                    _found_scanner = scanner
+                    _stamp = _found_scanner.stamp or 0
+
+        return _found_scanner
+
     def calculate_data(self):
         """
         Call after doing update_scanner() calls so that distances
@@ -264,36 +300,49 @@ class BermudaDevice(dict):
         with calculate_data()
 
         """
-        if format_mac(scanner_device.address) in self.scanners:
+        scanner_address = mac_norm(scanner_device.address)
+
+        if (self.address, scanner_address) in self.scanners:
             # Device already exists, update it
-            self.scanners[format_mac(scanner_device.address)].update_advertisement(
+            self.scanners[self.address, scanner_address].update_advertisement(
                 discoveryinfo,  # the entire BluetoothScannerDevice struct
             )
-            device_scanner = self.scanners[format_mac(scanner_device.address)]
+            device_scanner = self.scanners[self.address, scanner_address]
         else:
             # Create it
-            self.scanners[format_mac(scanner_device.address)] = BermudaDeviceScanner(
+            self.scanners[self.address, scanner_address] = BermudaDeviceScanner(
                 self,
                 discoveryinfo,  # the entire BluetoothScannerDevice struct
                 self.options,
                 scanner_device,
             )
-            device_scanner = self.scanners[format_mac(scanner_device.address)]
+            device_scanner = self.scanners[self.address, scanner_address]
             # On first creation, we also want to copy our ref_power to it (but not afterwards,
             # since a metadevice might take over that role later)
             device_scanner.ref_power = self.ref_power
+
         # Let's see if we should update our last_seen based on this...
         if device_scanner.stamp is not None and self.last_seen < device_scanner.stamp:
             self.last_seen = device_scanner.stamp
+
+        # Do we have a new name we should adopt?
+        if (
+            discoveryinfo.advertisement.local_name is not None
+            and discoveryinfo.advertisement.local_name != self.name_bt_local_name
+        ):
+            self.name_bt_local_name = discoveryinfo.advertisement.local_name
+            self.make_name()
 
     def to_dict(self):
         """Convert class to serialisable dict for dump_devices."""
         out = {}
         for var, val in vars(self).items():
+            if var in ("hascanner", "_coordinator"):
+                continue
             if var == "scanners":
                 scanout = {}
-                for address, scanner in self.scanners.items():
-                    scanout[address] = scanner.to_dict()
+                for scanner in self.scanners.values():
+                    scanout[f"{scanner.device_address}__{scanner.scanner_address}"] = scanner.to_dict()
                 # FIXME: val is overwritten
                 val = scanout  # noqa
             out[var] = val
@@ -301,4 +350,4 @@ class BermudaDevice(dict):
 
     def __repr__(self) -> str:
         """Help debug devices and figure out what device it is at a glance."""
-        return self.name
+        return f"{self.name} [{self.address}]"

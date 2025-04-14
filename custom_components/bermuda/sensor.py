@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: BermudaConfigEntry,
-    async_add_devices: AddEntitiesCallback,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Setup sensor platform."""
     coordinator: BermudaDataUpdateCoordinator = entry.runtime_data.coordinator
@@ -52,6 +52,21 @@ async def async_setup_entry(
         facility from HA.
         Make sure you have a full list of scanners ready before calling this.
         """
+        if len(scanners) == 0:
+            # Bail out until we get called with some scanners to work with!
+            return
+        for scanner in scanners:
+            if (
+                coordinator.devices[scanner].is_remote_scanner is None  # usb/HCI scanner's are fine.
+                or (
+                    coordinator.devices[scanner].is_remote_scanner  # usb/HCI scanner's are fine.
+                    and coordinator.devices[scanner].address_wifi_mac is None
+                )
+            ):
+                # This scanner doesn't have a wifi mac yet, bail out
+                # until they are all filled out.
+                return
+
         if address not in created_devices:
             entities = []
             entities.append(BermudaSensor(coordinator, entry, address))
@@ -59,6 +74,7 @@ async def async_setup_entry(
             entities.append(BermudaSensorScanner(coordinator, entry, address))
             entities.append(BermudaSensorRssi(coordinator, entry, address))
             entities.append(BermudaSensorAreaLastSeen(coordinator, entry, address))
+            entities.append(BermudaSensorAreaSwitchReason(coordinator, entry, address))
 
             for scanner in scanners:
                 entities.append(BermudaSensorScannerRange(coordinator, entry, address, scanner))
@@ -66,7 +82,7 @@ async def async_setup_entry(
             # _LOGGER.debug("Sensor received new_device signal for %s", address)
             # We set update before add to False because we are being
             # call(back(ed)) from the update, so causing it to call another would be... bad.
-            async_add_devices(entities, False)
+            async_add_entities(entities, False)
             created_devices.append(address)
         else:
             # We've already created this one.
@@ -76,9 +92,9 @@ async def async_setup_entry(
         coordinator.sensor_created(address)
 
     # Connect device_new to a signal so the coordinator can call it
-    _LOGGER.debug("Registering device_new callback.")
+    _LOGGER.debug("Registering device_new callback")
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, device_new))
-    async_add_devices(
+    async_add_entities(
         (
             BermudaTotalProxyCount(coordinator, entry),
             BermudaActiveProxyCount(coordinator, entry),
@@ -86,10 +102,6 @@ async def async_setup_entry(
             BermudaVisibleDeviceCount(coordinator, entry),
         )
     )
-    # Now we must tell the co-ord to do initial refresh, so that it will call our callback.
-    # This runs inside the event loop so should be fine as-is.
-    # Disabling as it seems to work ok without, and it might be cause of async race.
-    # await coordinator.async_config_entry_first_refresh()
 
 
 class BermudaSensor(BermudaEntity, SensorEntity):
@@ -135,6 +147,7 @@ class BermudaSensor(BermudaEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
+        """Provide state_attributes for the sensor entity."""
         # By default, it's the device's MAC
         current_mac = self._device.address
         # But metadevices have source_devices
@@ -142,10 +155,13 @@ class BermudaSensor(BermudaEntity, SensorEntity):
             ADDR_TYPE_IBEACON,
             ADDR_TYPE_PRIVATE_BLE_DEVICE,
         ]:
-            if len(self._device.metadevice_sources) > 0:
-                current_mac = self._device.metadevice_sources[0]
-            else:
-                current_mac = STATE_UNAVAILABLE
+            # Check the current sources and find the latest
+            current_mac: str = STATE_UNAVAILABLE
+            _best_stamp = 0
+            for source_ad in self._device.scanners.values():
+                if source_ad.stamp > _best_stamp:  # It's a valid ad
+                    current_mac = source_ad.device_address
+                    _best_stamp = source_ad.stamp
 
         # Limit how many attributes we list - prefer new sensors instead
         # since oft-changing attribs cause more db writes than sensors
@@ -172,7 +188,12 @@ class BermudaSensorScanner(BermudaSensor):
 
     @property
     def native_value(self):
-        return self._device.area_scanner
+        # Don't use area_scanner.name because it comes from the advert
+        # entry. Instead refer to the BermudaDevice, which takes trouble
+        # to use user-given names etc.
+        if self._device.area_scanner is not None:
+            return self.coordinator.devices[self._device.area_scanner.scanner_address].name
+        return None
 
 
 class BermudaSensorRssi(BermudaSensor):
@@ -261,7 +282,8 @@ class BermudaSensorScannerRange(BermudaSensorRange):
 
     @property
     def unique_id(self):
-        return f"{self._device.unique_id}_{self._scanner.address}_range"
+        # Retaining legacy wifi mac for unique_id
+        return f"{self._device.unique_id}_{self._scanner.address_wifi_mac or self._scanner.address}_range"
 
     @property
     def name(self):
@@ -274,8 +296,9 @@ class BermudaSensorScannerRange(BermudaSensorRange):
 
         Don't break if that scanner's never heard of us!
         """
-        devscanner = self._device.scanners.get(self._scanner.address, {})
-        distance = getattr(devscanner, "rssi_distance", None)
+        distance = None
+        if (scanner := self._device.get_scanner(self._scanner.address)) is not None:
+            distance = scanner.rssi_distance
         if distance is not None:
             return self._cached_ratelimit(round(distance, 3))
         return None
@@ -283,7 +306,7 @@ class BermudaSensorScannerRange(BermudaSensorRange):
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
         """We need to reimplement this, since the attributes need to be scanner-specific."""
-        devscanner = self._device.scanners.get(self._scanner.address, {})
+        devscanner = self._device.get_scanner(self._scanner.address)
         if hasattr(devscanner, "source"):
             return {
                 "area_id": self._scanner.area_id,
@@ -300,7 +323,10 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
 
     @property
     def unique_id(self):
-        return f"{self._device.unique_id}_{self._scanner.address}_range_raw"
+        # Using address_wifi_mac as a legacy action, because esphome changed from
+        # sending WIFI MAC to BLE MAC as its source address, in ESPHome 2025.3.0
+        #
+        return f"{self._device.unique_id}_{self._scanner.address_wifi_mac or self._scanner.address}_range_raw"
 
     @property
     def name(self):
@@ -313,10 +339,36 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
 
         Don't break if that scanner's never heard of us!
         """
-        devscanner = self._device.scanners.get(self._scanner.address, {})
+        devscanner = self._device.get_scanner(self._scanner.address)
         distance = getattr(devscanner, "rssi_distance_raw", None)
         if distance is not None:
             return round(distance, 3)
+        return None
+
+
+class BermudaSensorAreaSwitchReason(BermudaSensor):
+    """Sensor for area switch reason."""
+
+    # _attr_entity_registry_enabled_default = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        """Declare if entity should be automatically enabled on adding."""
+        return False
+
+    @property
+    def name(self):
+        return "Area Switch Diagnostic"
+
+    @property
+    def unique_id(self):
+        return f"{self._device.unique_id}_area_switch_reason"
+
+    @property
+    def native_value(self):
+        if self._device.diag_area_switch is not None:
+            return self._device.diag_area_switch[:255]
         return None
 
 
@@ -363,6 +415,7 @@ class BermudaTotalProxyCount(BermudaGlobalSensor):
     """Counts the total number of proxies we have access to."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
     def unique_id(self):
@@ -387,6 +440,7 @@ class BermudaActiveProxyCount(BermudaGlobalSensor):
     """Counts the number of proxies that are active."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
     def unique_id(self):
@@ -411,6 +465,7 @@ class BermudaTotalDeviceCount(BermudaGlobalSensor):
     """Counts the total number of devices we can see."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
     def unique_id(self):
@@ -435,6 +490,7 @@ class BermudaVisibleDeviceCount(BermudaGlobalSensor):
     """Counts the number of devices that are active."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
     def unique_id(self):

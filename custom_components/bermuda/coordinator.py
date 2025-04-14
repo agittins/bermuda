@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -49,7 +50,6 @@ from homeassistant.helpers import (
 from homeassistant.helpers.device_registry import (
     EVENT_DEVICE_REGISTRY_UPDATED,
     EventDeviceRegistryUpdatedData,
-    format_mac,
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_call_later
@@ -84,7 +84,8 @@ from .const import (
     DOMAIN,
     DOMAIN_PRIVATE_BLE_DEVICE,
     HIST_KEEP_COUNT,
-    METADEVICE_SOURCETYPES,
+    METADEVICE_IBEACON_DEVICE,
+    METADEVICE_PRIVATE_BLE_DEVICE,
     METADEVICE_TYPE_IBEACON_SOURCE,
     METADEVICE_TYPE_PRIVATE_BLE_SOURCE,
     PRUNE_MAX_COUNT,
@@ -96,7 +97,7 @@ from .const import (
     SIGNAL_DEVICE_NEW,
     UPDATE_INTERVAL,
 )
-from .util import clean_charbuf
+from .util import clean_charbuf, mac_explode_formats, mac_math_offset, mac_norm
 
 if TYPE_CHECKING:
     from habluetooth import BluetoothServiceInfoBleak
@@ -106,6 +107,12 @@ if TYPE_CHECKING:
     from .bermuda_device_scanner import BermudaDeviceScanner
 
 Cancellable = Callable[[], None]
+
+# The if instead of min/max triggers PLR1730, but when
+# split over two lines, ruff removes it, then complains again.
+# so we're just disabling it for the whole file.
+# https://github.com/astral-sh/ruff/issues/4244
+# ruff: noqa: PLR1730
 
 
 class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
@@ -140,15 +147,21 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         # set some version flags
         self.hass_version_min_2025_2 = HA_VERSION_MAJ > 2025 or (HA_VERSION_MAJ == 2025 and HA_VERSION_MIN >= 2)
+        # when habasescanner.discovered_device_timestamps became a public method.
+        self.hass_version_min_2025_4 = HA_VERSION_MAJ > 2025 or (HA_VERSION_MAJ == 2025 and HA_VERSION_MIN >= 4)
 
         # match/replacement pairs for redacting addresses
         self.redactions: dict[str, str] = {}
         # Any remaining MAC addresses will be replaced with this. We define it here
-        # so we can compile it once.
-        self._redact_generic_re = re.compile(r"(?P<start>[0-9A-Fa-f]{2}):([0-9A-Fa-f]{2}:){4}(?P<end>[0-9A-Fa-f]{2})")
+        # so we can compile it once. MAC addresses may have [:_-] separators.
+        self._redact_generic_re = re.compile(
+            r"(?P<start>[0-9A-Fa-f]{2})[:_-]([0-9A-Fa-f]{2}[:_-]){4}(?P<end>[0-9A-Fa-f]{2})"
+        )
         self._redact_generic_sub = r"\g<start>:xx:xx:xx:xx:\g<end>"
 
+        self.update_in_progress: bool = False  # A lock to guard against huge backlogs / slow processing
         self.stamp_last_update: float = 0  # Last time we ran an update, from MONOTONIC_TIME()
+        self.stamp_last_update_started: float = 0
         self.stamp_last_prune: float = 0  # When we last pruned device list
 
         self.member_uuids = {}
@@ -162,7 +175,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
         self._manager: HomeAssistantBluetoothManager = _get_manager(hass)  # instance of the bluetooth manager
-        self._hascanners: set[BaseHaScanner]  # Links to the backend scanners
+        self._hascanners: set[BaseHaScanner] = set()  # Links to the backend scanners
         self._hascanner_timestamps: dict[str, dict[str, float]] = {}  # scanner_address, device_address, stamp
 
         self._entity_registry = er.async_get(self.hass)
@@ -367,7 +380,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             for scanner in self.scanner_list:
                 if self.devices[scanner].entry_id == ev.data["device_id"]:
                     _LOGGER.debug(
-                        "Scanner %s removed, trigger update of scanners.",
+                        "Scanner %s removed, trigger update of scanners",
                         self.devices[scanner].name,
                     )
                     self._do_full_scanner_init = True
@@ -495,39 +508,39 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         stamp = MONOTONIC_TIME()
         results = []
         for scanner in self.scanner_list:
-            scannerdev = self.devices[scanner]
-            last_stamp: float = 0
-            for device in self.devices.values():
-                record = device.scanners.get(scanner, None)
-                if record is not None and record.stamp is not None:
-                    last_stamp = max(record.stamp, last_stamp)
+            try:
+                scannerdev = self.devices[scanner]
+            except KeyError:
+                # Scanner is not set up yet, we might be initialising.
+                continue
             results.append(
                 {
                     "name": scannerdev.name,
                     "address": scanner,
-                    "last_stamp": last_stamp,
-                    "last_stamp_age": stamp - last_stamp,
+                    "last_stamp": scannerdev.last_seen,
+                    "last_stamp_age": stamp - scannerdev.last_seen,
                 }
             )
         return results
 
     def _get_device(self, address: str) -> BermudaDevice | None:
         """Search for a device entry based on mac address."""
-        mac = format_mac(address).lower()
-        # format_mac tries to return a lower-cased, colon-separated mac address.
-        # failing that, it returns the original unaltered.
-        if mac in self.devices:
-            return self.devices[mac]
-        return None
+        # mac_norm tries to return a lower-cased, colon-separated mac address.
+        # failing that, it returns the original, lower-cased.
+        try:
+            return self.devices[mac_norm(address)]
+        except KeyError:
+            return None
 
     def _get_or_create_device(self, address: str) -> BermudaDevice:
-        device = self._get_device(address)
-        if device is None:
-            mac = format_mac(address).lower()
-            self.devices[mac] = device = BermudaDevice(address=mac, options=self.options)
+        mac = mac_norm(address)
+        try:
+            return self.devices[mac]
+        except KeyError:
+            self.devices[mac] = device = BermudaDevice(mac, self)
             device.address = mac
             device.unique_id = mac
-        return device
+            return device
 
     async def _async_update_data(self):
         """
@@ -537,10 +550,28 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         (no network requests made etc).
 
         """
+        if self.update_in_progress:
+            # Eeep!
+            _LOGGER_SPAM_LESS.warning("update_still_running", "Previous update still running, skipping this cycle.")
+            return False
+        self.update_in_progress = True
+
+        nowstamp = MONOTONIC_TIME()
+        _timestamp_cutoff = nowstamp - min(PRUNE_TIME_DEFAULT, PRUNE_TIME_IRK)
+
         for service_info in bluetooth.async_discovered_service_info(self.hass, False):
             # Note that some of these entries are restored from storage,
             # so we won't necessarily find (immediately, or perhaps ever)
             # scanner entries for any given device.
+
+            if self.stamp_last_update == 0 and service_info.time < _timestamp_cutoff:
+                # It's our first run and we want to seed the lists a bit.
+                # So let through anything that would not have already been pruned
+                continue
+            if service_info.time < (self.stamp_last_update_started - 3):  # some arbitrary lee-way.
+                # If it's older than this, skip it (since we will have already
+                # recorded it on at least the previous run)
+                continue
 
             _got_new_name = False
             if service_info.address not in self.devices:
@@ -692,6 +723,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             for _source_address in self.options.get(CONF_DEVICES, []):
                 self._get_or_create_device(_source_address)
 
+        # Set up metadevice sources
+        #
+        # set up any beacons and update their data. We do this after all the devices
+        # have had their updates done since any beacon inherits data from its source
+        # device(s). We do this *before* sensor creation, though.
+        self.update_metadevices()
+
+        # Calculate per-device data
+        #
         # Scanner entries have been loaded up with latest data, now we can
         # process data for all devices over all scanners.
         for device in self.devices.values():
@@ -710,11 +750,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # self.last_update_success = False
                 pass
 
-        # set up any beacons and update their data. We do this after all the devices
-        # have had their updates done since any beacon inherits data from its source
-        # device(s). We do this *before* sensor creation, though.
-        self.update_metadevices()
-
+        # Trigger creation of any new entities
+        #
         # The devices are all updated now (and any new scanners and beacons seen have been added),
         # so let's ensure any devices that we create sensors for are set up ready to go.
         # We don't do this sooner because we need to ensure we have every active scanner
@@ -727,18 +764,30 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # called by _run in events.py, so pretty sure we are "in the event loop".
                     async_dispatcher_send(self.hass, SIGNAL_DEVICE_NEW, address, self.scanner_list)
 
-        if self.stamp_last_prune < MONOTONIC_TIME() - PRUNE_TIME_INTERVAL:
-            # (periodically) prune any stale device entries...
-            self.prune_devices()
-            self.stamp_last_prune = MONOTONIC_TIME()
+        # Device Pruning (only runs periodically)
+        self.prune_devices()
 
         # end of async update
+        self.stamp_last_update_started = nowstamp
         self.stamp_last_update = MONOTONIC_TIME()
+        self.update_in_progress = False
         self.last_update_success = True
+        return True
 
-    def prune_devices(self):
-        """Scan through all collected devices, and remove those that meet Pruning criteria."""
-        prune_list = []
+    def prune_devices(self, force_pruning=False):
+        """
+        Scan through all collected devices, and remove those that meet Pruning criteria.
+
+        By default no pruning will be done if it has been performed within the last
+        PRUNE_TIME_INTERVAL, unless the force_pruning flag is set to True.
+        """
+        if self.stamp_last_prune > MONOTONIC_TIME() - PRUNE_TIME_INTERVAL and not force_pruning:
+            # We ran recently enough, bail out.
+            return
+        # stamp the run.
+        self.stamp_last_prune = MONOTONIC_TIME()
+
+        prune_list: list[str] = []
         prunable_stamps = {}
 
         # build a set of source devices that are still metadevice_sources[0]
@@ -760,9 +809,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # should totally be pruned if it's no longer around.
             if (
                 device_address not in metadevice_source_primos
+                and device_address not in self.scanner_list
                 and (not device.create_sensor)  # Not if we track the device
                 and (not device.is_scanner)
-                and (device.last_seen > 0)  # Don't prune if we haven't initialised yet!
+                # and (device.last_seen > 0)  # Don't prune if we haven't initialised yet!
                 and device.address_type != BDADDR_TYPE_NOT_MAC48
             ):
                 if device.address_type == BDADDR_TYPE_PRIVATE_RESOLVABLE:
@@ -772,14 +822,20 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                     if device.last_seen < MONOTONIC_TIME() - PRUNE_TIME_IRK:
                         _LOGGER.debug(
-                            "Marking stale IRK address for pruning: %s",
+                            "Marking stale IRK address for pruning: [%s] %s",
+                            device_address,
                             device.name,
                         )
                         prune_list.append(device_address)
                     else:
                         # It's not stale, but we will prune it if we have to later to fit
                         # into PRUNE_MAX_COUNT
-                        prunable_stamps[device_address] = device.last_seen
+                        # prunable_stamps[device_address] = device.last_seen
+
+                        # Actually, let's keep it. A more recent stamp implies
+                        # that it's probably still in the advert cache of BlueZ
+                        # or BaseHaRemoteScanner, so we'd just create churn.
+                        pass
 
                 elif device.last_seen < MONOTONIC_TIME() - PRUNE_TIME_DEFAULT:
                     # It's a static address, and stale.
@@ -792,13 +848,36 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # Device is static, not so old, but we might have to prune it anyway
                     prunable_stamps[device_address] = device.last_seen
 
+            # Prune metadevices and scanners
+            #
+            if (
+                device.is_scanner
+                or METADEVICE_PRIVATE_BLE_DEVICE in device.metadevice_type
+                or METADEVICE_IBEACON_DEVICE in device.metadevice_type
+            ):
+                # For scanners and metadevices we will want to prune their scanners entries, since
+                # they may fill up with dynamic addresses.
+                # create a list of keys so we can del items while iterating
+                nowstamp = MONOTONIC_TIME()
+                for scannerkey in list(device.scanners.keys()):
+                    scannerstamp = device.scanners[scannerkey].stamp
+                    if scannerstamp is None or scannerstamp < (nowstamp - PRUNE_TIME_IRK):
+                        del device.scanners[scannerkey]
+                        _LOGGER.debug("Pruning metadevice advert %s", scannerkey)
+
+            # Clean up the device.metadevices lists (otherwise update_metadevices will re-populate)
+            for metadevice in self.metadevices.values():
+                for source_address in prune_list:
+                    if source_address in metadevice.metadevice_sources:
+                        metadevice.metadevice_sources.remove(source_address)
+
         prune_quota = len(self.devices) - len(prune_list) - PRUNE_MAX_COUNT
         if prune_quota > 0:
             # We need to find more addresses to prune. Perhaps we live
             # in a busy train station, or are under some sort of BLE-MAC
             # DOS-attack.
             sorted_addresses = sorted([(v, k) for k, v in prunable_stamps.items()])
-            _LOGGER.info("Having to prune %s extra devices to make quota.", prune_quota)
+            _LOGGER.info("Having to prune %s extra devices to make quota", prune_quota)
             # pylint: disable-next=unused-variable
             for _stamp, address in sorted_addresses[:prune_quota]:
                 prune_list.append(address)
@@ -889,6 +968,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                             # This should always be the latest known source address,
                             # since private ble device tells us so.
                             # So ensure it's listed, and listed first.
+                            # Don't remove any existing addresses as IRK devices might alternate
+                            # back and forth.
                             if (
                                 len(metadevice.metadevice_sources) == 0
                                 or metadevice.metadevice_sources[0] != pb_source_address
@@ -910,14 +991,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         This should be called each time we discover a new address advertising
         an iBeacon. This might happen only once at startup, but will also
-        happen each time a new MAC address is used by a given iBeacon.
+        happen each time a new MAC address is used by a given iBeacon,
+        or each time an existing MAC sends a *new* iBeacon(!)
 
         This does not update the beacon's details (distance etc), that is done
         in the update_metadevices function after all data has been gathered.
         """
         if METADEVICE_TYPE_IBEACON_SOURCE not in source_device.metadevice_type:
             _LOGGER.error(
-                "Only IBEACON_SOURCE devices can be used to see a beacon metadevice. %s is not.",
+                "Only IBEACON_SOURCE devices can be used to see a beacon metadevice. %s is not",
                 source_device.name,
             )
         if source_device.beacon_unique_id is None:
@@ -956,6 +1038,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # insert this device as a known source
                 metadevice.metadevice_sources.insert(0, source_device.address)
                 # and trim the list of sources
+                # Note that scanner devices might have metadevice sources because they
+                # might be sending ibeacons etc, but since their addresses are static
+                # they should never run into an issue here.
                 del metadevice.metadevice_sources[HIST_KEEP_COUNT:]
 
                 # If we have a new / better name, use that..
@@ -980,22 +1065,45 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         # iBeacon devices should already have their metadevices created, so nothing more to
         # set up for that.
-
         for metadev in self.metadevices.values():
             # We Expect the first beacon source to be the current one.
             # This is maintained by ibeacon or private_ble metadevice creation/update
             latest_source: str | None = None
             source_device: BermudaDevice | None = None
+
             if len(metadev.metadevice_sources) > 0:
                 latest_source = metadev.metadevice_sources[0]
                 if latest_source is not None:
                     source_device = self._get_device(latest_source)
 
-            if latest_source is not None and source_device is not None:
-                # Map the source device's scanner list into ours
-                metadev.scanners = source_device.scanners
+            # Find each known source (address) for adverts...
+            for source_address in metadev.metadevice_sources:
+                # Get the BermudaDevice holding those adverts
+                source_device = self._get_or_create_device(source_address)
 
-                # Set the source device's ref_power from our own. This will cause
+                # iBeacons (specifically Bluecharms) that change uuid on movement...
+                if (
+                    metadev.metadevice_type == METADEVICE_IBEACON_DEVICE
+                    and metadev.beacon_unique_id != source_device.beacon_unique_id
+                ):
+                    # This source device has changed uuid, so we won't track it against
+                    # this metadevice any more (it will appear on the new one instead).
+                    # Remove it if found, then skip to the next.
+                    #
+                    # For devices (like android15) that change their MAC whenever the uuid
+                    # is altered, the old ibeacon device will timeout in DEVTRACK_TIMEOUT,
+                    # but for devices that keep the same MAC, it should immediately `away`
+                    # the old iBeacon and `home` the new one.
+                    for key_address, key_scanner in metadev.scanners:
+                        if key_address == source_device.address:
+                            del metadev.scanners[(key_address, key_scanner)]
+                    continue  # to next metadevice_source
+
+                # And copy them into our metadevice
+                for scanneradvert in source_device.scanners.values():
+                    metadev.scanners[source_device.address, scanneradvert.scanner_address] = scanneradvert
+
+                # If not done already, set the source device's ref_power from our own. This will cause
                 # the source device and all its scanner entries to update their
                 # distance measurements. This won't affect Area wins though, because
                 # they are "relative", not absolute.
@@ -1019,9 +1127,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # Defaults:
                 for attribute in [
                     # "create_sensor",  # don't copy this, maybe we're tracking the device alone
-                    "name",
-                    "name_by_user",
-                    "name_devreg",
+                    # "name",
+                    # "name_by_user",
+                    # "name_devreg",
                     "name_bt_local_name",
                     "name_bt_serviceinfo",
                     "manufacturer",
@@ -1035,57 +1143,34 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                 metadev.make_name()
                     else:
                         _LOGGER.error(
-                            "Devices don't have a '%s' attribute, this is a bug.",
+                            "Devices don't have a '%s' attribute, this is a bug",
                             attribute,
                         )
                 # Anything that's VERY interesting, overwrite it regardless of what's already there:
                 # INTERESTING:
                 for attribute in [
-                    "area_distance",
-                    "area_id",
-                    "area_name",
-                    "area_rssi",
-                    "area_scanner",
+                    # "area_distance",
+                    # "area_id",
+                    # "area_name",
+                    # "area_rssi",
+                    # "area_scanner",
                     "beacon_major",
                     "beacon_minor",
                     "beacon_power",
                     "beacon_unique_id",
                     "beacon_uuid",
                     "connectable",
-                    "zone",
+                    # "zone",
                 ]:
                     if hasattr(metadev, attribute):
                         setattr(metadev, attribute, getattr(source_device, attribute))
                     else:
                         _LOGGER.error(
-                            "Devices don't have a '%s' attribute, this is a bug.",
+                            "Devices don't have a '%s' attribute, this is a bug",
                             attribute,
                         )
-
-                if source_device.last_seen > metadev.last_seen:
-                    # Source is newer than the latest recorded, update last_seen
+                if metadev.last_seen < source_device.last_seen:
                     metadev.last_seen = source_device.last_seen
-
-                elif source_device.last_seen == 0:
-                    # _LOGGER.debug(
-                    #     "New source %s for %s has no stamp yet. This is"
-                    #     " expected if it's a fresh Private BLE source.",
-                    #     source_device.address,
-                    #     metadev.name
-                    # )
-                    pass
-                elif source_device.last_seen < metadev.last_seen:
-                    # We should not have a source device that is older than the
-                    # current metadevice, so flag this if it occurs.
-                    # This caught bug #138, not that I realised it at the time!
-                    # (https://github.com/agittins/bermuda/issues/138)
-                    _LOGGER.debug(
-                        "Using freshest advert from %s for %s but it's still %s seconds too old!",
-                        source_device.address,
-                        metadev.name,
-                        metadev.last_seen - source_device.last_seen,
-                    )
-                # else the stamps are equal, which is perfectly OK.
 
     def dt_mono_to_datetime(self, stamp) -> datetime:
         """Given a monotonic timestamp, convert to datetime object."""
@@ -1112,55 +1197,293 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         """Set area for ALL devices based on closest beacon."""
         for device in self.devices.values():
             if (
-                device.is_scanner is not True  # exclude scanners.
-                or device.create_sensor  # include any devices we are tracking
-                or device.metadevice_type in METADEVICE_SOURCETYPES  # and any source devices for PBLE, ibeacon etc
+                # device.is_scanner is not True  # exclude scanners.
+                device.create_sensor  # include any devices we are tracking
+                # or device.metadevice_type in METADEVICE_SOURCETYPES  # and any source devices for PBLE, ibeacon etc
             ):
                 self._refresh_area_by_min_distance(device)
 
+    @dataclass
+    class AreaTests:
+        """
+        Holds the results of Area-based tests.
+
+        Likely to become a stand-alone class for performing the whole area-selection
+        process.
+        """
+
+        device: str = ""
+        scannername: tuple[str, str] = ("", "")
+        areas: tuple[str, str] = ("", "")
+        pcnt_diff: float = 0  # distance percentage difference.
+        same_area: bool = False  # The old scanner is in the same area as us.
+        # last_detection: tuple[float, float] = (0, 0)  # bt manager's last_detection field. Compare with ours.
+        last_ad_age: tuple[float, float] = (0, 0)  # seconds since we last got *any* ad from scanner
+        this_ad_age: tuple[float, float] = (0, 0)  # how old the *current* advert is on this scanner
+        distance: tuple[float, float] = (0, 0)
+        hist_min_max: tuple[float, float] = (0, 0)  # min/max distance from history
+        # velocity: tuple[float, float] = (0, 0)
+        # last_closer: tuple[float, float] = (0, 0)  # since old was closer and how long new has been closer
+        reason: str | None = None  # reason/result
+
+        def sensortext(self) -> str:
+            out = ""
+            for var, val in vars(self).items():
+                out += f"{var}|"
+                if isinstance(val, tuple):
+                    for v in val:
+                        if isinstance(v, float):
+                            out += f"{v:.2f}|"
+                        else:
+                            out += f"{v}"
+                    # out += "\n"
+                elif var == "pcnt_diff":
+                    out += f"{val:.3f}"
+                else:
+                    out += f"{val}"
+                out += "\n"
+            return out[:255]
+
+        def __str__(self) -> str:
+            """
+            Create string representation for easy debug logging/dumping
+            and potentially a sensor for logging Area decisions.
+            """
+            out = ""
+            for var, val in vars(self).items():
+                out += f"** {var:20} "
+                if isinstance(val, tuple):
+                    for v in val:
+                        if isinstance(v, float):
+                            out += f"{v:.2f} "
+                        else:
+                            out += f"{v} "
+                    out += "\n"
+                elif var == "pcnt_diff":
+                    out += f"{val:.3f}\n"
+                else:
+                    out += f"{val}\n"
+            return out
+
     def _refresh_area_by_min_distance(self, device: BermudaDevice):
-        """Very basic Area setting by finding closest beacon to a given device."""
-        closest_scanner: BermudaDeviceScanner | None = None
+        """Very basic Area setting by finding closest proxy to a given device."""
+        # The current area_scanner (which might be None) is the one to beat.
+        closest_scanner: BermudaDeviceScanner | None = device.area_scanner
+
         _max_radius = self.options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS)
+        nowstamp = MONOTONIC_TIME()
 
-        if device.area_scanner is not None:
-            closest_scanner = device.area_scanner  # The one to beat.
+        tests = self.AreaTests()
+        tests.device = device.name
 
-        # Special case for metadevices, we pull in all their scanner entries
-        # from the older addresses, since it's possible that the closest scanner
-        # still had the old address, or that the new address is actually only
-        # transient, and the device will resume tx on an older address...
-        #
-        othersources: dict[str, BermudaDeviceScanner] = {}
-        for source in device.metadevice_sources:
-            if otherdev := self._get_device(source):
-                for otherscanner in otherdev.scanners.values():
-                    othersources["other_" + otherscanner.address] = otherscanner
+        _superchatty = False  # Set to true for very verbose logging about area wins
+        # if device.name in ("Ash Pixel IRK", "Garage", "Melinda iPhone"):
+        #     _superchatty = True
 
-        # combine both current address scanners and the others...
-        for scanner in (device.scanners | othersources).values():
-            # Check each scanner and keep note of the closest one based on rssi_distance.
+        for scanner in device.scanners.values():
+            # Check each scanner and any time one is found to be closer / better than
+            # the existing closest_scanner, replace it. At the end we should have the
+            # right one. In theory.
+            #
             # Note that rssi_distance is smoothed/filtered, and might be None if the last
             # reading was old enough that our algo decides it's "away".
+            #
+            # Every loop, every test is just a two-way race.
+
+            # no competing against ourselves...
+            if closest_scanner is scanner:
+                continue
+
+            # If closest scanner lacks critical data, we win.
             if (
-                scanner.rssi_distance is not None  # We have a valid distance
-                and scanner.rssi_distance < _max_radius  # It's within the max radius
+                closest_scanner is None
+                or closest_scanner.rssi_distance is None
+                or closest_scanner.area_id is None
+                # Extra checks that are redundant but make linting easier later...
+                or closest_scanner.hist_distance_by_interval is None
             ):
-                # We're a chance, let's see if we win...
+                # Default Instawin!
+                closest_scanner = scanner
+                if _superchatty:
+                    _LOGGER.debug(
+                        "%s IS closesr to %s: Encumbant is invalid",
+                        device.name,
+                        scanner.name,
+                    )
+                continue
+
+            # NOTE:
+            # From here on in, don't award a win directly. Instead award a loss if the new scanner is
+            # not a contender, but otherwise build a set of test scores and make a determination at the
+            # end.
+
+            # If we lack critical data we cannot win...
+            if (
+                scanner.rssi_distance is None
+                or scanner.rssi_distance > _max_radius
+                or scanner.area_id is None
+                # Add others that are redundant, but make the linter happy
+                # in future comparisons
+                or scanner.hist_distance_by_interval is None
+            ):
+                # if _superchatty:
+                #     _LOGGER.debug(
+                #         "%s not closest to %s vs %s: we lack the basics",
+                #         device.name,
+                #         scanner.name,
+                #         closest_scanner.name,
+                #     )
+                continue
+
+            # If we ARE NOT ACTUALLY CLOSER(!) we can not win.
+            if closest_scanner.rssi_distance < scanner.rssi_distance:
+                # we are not even closer!
+                continue
+
+            tests.reason = None  # ensure we don't trigger logging if no decision was made.
+            tests.same_area = closest_scanner.area_id == scanner.area_id
+            tests.areas = (closest_scanner.area_name or "", scanner.area_name or "")
+            tests.scannername = (closest_scanner.name, scanner.name)
+            tests.distance = (closest_scanner.rssi_distance, scanner.rssi_distance)
+            # tests.velocity = (
+            #     next((val for val in closest_scanner.hist_velocity), 0),
+            #     next((val for val in scanner.hist_velocity), 0),
+            # )
+
+            # _old_last_detection = 999.9
+            # _new_last_detection = 999.9
+            # if (_closest_hascanner := self.devices[closest_scanner.scanner_address]._hascanner) is not None:
+            #     _old_last_detection = _closest_hascanner.time_since_last_detection() or 999
+
+            # if (_new_hascanner := self.devices[scanner.scanner_address]._hascanner) is not None:
+            #     _new_last_detection = _new_hascanner.time_since_last_detection() or 999.0
+
+            # tests.last_detection = (_old_last_detection, _new_last_detection)
+
+            tests.last_ad_age = (
+                nowstamp - closest_scanner.scanner_device.last_seen,
+                nowstamp - scanner.scanner_device.last_seen,
+            )
+            tests.this_ad_age = (
+                nowstamp - closest_scanner.stamp,
+                nowstamp - scanner.stamp,
+            )
+
+            # when_old_was_last_this_close = 999.9
+            # for seconds, old_dist in enumerate(closest_scanner.hist_distance_by_interval):
+            #     if old_dist >= scanner.rssi_distance:
+            #         when_old_was_last_this_close = seconds
+            #         continue
+
+            # time_new_has_been_closer_for = 999.9
+            # for seconds, old_dist in enumerate(closest_scanner.hist_distance_by_interval):
+            #     if old_dist >= max(scanner.hist_distance_by_interval[0 : seconds + 1]):
+            #         time_new_has_been_closer_for = seconds
+            #         continue
+
+            # tests.last_closer = (
+            #     # How recently closest_scanner was as close as new scanner is now
+            #     when_old_was_last_this_close,
+            #     # How long new scanner has been closer
+            #     time_new_has_been_closer_for,
+            # )
+
+            if False:  # tests.last_closer[0] < 3:
+                # Our worst hasn't yet beat its best, we're out.
+                if _superchatty:
+                    _LOGGER.debug(
+                        "%s not closest to %s vs %s: we need to dwell more\n%s",
+                        device.name,
+                        scanner.name,
+                        closest_scanner.name,
+                        tests,
+                    )
+                continue
+
+            _pda = scanner.rssi_distance
+            _pdb = closest_scanner.rssi_distance
+            tests.pcnt_diff = abs(_pda - _pdb) / (_pda + _pdb) / 2
+
+            # Same area. Confirm freshness and distance.
+            if (
+                tests.same_area
+                and (tests.this_ad_age[0] > tests.this_ad_age[1] + 1)
+                and tests.distance[0] >= tests.distance[1]
+            ):
+                tests.reason = "WIN awarded for same area, newer, closer advert"
+                closest_scanner = scanner
+                continue
+
+            # Win by historical min/max. Confirm available history and sufficient %diff.
+            min_seconds = 3
+            max_seconds = 5
+            if len(scanner.hist_distance_by_interval) > min_seconds:
+                tests.hist_min_max = (
+                    min(closest_scanner.hist_distance_by_interval[:max_seconds]),  # Oldest min
+                    max(scanner.hist_distance_by_interval[:max_seconds]),  # Newest max
+                )
                 if (
-                    closest_scanner is None  # No existing candidate, we are in the lead.
-                    or closest_scanner.rssi_distance is None  # existing winner has no distance
-                    or scanner.rssi_distance < closest_scanner.rssi_distance  # we are closer.
+                    tests.hist_min_max[1] < tests.hist_min_max[0]
+                    and tests.pcnt_diff > 0.15  # and we're significantly closer.
                 ):
-                    # We are the closest, valid scanner.
-                    # TODO: At this point, it might be worth looking at the velocity and other history,
-                    #       to see if we should *not* take over the area, as maybe we're in a fringe
-                    #       area and some hysterisis is in order. but don't sacrifice responsiveness!
-                    #
+                    tests.reason = "WIN on historical min/max"
                     closest_scanner = scanner
+                    continue
+
+            if tests.pcnt_diff < 0.18:
+                # Didn't make the cut. We're not "different enough" given how
+                # recently the previous nearest was updated.
+                tests.reason = "LOSS - failed on percentage_difference"
+                continue
+
+            # If we made it through all of that, we're winning, so far!
+            tests.reason = "WIN by not losing!"
+
+            closest_scanner = scanner
+
+        if _superchatty and tests.reason is not None:
+            _LOGGER.info(
+                "***************\n**************** %s *******************\n%s",
+                tests.reason,
+                tests,
+            )
+
+        _superchatty = False
+
+        if device.area_scanner != closest_scanner and tests.reason is not None:
+            device.diag_area_switch = tests.sensortext()
 
         # Apply the newly-found closest scanner (or apply None if we didn't find one)
         device.apply_scanner_selection(closest_scanner)
+
+    def _ha_ble_scanners_changed(self) -> bool:
+        """
+        Queries the HA bluetooth backend for new scanners.
+
+        If the list of scanners is different to what we had previously saved in self._hascanners,
+        update our list (and our list of timestamp references) it and return true.
+        If the list has not changed, return False.
+        These are HA's bluetooth backend representation of proxies/scanners.
+        """
+        _new_ha_scanners = set[BaseHaScanner]
+        # Using new API in 2025.2
+        _new_ha_scanners = set(self._manager.async_current_scanners())
+
+        if _new_ha_scanners != self._hascanners:
+            _LOGGER.debug("*** HA Base Scanner Set has changed")
+            self._hascanners = _new_ha_scanners
+
+            # Populate the local copy of timestamps, if applicable
+            for hascanner in self._hascanners:
+                # Only Remote ha scanners provide explicit timestamps...
+                if isinstance(hascanner, BaseHaRemoteScanner):
+                    # New API in 2025.4.0
+                    if self.hass_version_min_2025_4:
+                        self._hascanner_timestamps[hascanner.source.lower()] = hascanner.discovered_device_timestamps
+                    else:
+                        self._hascanner_timestamps[hascanner.source.lower()] = hascanner._discovered_device_timestamps  # noqa: SLF001
+            return True
+        return False
 
     def _refresh_scanners(self):
         """
@@ -1185,31 +1508,80 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # scanner_devreg_mac: DeviceEntry from HA's *other* integrations, like ESPHome, Shelly.
         # scanner_b: BermudaDevice entry
 
-        # TODO: Eventually replace this with a minver requirement in hacs.json.
-        if self.hass_version_min_2025_2:
-            # New api
-            self._hascanners = set(self._manager.async_current_scanners())
-        else:
-            # Evil: We're acessing private members of bt manager to do it since there's no API call for it.
-            self._hascanners = self._manager._connectable_scanners | self._manager._non_connectable_scanners  # noqa: SLF001
+        # Update the list of backend bluetooth scanners and timestamps.
+        self._ha_ble_scanners_changed()
 
         for hascanner in self._hascanners:
-            scanner_address = format_mac(hascanner.source).lower()
+            scanner_address = mac_norm(hascanner.source)
             # As of 2025.2.0 The bluetooth integration creates its own device entries
             # for all HaScanners, not just local adaptors. So since there are two integration
-            # pages where a user might apply an area setting (eg, the bluetooth page or the shelly or esphome page)
-            # we should check both to see if the user has applied an area anywhere, and prefer the bluetooth one
-            # if both are set.
-            scanner_devreg_bt = self._device_registry.async_get_device(
-                connections={
-                    ("bluetooth", scanner_address.upper()),  # bluetooth, uppercase: matches bluetooth integration
-                }
-            )
-            scanner_devreg_mac = self._device_registry.async_get_device(
-                connections={
-                    ("mac", scanner_address),  # mac, lowercase: matches ESPHome, Shellys integrations etc
-                }
-            )
+            # pages where a user might apply an area setting (eg, the bluetooth page or the shelly/esphome pages)
+            # we should check both to see if the user has applied an area (or name) anywhere, and
+            # prefer the bluetooth one if both are set.
+
+            # espressif devices have a base_mac
+            # https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/misc_system_api.html#local-mac-addresses
+            # base_mac (WiFi STA), +1 (AP), +2 (BLE), +3 (Ethernet)
+            # Also possible for them to use LocalMAC, where the AP and Ether MACs are derived from STA and BLE
+            # MACs, with first octet having bitvalue0x2 set, or if it was already, bitvalue0x4 XORd
+            #
+            # core Bluetooth now reports the BLE MAC address, while ESPHome (and maybe Shelly?) use
+            # the ethernet MAC for their connection links. We want both devices (if present) so that
+            # we can let the user apply name and area settings to either device.
+
+            connlist = set()
+            maclist = set()
+
+            # The device registry devices for the bluetooth and ESPHome/Shelly devices.
+            scanner_devreg_bt = None
+            scanner_devreg_mac = None
+            scanner_devreg_mac_address = None
+            scanner_devreg_bt_address = None
+
+            for offset in range(-3, 3):
+                if (altmac := mac_math_offset(scanner_address, offset)) is not None:
+                    connlist.add(("bluetooth", altmac.upper()))
+                    connlist.add(("mac", altmac))
+                    maclist.add(altmac)
+
+            # Requires 2025.3
+            devreg_devices = self._device_registry.devices.get_entries(None, connections=connlist)
+            devreg_count = 0
+            devreg_stringlist = ""  # for debug logging
+            for devreg_device in devreg_devices:
+                devreg_count += 1
+                # _LOGGER.debug("DevregScanner: %s", devreg_device)
+                devreg_stringlist += f"** {devreg_device}\n"
+                for conn in devreg_device.connections:
+                    if conn[0] == "bluetooth":
+                        # Bluetooth component's device!
+                        scanner_devreg_bt = devreg_device
+                        scanner_devreg_bt_address = conn[1].lower()
+                    if conn[0] == "mac":
+                        # ESPHome, Shelly
+                        scanner_devreg_mac = devreg_device
+                        scanner_devreg_mac_address = conn[1]
+
+            if devreg_count not in (1, 2):
+                _LOGGER_SPAM_LESS.warning(
+                    f"multimatch_devreg_{hascanner.source}",
+                    "Unexpectedly got %d device registry matches for %s:\n",
+                    devreg_count,
+                    hascanner.name,
+                    devreg_stringlist,
+                )
+
+            # scanner_devreg_bt = self._device_registry.async_get_device(
+            #     connections={
+            #         ("bluetooth", scanner_address.upper()),  # bluetooth, uppercase: matches bluetooth integration
+            #     }
+            # )
+            # scanner_devreg_bt = [i for i in devreg_devices.values() if
+            # scanner_devreg_mac = self._device_registry.async_get_device(
+            #     connections={
+            #         ("mac", scanner_address),  # mac, lowercase: matches ESPHome, Shellys integrations etc
+            #     }
+            # )
 
             if scanner_devreg_bt is None and scanner_devreg_mac is None:
                 _LOGGER_SPAM_LESS.error(
@@ -1224,15 +1596,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             if scanner_address in _purge_scanners:
                 _purge_scanners.remove(scanner_address)
 
-            # Populate the local copy of timestamps, if applicable
-            if isinstance(hascanner, BaseHaRemoteScanner):
-                self._hascanner_timestamps[hascanner.source.lower()] = hascanner._discovered_device_timestamps  # noqa: SLF001
+            scanner_b = self._get_or_create_device(scanner_address)
+            # scanner_b.create_sensor = True
 
-            scanner_b = self._get_device(scanner_address)
-            if scanner_b is None:
-                # It's a new scanner, we will need to update our saved config.
-                # _LOGGER.debug("New Scanner: %s", scanner_ha.name)
-                scanner_b = self._get_or_create_device(scanner_address)
+            scanner_b.hascanner = hascanner
+            scanner_b.is_remote_scanner = isinstance(scanner_b.hascanner, BaseHaRemoteScanner)
 
             # We found the device entry and have created our scannerdevice,
             # now update any fields that might be new from the device reg.
@@ -1257,12 +1625,41 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 _mac_name = scanner_devreg_mac.name
                 _mac_name_by_user = scanner_devreg_mac.name_by_user
 
+            # As of ESPHome 2025.3.0 (via aioesphomeapi 29.3.1) ESPHome proxies now
+            # report their BLE MAC address instead of their WIFI MAC in the hascanner
+            # details.
+            # To work around breaking the existing distance_to entities, retain the
+            # ESPHome / Shelly integration's MAC as the unique_id
+            scanner_b.unique_id = scanner_devreg_mac_address or scanner_devreg_bt_address or hascanner.source
+            scanner_b.address_ble_mac = scanner_devreg_bt_address or scanner_devreg_mac_address or hascanner.source
+            scanner_b.address_wifi_mac = scanner_devreg_mac_address
+
+            # Populate the possible metadevice source MACs so that we capture any
+            # data the scanner is sending (Shelly's already send broadcasts, and
+            # future ESPHome Bermuda templates will, too). We can't easily tell
+            # if our base address is the wifi mac, ble mac or ether mac, so whack
+            # 'em all in and let the loop sort it out.
+            for mac in (
+                scanner_b.address_ble_mac,  # BLE mac, if known
+                mac_math_offset(scanner_b.address_wifi_mac, 2),  # WIFI+2=BLE
+                mac_math_offset(scanner_b.address_wifi_mac, -1),  # ETHER-1=BLE
+            ):
+                if (
+                    mac is not None
+                    and mac not in scanner_b.metadevice_sources
+                    and mac != scanner_b.address  # because it won't need to be a metadevice
+                ):
+                    scanner_b.metadevice_sources.append(mac)
+
             # Bluetooth integ names scanners by address, so prefer the source integration's
             # autogenerated name over that.
             scanner_b.name_devreg = _mac_name or _bt_name
             # Bluetooth device reg is newer, so use the user-given name there if it exists.
             scanner_b.name_by_user = _bt_name_by_user or _mac_name_by_user
+            # Apply any name changes.
+            scanner_b.make_name()
 
+            # Look up areas
             areas = self.area_reg.async_get_area(scanner_b.area_id) if scanner_b.area_id else None
             if areas is not None and hasattr(areas, "name") and areas.name is not None:
                 scanner_b.area_name = areas.name
@@ -1273,7 +1670,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     scanner_b.name,
                     areas,
                 )
-                _scanners_without_areas.append(scanner_b.name)
+                _scanners_without_areas.append(f"{scanner_b.name} [{scanner_b.address}]")
                 scanner_b.area_name = f"Invalid Area for {scanner_b.name}"
             scanner_b.is_scanner = True
 
@@ -1407,7 +1804,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         if redact:
             _stamp_redact = MONOTONIC_TIME()
-            out = cast(ServiceResponse, self.redact_data(out))
+            out = cast("ServiceResponse", self.redact_data(out))
             _stamp_redact_elapsed = MONOTONIC_TIME() - _stamp_redact
             if _stamp_redact_elapsed > 3:  # It should be fast now.
                 _LOGGER.warning("Dump devices redaction took %2f seconds", _stamp_redact_elapsed)
@@ -1502,14 +1899,18 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         if isinstance(data, str):
             data = data.lower()
             # the end of the recursive wormhole, do the actual work:
-            if data not in self.redactions:
-                for find, fix in list(self.redactions.items()):
-                    if find in data:
-                        self.redactions[data] = data.replace(find, fix)
-                        data = self.redactions[data]
-                        break
-            else:
+            if data in self.redactions:
+                # Full string match, easy...
                 data = self.redactions[data]
+            else:
+                # Search for any of the redaction strings in the data.
+                for find_mac, fix in list(self.redactions.items()):
+                    # Include variants of MAC address
+                    for find in mac_explode_formats(find_mac):
+                        if find in data:
+                            self.redactions[data] = data.replace(find, fix)
+                            data = self.redactions[data]
+                            break
             # redactions done, now replace any remaining MAC addresses
             # We are only looking for xx:xx:xx... format.
             return self._redact_generic_re.sub(self._redact_generic_sub, data)

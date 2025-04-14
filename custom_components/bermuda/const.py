@@ -68,9 +68,9 @@ LOGSPAM_INTERVAL = 22
 # uuid. Other non-static-mac protocols should use this method as well, by adding their
 # own BEACON_ types.
 METADEVICE_TYPE_IBEACON_SOURCE: Final = "beacon source"  # The source-device sending a beacon packet (MAC-tracked)
-BEACON_IBEACON_DEVICE: Final = "beacon device"  # The meta-device created to track the beacon
+METADEVICE_IBEACON_DEVICE: Final = "beacon device"  # The meta-device created to track the beacon
 METADEVICE_TYPE_PRIVATE_BLE_SOURCE: Final = "private_ble_src"  # current (random) MAC of a private ble device
-BEACON_PRIVATE_BLE_DEVICE: Final = "private_ble_device"  # meta-device create to track private ble device
+METADEVICE_PRIVATE_BLE_DEVICE: Final = "private_ble_device"  # meta-device create to track private ble device
 
 METADEVICE_SOURCETYPES: Final = {METADEVICE_TYPE_IBEACON_SOURCE, METADEVICE_TYPE_PRIVATE_BLE_SOURCE}
 
@@ -92,10 +92,13 @@ ADDR_TYPE_PRIVATE_BLE_DEVICE: Final = "addr_type_private_ble_device"
 #
 # IRK devices typically change their MAC every 15 minutes, so 96 addresses/day.
 #
+# Accoring to the backend comments, BlueZ times out adverts at 180 seconds, and HA
+# expires adverts at 195 seconds to avoid churning.
+#
 PRUNE_MAX_COUNT = 1000  # How many device entries to allow at maximum
-PRUNE_TIME_INTERVAL = 310  # Every 5m10s, prune stale devices
-PRUNE_TIME_DEFAULT = 259200  # Max age of regular device entries (3days)
-PRUNE_TIME_IRK = 3600  # Resolvable Private addresses change often, prune regularly (1h)
+PRUNE_TIME_INTERVAL = 180  # Every 3m, prune stale devices
+PRUNE_TIME_DEFAULT = 86400  # Max age of regular device entries (1day)
+PRUNE_TIME_IRK = 240  # Resolvable Private addresses change often, prune regularly
 
 SAVEOUT_COOLDOWN = 10  # seconds to delay before re-trying config entry save.
 
