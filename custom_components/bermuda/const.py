@@ -97,8 +97,13 @@ ADDR_TYPE_PRIVATE_BLE_DEVICE: Final = "addr_type_private_ble_device"
 #
 PRUNE_MAX_COUNT = 1000  # How many device entries to allow at maximum
 PRUNE_TIME_INTERVAL = 180  # Every 3m, prune stale devices
+# ### Note about timeouts: Bluez and HABT cache for 180 or 195 seconds. Setting
+# timeouts below that may result in prune/create/prune churn, but as long as
+# we only re-create *fresh* devices the risk is low.
 PRUNE_TIME_DEFAULT = 86400  # Max age of regular device entries (1day)
-PRUNE_TIME_IRK = 240  # Resolvable Private addresses change often, prune regularly
+PRUNE_TIME_UNKNOWN_IRK = 240  # Resolvable Private addresses change often, prune regularly.
+# see Bluetooth Core Spec, Vol3, Part C, Appendix A, Table A.1: Defined GAP timers
+PRUNE_TIME_KNOWN_IRK = 960  # spec "recommends" 15 min max address age. Round up to 16 :-)
 
 SAVEOUT_COOLDOWN = 10  # seconds to delay before re-trying config entry save.
 

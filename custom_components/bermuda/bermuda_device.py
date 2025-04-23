@@ -135,7 +135,8 @@ class BermudaDevice(dict):
         #
         if self.address_type is BDADDR_TYPE_UNKNOWN:
             if self.address.count(":") != 5:
-                # Doesn't look like an actual MAC address
+                # Doesn't look like an actual MAC address - should be some sort of metadevice.
+
                 if re.match("^[A-Fa-f0-9]{32}_[A-Fa-f0-9]*_[A-Fa-f0-9]*$", self.address):
                     # It's an iBeacon uuid_major_minor
                     self.address_type = ADDR_TYPE_IBEACON
