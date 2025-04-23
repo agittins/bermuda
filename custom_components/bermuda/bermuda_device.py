@@ -12,6 +12,7 @@ for them, so we can use them to contribute towards measurements.
 
 from __future__ import annotations
 
+import binascii
 import re
 from typing import TYPE_CHECKING
 
@@ -19,9 +20,13 @@ from homeassistant.components.bluetooth import (
     MONOTONIC_TIME,
     BaseHaRemoteScanner,
     BaseHaScanner,
+    BluetoothChange,
     BluetoothScannerDevice,
+    BluetoothServiceInfoBleak,
 )
+from homeassistant.components.private_ble_device import coordinator as pble_coordinator
 from homeassistant.const import STATE_HOME, STATE_NOT_HOME, STATE_UNAVAILABLE
+from homeassistant.core import callback
 from homeassistant.util import slugify
 
 from .bermuda_device_scanner import BermudaDeviceScanner
@@ -141,6 +146,15 @@ class BermudaDevice(dict):
                     self.metadevice_type.add(METADEVICE_PRIVATE_BLE_DEVICE)
                     self.address_type = ADDR_TYPE_PRIVATE_BLE_DEVICE
                     self.beacon_unique_id = self.address
+                    # If we've been given a private BLE address, then the integration must be up.
+                    # register to get callbacks for address changes.
+                    _pble_coord = pble_coordinator.async_get_coordinator(self._coordinator.hass)
+                    self._coordinator.config_entry.async_on_unload(
+                        _pble_coord.async_track_service_info(
+                            self.async_handle_pble_callback, binascii.unhexlify(self.address)
+                        )
+                    )
+                    _LOGGER.debug("Private BLE Callback registered for %s, %s", self.name, self.address)
                 else:
                     # We have no idea, currently.
                     # Mark it as such so we don't spend time testing it again.
@@ -152,6 +166,24 @@ class BermudaDevice(dict):
                 self.address_type = BDADDR_TYPE_PRIVATE_RESOLVABLE
             else:
                 self.address_type = BDADDR_TYPE_OTHER
+
+    @callback
+    def async_handle_pble_callback(
+        self,
+        service_info: BluetoothServiceInfoBleak,
+        change: BluetoothChange,
+    ) -> None:
+        """
+        If this is an IRK device, this callback will be called on IRK updates.
+
+        This method gets registered with core's Private BLE Device integration,
+        and will be called each time that its co-ordinator sees a new MAC address
+        for this IRK.
+        """
+        address = mac_norm(service_info.address)
+        if address not in self.metadevice_sources:
+            self.metadevice_sources.insert(0, address)
+            _LOGGER.debug("Got %s callback for new IRK address on %s of %s", change, self.name, address)
 
     def make_name(self):
         """
@@ -215,8 +247,6 @@ class BermudaDevice(dict):
 
         Used to apply a "winning" scanner's data to the device for setting closest Area.
         """
-        # FIXME: This might need to check if it's a metadevice source or dest, and
-        # ensure things are applied correctly. Might be a non-issue.
         old_area = self.area_name
         if closest_scanner is not None and closest_scanner.rssi_distance is not None:
             # We found a winner
@@ -343,7 +373,6 @@ class BermudaDevice(dict):
                 scanout = {}
                 for scanner in self.scanners.values():
                     scanout[f"{scanner.device_address}__{scanner.scanner_address}"] = scanner.to_dict()
-                # FIXME: val is overwritten
                 val = scanout  # noqa
             out[var] = val
         return out

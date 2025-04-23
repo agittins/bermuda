@@ -19,12 +19,10 @@ from homeassistant.components.bluetooth import (
 )
 from homeassistant.components.bluetooth.api import _get_manager
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import EVENT_STATE_CHANGED
 from homeassistant.const import MAJOR_VERSION as HA_VERSION_MAJ
 from homeassistant.const import MINOR_VERSION as HA_VERSION_MIN
 from homeassistant.core import (
     Event,
-    EventStateChangedData,
     HassJob,
     HomeAssistant,
     ServiceCall,
@@ -199,7 +197,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # to stabilise. So set the stamp into the future.
         self.last_config_entry_update_request = MONOTONIC_TIME() + SAVEOUT_COOLDOWN  # Stamp for save-out requests
 
-        self.config_entry.async_on_unload(self.hass.bus.async_listen(EVENT_STATE_CHANGED, self.handle_state_changes))
+        # AJG 2025-04-23 Disabling, see the commented method below for notes.
+        # self.config_entry.async_on_unload(self.hass.bus.async_listen(EVENT_STATE_CHANGED, self.handle_state_changes))
 
         # First time around we freshen the restored scanner info by
         # forcing a scan of the captured info.
@@ -301,34 +300,37 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             member_uuids_yaml = yaml.safe_load(f)["uuids"]
         self.member_uuids = {hex(member["uuid"])[2:]: member["name"] for member in member_uuids_yaml}
 
-    @callback
-    def handle_state_changes(self, ev: Event[EventStateChangedData]):
-        """Watch for new mac addresses on private ble devices and act."""
-        if ev.event_type == EVENT_STATE_CHANGED:
-            event_entity = ev.data.get("entity_id", "invalid_event_entity")
-            if event_entity in self.pb_state_sources:
-                # It's a state change of an entity we are tracking.
-                new_state = ev.data.get("new_state")
-                if new_state:
-                    # _LOGGER.debug("New state change! %s", new_state)
-                    # check new_state.attributes.assumed_state
-                    if hasattr(new_state, "attributes"):
-                        new_address = new_state.attributes.get("current_address")
-                        if new_address is not None and new_address.lower() != self.pb_state_sources[event_entity]:
-                            _LOGGER.debug(
-                                "Have a new source address for %s, %s",
-                                event_entity,
-                                new_address,
-                            )
-                            self.pb_state_sources[event_entity] = new_address.lower()
-                            # Flag that we need new pb checks, and work them out:
-                            self._do_private_device_init = True
-                            # If no sensors have yet been configured, the coordinator
-                            # won't be getting polled for fresh data. Since we have
-                            # found something, we should get it to do that.
-                            # No longer using async_config_entry_first_refresh as it
-                            # breaks
-                            self.hass.add_job(self.async_refresh())
+    # AJG 2025-04-23 - This is probably no longer necessary, since we now hook a callback
+    # directly in Private_ble_devices to get updates on new MAC addresses.
+    # The device_registry events should cover anything else we need.
+    # @callback
+    # def handle_state_changes(self, ev: Event[EventStateChangedData]):
+    #     """Watch for new mac addresses on private ble devices and act."""
+    #     if ev.event_type == EVENT_STATE_CHANGED:
+    #         event_entity = ev.data.get("entity_id", "invalid_event_entity")
+    #         if event_entity in self.pb_state_sources:
+    #             # It's a state change of an entity we are tracking.
+    #             new_state = ev.data.get("new_state")
+    #             if new_state:
+    #                 # _LOGGER.debug("New state change! %s", new_state)
+    #                 # check new_state.attributes.assumed_state
+    #                 if hasattr(new_state, "attributes"):
+    #                     new_address = new_state.attributes.get("current_address")
+    #                     if new_address is not None and new_address.lower() != self.pb_state_sources[event_entity]:
+    #                         _LOGGER.debug(
+    #                             "Have a new source address for %s, %s",
+    #                             event_entity,
+    #                             new_address,
+    #                         )
+    #                         self.pb_state_sources[event_entity] = new_address.lower()
+    #                         # Flag that we need new pb checks, and work them out:
+    #                         self._do_private_device_init = True
+    #                         # If no sensors have yet been configured, the coordinator
+    #                         # won't be getting polled for fresh data. Since we have
+    #                         # found something, we should get it to do that.
+    #                         # No longer using async_config_entry_first_refresh as it
+    #                         # breaks
+    #                         self.hass.add_job(self.async_refresh())
 
     @callback
     def handle_devreg_changes(self, ev: Event[EventDeviceRegistryUpdatedData]):
@@ -1227,6 +1229,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         reason: str | None = None  # reason/result
 
         def sensortext(self) -> str:
+            """Return a text summary suitable for use in a sensor entity."""
             out = ""
             for var, val in vars(self).items():
                 out += f"{var}|"
@@ -1387,18 +1390,17 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             #     # How long new scanner has been closer
             #     time_new_has_been_closer_for,
             # )
-
-            if False:  # tests.last_closer[0] < 3:
-                # Our worst hasn't yet beat its best, we're out.
-                if _superchatty:
-                    _LOGGER.debug(
-                        "%s not closest to %s vs %s: we need to dwell more\n%s",
-                        device.name,
-                        scanner.name,
-                        closest_scanner.name,
-                        tests,
-                    )
-                continue
+            # if tests.last_closer[0] < 3:
+            #     # Our worst hasn't yet beat its best, we're out.
+            #     if _superchatty:
+            #         _LOGGER.debug(
+            #             "%s not closest to %s vs %s: we need to dwell more\n%s",
+            #             device.name,
+            #             scanner.name,
+            #             closest_scanner.name,
+            #             tests,
+            #         )
+            #     continue
 
             _pda = scanner.rssi_distance
             _pdb = closest_scanner.rssi_distance
@@ -1481,6 +1483,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     if self.hass_version_min_2025_4:
                         self._hascanner_timestamps[hascanner.source.lower()] = hascanner.discovered_device_timestamps
                     else:
+                        # pylint: disable=W0212,C0301
                         self._hascanner_timestamps[hascanner.source.lower()] = hascanner._discovered_device_timestamps  # noqa: SLF001
             return True
         return False
