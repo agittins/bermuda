@@ -870,19 +870,25 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # We need to find more addresses to prune. Perhaps we live
             # in a busy train station, or are under some sort of BLE-MAC
             # DOS-attack.
-            # Sort the prunables by timestamp ascending
-            sorted_addresses = sorted([(v, k) for k, v in prunable_stamps.items()])
-            cutoff = min(len(sorted_addresses), prune_quota_shortfall)
+            if len(prunable_stamps) > 0:
+                # Sort the prunables by timestamp ascending
+                sorted_addresses = sorted([(v, k) for k, v in prunable_stamps.items()])
+                cutoff_index = min(len(sorted_addresses), prune_quota_shortfall)
 
-            _LOGGER.info(
-                "Prune quota short by %d. Pruning %d extra devices (down to age %d seconds)",
-                prune_quota_shortfall,
-                cutoff,
-                nowstamp - sorted_addresses[prune_quota_shortfall][0],
-            )
-            # pylint: disable-next=unused-variable
-            for _stamp, address in sorted_addresses[:prune_quota_shortfall]:
-                prune_list.append(address)
+                _LOGGER.debug(
+                    "Prune quota short by %d. Pruning %d extra devices (down to age %0.2f seconds)",
+                    prune_quota_shortfall,
+                    cutoff_index,
+                    nowstamp - sorted_addresses[prune_quota_shortfall - 1][0],
+                )
+                # pylint: disable-next=unused-variable
+                for _stamp, address in sorted_addresses[: prune_quota_shortfall - 1]:
+                    prune_list.append(address)
+            else:
+                _LOGGER.warning(
+                    "Need to prune another %s devices to make quota, but no extra prunables available",
+                    prune_quota_shortfall,
+                )
 
         # ###############################################
         # Prune_list is now ready to action. It contains no keepers, and is already
