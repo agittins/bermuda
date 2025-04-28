@@ -10,12 +10,12 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-#if [[ ! -f venv/bin/activate ]]; then
-#    echo "ERROR: No venv, make sure you run setup first!"
-#    exit 1
-#fi
-#
-#source venv/bin/activate
+if [[ ! -f "$VENV/bin/activate" ]]; then
+    echo "ERROR: No venv, make sure you run setup first!"
+    exit 1
+fi
+
+source $VENV/bin/activate
 
 
 # Create config dir if not present
