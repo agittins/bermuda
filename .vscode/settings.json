@@ -1,5 +1,5 @@
 {
-  "python.pythonPath": "venv/bin/python",
+  "python.pythonPath": "/home/vscode/.local/ha-venv/bin/python",
   "files.associations": {
     "*.yaml": "home-assistant"
   },
@@ -7,5 +7,7 @@
     "editor.defaultFormatter": "charliermarsh.ruff"
   },
   "python.analysis.typeCheckingMode": "basic",
-  "python.analysis.autoImportCompletions": true
+  "python.analysis.autoImportCompletions": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true
 }

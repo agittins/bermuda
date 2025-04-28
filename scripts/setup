@@ -5,20 +5,26 @@ set -e
 cd "$(dirname "$0")/.."
 
 # Create a virtual environment
-# AJG - actually, don't. Thought it was a good idea but it breaks
-# code completion etc because it seems vscode doesn't/won't run in
-# that context. Or I'm an idiot, just as likely.
 #
-# Note that this setup script gets run on container init so everything
-# should be ready to go on loading.
+# If you're using vscode, this is where the venv lives that it will
+# call by default.
+export VENV=/home/vscode/.local/ha-venv
 #
-#python3 -m venv venv
-#source venv/bin/activate
+# If you're running closer to the metal, you might prefer this
+# instead:
+# export VENV=venv
+
+# Hopefully prioritise finding bermuda sources in our
+# working dir while debugging, rather than in the HA tree.
+export PYTHONPATH="${PWD}/custom_components:${PYTHONPATH}"
+
+python3 -m venv $VENV
+source $VENV/bin/activate
 
 # Seems to fix broken aiohttp wheel building in 3.11:
-python3 -m pip install --upgrade setuptools wheel
+uv pip install --upgrade setuptools wheel
 # Fix urllib3 issue https://github.com/home-assistant/core/issues/95192
-python3 -m pip install git+https://github.com/boto/botocore
+uv pip install git+https://github.com/boto/botocore
 
-python3 -m pip install --requirement requirements.txt
-python3 -m pip install --requirement requirements_test.txt
+uv pip install --requirement requirements.txt
+uv pip install --requirement requirements_test.txt

@@ -3,12 +3,17 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "HomeAssistant(debug)",
+      "name": "Home Assistant (debug)",
       "type": "debugpy",
       "request": "launch",
-      "justMyCode": false,
       "module": "homeassistant",
-      "args": ["--debug", "-c", "config"]
+      "justMyCode": false,
+      "args": [
+        "--debug",
+        "-c",
+        "/workspaces/homeassistant-core/config"
+      ],
+      // "preLaunchTask": "Compile English translations"
     },
     // This is the old (attempted) config of attaching to an already-running
     // instance, but I couldn't get breakpoints to work in the custom_component.
@@ -28,9 +33,27 @@
     //     }
     //   ]
     // },
+    // {
+    //   // Example of attaching to my production server
+    //   "name": "Python: Attach Remote",
+    //   "type": "debugpy",
+    //   "request": "attach",
+    //   "connect": {
+    //     "port": 5678,
+    //     "host": "homeassistant.home"
+    //   },
+    //   "pathMappings": [
+    //     {
+    //       "localRoot": "${workspaceFolder}",
+    //       "remoteRoot": "/config"
+    //     }
+    //   ]
+    // },
     {
-      // Example of attaching to my production server
-      "name": "Python: Attach Remote",
+      // Debug by attaching to remote Home Assistant server using Remote Python Debugger.
+      // See https://www.home-assistant.io/integrations/debugpy/
+      // This nearly works now.
+      "name": "AJG Home Remote",
       "type": "debugpy",
       "request": "attach",
       "connect": {
@@ -38,9 +61,18 @@
         "host": "homeassistant.home"
       },
       "pathMappings": [
+        // This maps the HA devcontainer paths to match the HAOS paths
         {
-          "localRoot": "${workspaceFolder}",
+          "localRoot": "/workspaces/homeassistant-core/config",
           "remoteRoot": "/config"
+        },
+        {
+          "localRoot": "/workspaces/homeassistant-core",
+          "remoteRoot": "/usr/src/homeassistant"
+        },
+        {
+          "localRoot": "/workspaces/repo-bermuda/custom_components/bermuda",
+          "remoteRoot": "/config/custom_components/bermuda"
         }
       ]
     }
