@@ -59,6 +59,7 @@ from .const import (
     _LOGGER,
     _LOGGER_SPAM_LESS,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
+    AREA_MIN_AD_AGE,
     BDADDR_TYPE_NOT_MAC48,
     BDADDR_TYPE_PRIVATE_RESOLVABLE,
     CONF_ATTENUATION,
@@ -1326,6 +1327,17 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             # no competing against ourselves...
             if closest_scanner is scanner:
+                continue
+
+            # No winning with stale adverts. If we didn't win back when it was fresh,
+            # we've no business winning now. This guards against a single advert
+            # being reported by two proxies at slightly different times, and the area
+            # switching to the later one after the reading times out on the first.
+            # The timeout value is fairly arbitrary, if it's too small then we risk
+            # ignoring valid reports from slow proxies (or if our processing loop is
+            # delayed / lengthened). Too long and we add needless jumping around for a
+            # device that isn't actually being actively detected.
+            if scanner.stamp < nowstamp - AREA_MIN_AD_AGE:
                 continue
 
             # If closest scanner lacks critical data, we win.
