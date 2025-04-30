@@ -46,10 +46,6 @@ DOMAIN_PRIVATE_BLE_DEVICE = "private_ble_device"
 # Signal names we are using:
 SIGNAL_DEVICE_NEW = f"{DOMAIN}-device-new"
 
-DISTANCE_TIMEOUT = 30  # seconds to wait before marking a sensor distance measurement
-# as unknown/none/stale/away. Separate from device_tracker.
-DISTANCE_INFINITE = 999  # arbitrary distance for infinite/unknown rssi range
-
 UPDATE_INTERVAL = 1.05  # Seconds between bluetooth data processing cycles
 # Note: this is separate from the CONF_UPDATE_INTERVAL which allows the
 # user to indicate how often sensors should update. We need to check bluetooth
@@ -62,6 +58,13 @@ LOGSPAM_INTERVAL = 22
 # users to see and act on, but we don't want to spam them on every update. This
 # value in seconds is how long we wait between emitting a particular error message
 # when encountering it - primarily for our update loop.
+
+DISTANCE_TIMEOUT = 30  # seconds to wait before marking a sensor distance measurement
+# as unknown/none/stale/away. Separate from device_tracker.
+DISTANCE_INFINITE = 999  # arbitrary distance for infinite/unknown rssi range
+
+AREA_MIN_AD_AGE: Final = max( DISTANCE_TIMEOUT/3, UPDATE_INTERVAL*2)
+# Adverts older than this can not win an area contest.
 
 # Beacon-handling constants. Source devices are tracked by MAC-address and are the
 # originators of beacon-like data. We then create a "meta-device" for the beacon's
