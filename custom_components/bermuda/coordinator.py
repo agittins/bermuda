@@ -400,8 +400,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # we do), then we trigger an update here with the expectation that we got a
         # device registry update after the private ble device was created. There might
         # be other corner cases where we need to trigger our own update here, so test
-        # carefully and completely if you are tempted to remove / alter this.
-        self.hass.add_job(self._async_update_data())
+        # carefully and completely if you are tempted to remove / alter this. Bermuda
+        # will skip an update cycle if it detects one already in progress.
+        self._async_update_data_internal()
 
     @callback
     def async_handle_advert(
@@ -432,7 +433,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # be triggered on the co-ordinator. So let's check if we haven't updated
         # recently, and do so...
         if self.stamp_last_update < MONOTONIC_TIME() - (UPDATE_INTERVAL * 2):
-            self.hass.add_job(self._async_update_data())
+            self._async_update_data_internal()
 
     def _check_all_platforms_created(self, address):
         """Checks if all platforms have finished loading a device's entities."""
@@ -547,6 +548,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             return device
 
     async def _async_update_data(self):
+        """Implementation of DataUpdateCoordinator update_data function."""
+        self._async_update_data_internal()
+
+    def _async_update_data_internal(self):
         """
         Update data for known devices by scanning bluetooth advert cache.
 
