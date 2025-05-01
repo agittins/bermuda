@@ -59,7 +59,7 @@ from .const import (
     _LOGGER,
     _LOGGER_SPAM_LESS,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
-    AREA_MIN_AD_AGE,
+    AREA_MAX_AD_AGE,
     BDADDR_TYPE_NOT_MAC48,
     BDADDR_TYPE_PRIVATE_RESOLVABLE,
     CONF_ATTENUATION,
@@ -1342,7 +1342,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # ignoring valid reports from slow proxies (or if our processing loop is
             # delayed / lengthened). Too long and we add needless jumping around for a
             # device that isn't actually being actively detected.
-            if scanner.stamp < nowstamp - AREA_MIN_AD_AGE:
+            if scanner.stamp < nowstamp - AREA_MAX_AD_AGE:
                 continue
 
             # If closest scanner lacks critical data, we win.
@@ -1602,7 +1602,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             for devreg_device in devreg_devices:
                 devreg_count += 1
                 # _LOGGER.debug("DevregScanner: %s", devreg_device)
-                devreg_stringlist += f"** {devreg_device}\n"
+                devreg_stringlist += f"** {devreg_device.name_by_user or devreg_device.name}\n"
                 for conn in devreg_device.connections:
                     if conn[0] == "bluetooth":
                         # Bluetooth component's device!
@@ -1613,10 +1613,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         scanner_devreg_mac = devreg_device
                         scanner_devreg_mac_address = conn[1]
 
-            if devreg_count not in (1, 2):
+            if devreg_count not in (1, 2, 3):
+                # We expect just the bt, or bt and another like esphome/shelly, or
+                # two bt's and shelly/esphome, the second bt being the alternate
+                # MAC address.
                 _LOGGER_SPAM_LESS.warning(
                     f"multimatch_devreg_{hascanner.source}",
-                    "Unexpectedly got %d device registry matches for %s:\n",
+                    "Unexpectedly got %d device registry matches for %s: %s\n",
                     devreg_count,
                     hascanner.name,
                     devreg_stringlist,

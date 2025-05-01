@@ -63,7 +63,7 @@ DISTANCE_TIMEOUT = 30  # seconds to wait before marking a sensor distance measur
 # as unknown/none/stale/away. Separate from device_tracker.
 DISTANCE_INFINITE = 999  # arbitrary distance for infinite/unknown rssi range
 
-AREA_MIN_AD_AGE: Final = max( DISTANCE_TIMEOUT/3, UPDATE_INTERVAL*2)
+AREA_MAX_AD_AGE: Final = max(DISTANCE_TIMEOUT / 3, UPDATE_INTERVAL * 2)
 # Adverts older than this can not win an area contest.
 
 # Beacon-handling constants. Source devices are tracked by MAC-address and are the

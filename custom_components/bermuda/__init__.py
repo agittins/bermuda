@@ -76,6 +76,9 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: BermudaConfigEn
         #
         # This is lifted from the discussion at https://community.home-assistant.io/t/migrating-unique-ids/348512
         #
+        # Also worth looking at https://github.com/home-assistant/core/pull/115265/files for an example
+        # of migrating unique_ids from one form to another.
+        #
         old_unique_id = config_entry.unique_id
         new_unique_id = mac_math_offset(old_unique_id, 3)
 
