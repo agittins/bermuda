@@ -8,10 +8,12 @@
 
 - (eventually) Triangulate device positions! Like, on a map. Maybe.
 
+
 [![GitHub Release][releases-shield]][releases]
 [![GitHub Activity][commits-shield]][commits]
 [![License][license-shield]](LICENSE)
 
+[![HomeAssistant Minimum Version][haminverbadge]][haminver]
 [![pre-commit][pre-commit-shield]][pre-commit]
 [![Black][black-shield]][black]
 
@@ -37,21 +39,24 @@ Bermuda aims to let you track any bluetooth device, and have Homeassistant tell 
 
 ## What you need:
 
-- One or more devices providing bluetooth proxy information to HA using esphome's `bluetooth_proxy` component.
-  I like the D1-Mini32 boards because they're cheap and easy to deploy.
-  The Shelly Plus bluetooth proxy devices are reported to work well.
-  Only natively-supported bluetooth devices are supported, meaning there's no current or planned support for MQTT devices etc.
+- Home Assistant. The current release of Bermuda requires at least ![haminverbadge]
+- One or more devices providing bluetooth proxy information to HA using HA's bluetooth backend. These can be:
+  - ESPHome devices with the `bluetooth_proxy` component enabled. I like the D1-Mini32 boards because they're cheap and easy to deploy.
+  - Shelly Plus or later devices with Bluetooth proxying enabled in the Shelly integration.
+  - USB Bluetooth on your HA host. This is not ideal, since they do not timestamp the advertisement packets and finding a well-supported usb bluetooth adaptor is non-trivial. However they can be used for simple "Home/Not Home" tracking, and basic Area distance support is enabled currently.
 
-- USB Bluetooth on your HA host is not ideal, since it does not timestamp the advertisement packets.
-  However it can be used for simple "Home/Not Home" tracking, and Area distance support is enabled currently.
+- Some bluetooth BLE devices you want to track. Phones, smart watches, beacon tiles, thermometers etc.
 
-- Some bluetooth BLE devices you want to track. Smart watches, beacon tiles, thermometers etc
+- Bermuda! I strongly recommend installing Bermuda via HACS:
+  [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=agittins&repository=bermuda&category=Integration)
 
-- Install Bermuda via HACS: [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=agittins&repository=bermuda&category=Integration)
+## Documentation and help
 
-## Documentation and help - the Wiki
+[The Wiki](https://github.com/agittins/bermuda/wiki/) is the primary and official source of information for setting up Bermuda.
 
-See [The Wiki](https://github.com/agittins/bermuda/wiki/) for more info on how it works and how to configure Bermuda for your home.
+[Discussions](https://github.com/agittins/bermuda/discussions/) contain both official and user-contributed guides, how-tos and general Q&A.
+
+[HA Community Thread for Bermuda](https://community.home-assistant.io/t/bermuda-bluetooth-ble-room-presence-and-tracking-custom-integration/625780/1) contains a *wealth* of information from and for users of Bermuda, and is where many folk first ask for assistance in setting up.
 
 ## Screenshots
 
@@ -82,21 +87,6 @@ for any person/user.
 ## FAQ
 
 See [The FAQ](https://github.com/agittins/bermuda/wiki/FAQ) in the Wiki!
-
-## TODO / Ideas
-
-- [ ] ~~Switch to performing updates on receipt of advertisements, instead of periodic polling~~ (nope, intervals work better)
-- [ ] "Solve" realtime approximation of inter-proxy distances using Triangle Inequality
-- [ ] Resolve x/y co-ordinates of all scanners and proxies (!)
-- [ ] Some sort of map, just pick two proxies as an x-axis vector and go
-- [ ] Config setting to define absolute locations of two proxies
-- [ ] Support some way to "pin" more than two proxies/tags, and have it not break.
-- [ ] An interface to define Areas in relation to the pinned proxies
-- [ ] Experiment with some of
-      [these algo's](https://mdpi-res.com/d_attachment/applsci/applsci-10-02003/article_deploy/applsci-10-02003.pdf?version=1584265508)
-      for improving accuracy (too much math for me!). Particularly weighting shorter
-      distances higher and perhaps the cosine similarity fingerprinting, possibly against
-      fixed beacons as well to smooth environmental rssi fluctuations.
 
 ## Hacking tips
 
@@ -193,6 +183,8 @@ Code template was mainly taken from [@Ludeeus](https://github.com/ludeeus)'s [in
 [commits]: https://github.com/agittins/bermuda/commits/main
 [hacs]: https://hacs.xyz
 [hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
+[haminver]: https://github.com/agittins/bermuda/commits/main/hacs.json
+[haminverbadge]: https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgithub.com%2Fagittins%2Fbermuda%2Fraw%2Fmain%2Fhacs.json&query=%24.homeassistant&style=for-the-badge&logo=homeassistant&logoColor=%2311BDF2&label=Minimum%20HA%20Version)
 [discord]: https://discord.gg/Qa5fW2R
 [discord-shield]: https://img.shields.io/discord/330944238910963714.svg?style=for-the-badge
 [exampleimg]: example.png
