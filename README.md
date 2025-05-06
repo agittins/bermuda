@@ -17,9 +17,13 @@
 [![Black][black-shield]][black]
 [![hacs][hacsbadge]][hacs]
 [![Project Maintenance][maintenance-shield]][user_profile]
-[![BuyMeCoffee][buymecoffeebadge]][buymecoffee]
 [![Discord][discord-shield]][discord]
 [![Community Forum][forum-shield]][forum]
+
+[![GitHub Sponsors][sponsorsbadge]][sponsors]
+[![BuyMeCoffee][buymecoffeebadge]][buymecoffee]
+[![Patreon Sponsorship][patreonbadge]][patreon]
+
 
 ## What it does:
 
@@ -177,7 +181,7 @@ Code template was mainly taken from [@Ludeeus](https://github.com/ludeeus)'s [in
 [black-shield]: https://img.shields.io/badge/code%20style-black-000000.svg?style=for-the-badge
 
 [buymecoffee]: https://www.buymeacoffee.com/AshleyGittins
-[buymecoffeebadge]: https://img.shields.io/badge/buy%20me%20a%20coffee-donate-yellow.svg?style=for-the-badge
+[buymecoffeebadge]: https://img.shields.io/badge/buy%20me%20a%20coffee-Caffeinate-green.svg?style=for-the-badge
 
 [commits-shield]: https://img.shields.io/github/commit-activity/y/agittins/bermuda.svg?style=for-the-badge
 [commits]: https://github.com/agittins/bermuda/commits/main
@@ -198,8 +202,14 @@ Code template was mainly taken from [@Ludeeus](https://github.com/ludeeus)'s [in
 [license-shield]: https://img.shields.io/github/license/agittins/bermuda.svg?style=for-the-badge
 [maintenance-shield]: https://img.shields.io/badge/maintainer-%40agittins-blue.svg?style=for-the-badge
 
+[patreon]: https://patreon.com/AshGittins
+[patreonbadge]: https://img.shields.io/badge/Patreon-Sponsor-green?style=for-the-badge
+
 [pre-commit]: https://github.com/pre-commit/pre-commit
 [pre-commit-shield]: https://img.shields.io/badge/pre--commit-enabled-brightgreen?style=for-the-badge
+
+[sponsorsbadge]: https://img.shields.io/github/sponsors/agittins?style=for-the-badge&label=GitHub%20Sponsors&color=green
+[sponsors]: https://github.com/sponsors/agittins
 
 [releases-shield]: https://img.shields.io/github/release/agittins/bermuda.svg?style=for-the-badge
 [releases]: https://github.com/agittins/bermuda/releases
