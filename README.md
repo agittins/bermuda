@@ -4,7 +4,7 @@
 
 # Bermuda BLE Trilateration
 
-- Track bluetooth devices by Area (Room) in [HomeAssistant](https://home-assistant.io/), using [ESPHome](https://esphome.io/) [bluetooth_proxy](https://esphome.io/components/bluetooth_proxy.html) devices.
+- Track bluetooth devices by Area (Room) in [Home Assistant](https://home-assistant.io/), using [ESPHome](https://esphome.io/) [Bluetooth Proxies](https://esphome.io/components/bluetooth_proxy.html) and Shelly Gen2 or later devices.
 
 - (eventually) Triangulate device positions! Like, on a map. Maybe.
 
@@ -12,21 +12,18 @@
 [![GitHub Release][releases-shield]][releases]
 [![GitHub Activity][commits-shield]][commits]
 [![License][license-shield]](LICENSE)
-
 [![HomeAssistant Minimum Version][haminverbadge]][haminver]
 [![pre-commit][pre-commit-shield]][pre-commit]
 [![Black][black-shield]][black]
-
 [![hacs][hacsbadge]][hacs]
 [![Project Maintenance][maintenance-shield]][user_profile]
 [![BuyMeCoffee][buymecoffeebadge]][buymecoffee]
-
 [![Discord][discord-shield]][discord]
 [![Community Forum][forum-shield]][forum]
 
 ## What it does:
 
-Bermuda aims to let you track any bluetooth device, and have Homeassistant tell you where in your house that device is. The only extra hardware you need are esp32 devices running esphome that act as bluetooth proxies. Alternatively, Shelly Plus devices can also perform this function.
+Bermuda aims to let you track any bluetooth device, and have Home Assistant tell you where in your house that device is. The only extra hardware you need are esp32 devices running esphome that act as bluetooth proxies. Alternatively, Shelly Plus devices can also perform this function.
 
 - Area-based device location (ie, device-level room prescence) is working reasonably well.
 - Creates sensors for Area and Distance for devices you choose
@@ -108,7 +105,7 @@ If called with no parameters, the service will return all data. parameters are a
 which let you limit or reformat the resulting data to make it easier to work with. In particular
 the `addresses` parameter is helpful to only return data relevant for one or more MAC addresses
 (or iBeacon UUIDs).
-See the information on parameters in the `Services` page in home assistant, under `Developer Tools`.
+See the information on parameters in the `Services` page in Home Assistant, under `Developer Tools`.
 
 Important: If you decide to use the results of this call for your own templates etc, bear in mind that
 the format might change in any release, and won't necessarily be considered a "breaking change".
@@ -140,7 +137,7 @@ Alternatively you can click the button below to be automatically redirected.
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=agittins&repository=bermuda&category=Integration)
 
 You should now be able to add the `Bermuda BLE Trilateration` integration. Once you have done that,
-you need to restart Homeassistant, then in `Settings`, `Devices & Services` choose `Add Integration`
+you need to restart Home Assistant, then in `Settings`, `Devices & Services` choose `Add Integration`
 and search for `Bermuda BLE Trilateration`. It's possible that it will autodetect for you just by
 noticing nearby bluetooth devices.
 
@@ -175,25 +172,35 @@ Code template was mainly taken from [@Ludeeus](https://github.com/ludeeus)'s [in
 ---
 
 [integration_blueprint]: https://github.com/custom-components/integration_blueprint
+
 [black]: https://github.com/psf/black
 [black-shield]: https://img.shields.io/badge/code%20style-black-000000.svg?style=for-the-badge
+
 [buymecoffee]: https://www.buymeacoffee.com/AshleyGittins
 [buymecoffeebadge]: https://img.shields.io/badge/buy%20me%20a%20coffee-donate-yellow.svg?style=for-the-badge
+
 [commits-shield]: https://img.shields.io/github/commit-activity/y/agittins/bermuda.svg?style=for-the-badge
 [commits]: https://github.com/agittins/bermuda/commits/main
+
 [hacs]: https://hacs.xyz
-[hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
+[hacsbadge]: https://img.shields.io/badge/HACS-Default-green.svg?style=for-the-badge
+
 [haminver]: https://github.com/agittins/bermuda/commits/main/hacs.json
-[haminverbadge]: https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgithub.com%2Fagittins%2Fbermuda%2Fraw%2Fmain%2Fhacs.json&query=%24.homeassistant&style=for-the-badge&logo=homeassistant&logoColor=%2311BDF2&label=Minimum%20HA%20Version)
+[haminverbadge]: https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgithub.com%2Fagittins%2Fbermuda%2Fraw%2Fmain%2Fhacs.json&query=%24.homeassistant&style=for-the-badge&logo=homeassistant&logoColor=%2311BDF2&label=Minimum%20HA%20Version
+
 [discord]: https://discord.gg/Qa5fW2R
 [discord-shield]: https://img.shields.io/discord/330944238910963714.svg?style=for-the-badge
+
 [exampleimg]: example.png
 [forum-shield]: https://img.shields.io/badge/community-forum-brightgreen.svg?style=for-the-badge
 [forum]: https://community.home-assistant.io/
+
 [license-shield]: https://img.shields.io/github/license/agittins/bermuda.svg?style=for-the-badge
 [maintenance-shield]: https://img.shields.io/badge/maintainer-%40agittins-blue.svg?style=for-the-badge
+
 [pre-commit]: https://github.com/pre-commit/pre-commit
 [pre-commit-shield]: https://img.shields.io/badge/pre--commit-enabled-brightgreen?style=for-the-badge
+
 [releases-shield]: https://img.shields.io/github/release/agittins/bermuda.svg?style=for-the-badge
 [releases]: https://github.com/agittins/bermuda/releases
 [user_profile]: https://github.com/agittins
