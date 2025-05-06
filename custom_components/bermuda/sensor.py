@@ -135,6 +135,30 @@ class BermudaSensor(BermudaEntity, SensorEntity):
         return self._device.area_name
 
     @property
+    def icon(self):
+        """Provide a custom icon for particular entities."""
+        # TODO: This is ugly doing a check on name, and is a kludge
+        # because I originally was a bit reckless with the multiple
+        # inheritance here. So all the sensors should be restructured
+        # a bit to clean up this and other properties.
+        if (
+            self.name in ["Area"]
+            and self._device.area_id
+            and (area := self.area_reg.async_get_area(self._device.area_id))
+            and area.icon
+        ):
+            return area.icon
+        if (
+            self.name in ["Area Last Seen"]
+            and self._device.area_last_seen_id
+            and (area := self.area_reg.async_get_area(self._device.area_last_seen_id))
+            and area.icon
+        ):
+            return area.icon
+        return super().icon
+        # return "mdi:floor-plan" or "mdi:map-marker-distance" or "mdi:signal-distance-variant"
+
+    @property
     def entity_registry_enabled_default(self) -> bool:
         """Declare if entity should be automatically enabled on adding."""
         return self.name in ["Area", "Distance"]

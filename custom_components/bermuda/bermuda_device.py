@@ -81,9 +81,11 @@ class BermudaDevice(dict):
         self.options = self._coordinator.options
         self.unique_id: str | None = None  # mac address formatted.
         self.address_type = BDADDR_TYPE_UNKNOWN
+
         self.area_id: str | None = None
         self.area_name: str | None = None
         self.area_last_seen: str | None = None
+        self.area_last_seen_id: str | None = None
 
         self.area_distance: float | None = None  # how far this dev is from that area
         self.area_rssi: float | None = None  # rssi from closest scanner
@@ -257,6 +259,7 @@ class BermudaDevice(dict):
             self.area_distance = closest_scanner.rssi_distance
             self.area_rssi = closest_scanner.rssi
             self.area_last_seen = closest_scanner.area_name
+            self.area_last_seen_id = closest_scanner.area_id
         else:
             # Not close to any scanners, or closest scanner has timed out!
             self.area_scanner = None
