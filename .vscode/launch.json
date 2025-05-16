@@ -13,6 +13,9 @@
         "-c",
         "/workspaces/homeassistant-core/config"
       ],
+      "autoReload": {
+        "enable": true,
+      },
       // "preLaunchTask": "Compile English translations"
     },
     // This is the old (attempted) config of attaching to an already-running
