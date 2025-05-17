@@ -75,6 +75,13 @@ def mac_explode_formats(mac):
     ]
 
 
+def mac_redact(mac: str, tag: str | None = None) -> str:
+    """Remove the centre octets of a MAC and optionally replace with a tag."""
+    if tag is None:
+        tag = ":"
+    return f"{mac[:2]}::{tag}::{mac[-2:]}"
+
+
 @lru_cache(1024)
 def rssi_to_metres(rssi, ref_power=None, attenuation=None):
     """

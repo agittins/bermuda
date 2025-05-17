@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import voluptuous as vol
+from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant import config_entries
-from homeassistant.components.bluetooth import MONOTONIC_TIME, BluetoothServiceInfoBleak
 from homeassistant.config_entries import OptionsFlowWithConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
@@ -23,7 +23,7 @@ from homeassistant.helpers.selector import (
 from .const import (
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
-    BDADDR_TYPE_PRIVATE_RESOLVABLE,
+    BDADDR_TYPE_RANDOM_RESOLVABLE,
     CONF_ATTENUATION,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
@@ -48,9 +48,10 @@ from .const import (
     DOMAIN_PRIVATE_BLE_DEVICE,
     NAME,
 )
-from .util import rssi_to_metres
+from .util import mac_redact, rssi_to_metres
 
 if TYPE_CHECKING:
+    from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
     from homeassistant.config_entries import ConfigFlowResult
 
     from . import BermudaConfigEntry
@@ -173,10 +174,11 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                 status = '<ha-icon icon="mdi:alert-outline"></ha-icon>'
             else:
                 status = '<ha-icon icon="mdi:skull-crossbones"></ha-icon>'
-
+            # Remove centre octets from mac for condensed, privatised display
+            shortmac = mac_redact(scanner.get("address", "ERR"))
             scanner_table += (
-                f"| {scanner.get('name', 'NAME_ERR')}| [{scanner.get('address', 'ADDR_ERR')}]"
-                f"| {status} {int(scanner.get('last_stamp_age', DISTANCE_INFINITE)):d} seconds ago.|\n"
+                f"| {scanner.get('name', 'NAME_ERR')}| [{shortmac}]"
+                f"| {status} {(scanner.get('last_stamp_age', DISTANCE_INFINITE)):.2f} seconds ago.|\n"
             )
         messages["status"] += scanner_table
 
@@ -273,10 +275,10 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                 )
                 continue
 
-            if device.address_type == BDADDR_TYPE_PRIVATE_RESOLVABLE:
+            if device.address_type == BDADDR_TYPE_RANDOM_RESOLVABLE:
                 # This is a random MAC, we should tag it as such
 
-                if device.last_seen < MONOTONIC_TIME() - (60 * 60 * 2):  # two hours
+                if device.last_seen < monotonic_time_coarse() - (60 * 60 * 2):  # two hours
                     # A random MAC we haven't seen for a while is not much use, skip
                     continue
 

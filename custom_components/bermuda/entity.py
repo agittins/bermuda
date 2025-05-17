@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.bluetooth import MONOTONIC_TIME
+from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.core import callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
@@ -66,7 +66,7 @@ class BermudaEntity(CoordinatorEntity):
         if interval is not None:
             self.bermuda_update_interval = interval
 
-        nowstamp = MONOTONIC_TIME()
+        nowstamp = monotonic_time_coarse()
         if (
             (self.bermuda_last_stamp < nowstamp - self.bermuda_update_interval)  # Cache is stale
             or (self._device.ref_power_changed > nowstamp + 2)  # ref power changed in last 2sec
@@ -205,7 +205,7 @@ class BermudaGlobalEntity(CoordinatorEntity):
         """A simple way to rate-limit sensor updates."""
         if interval is not None:
             self._cache_ratelimit_interval = interval
-        nowstamp = MONOTONIC_TIME()
+        nowstamp = monotonic_time_coarse()
 
         if nowstamp > self._cache_ratelimit_stamp + self._cache_ratelimit_interval:
             self._cache_ratelimit_stamp = nowstamp

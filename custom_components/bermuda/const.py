@@ -6,6 +6,8 @@ from __future__ import annotations
 import logging
 from typing import Final
 
+from homeassistant.const import Platform
+
 from .log_spam_less import BermudaLogSpamLess
 
 NAME = "Bermuda BLE Trilateration"
@@ -31,20 +33,21 @@ REPAIR_SCANNER_WITHOUT_AREA = "scanner_without_area"
 BINARY_SENSOR_DEVICE_CLASS = "connectivity"
 
 # Platforms
-BINARY_SENSOR = "binary_sensor"
-BUTTON = "button"
-SENSOR = "sensor"
-SWITCH = "switch"
-DEVICE_TRACKER = "device_tracker"
-NUMBER = "number"
-# PLATFORMS = [BINARY_SENSOR, SENSOR, SWITCH]
-PLATFORMS = [SENSOR, DEVICE_TRACKER, NUMBER]
+PLATFORMS = [
+    Platform.SENSOR,
+    Platform.DEVICE_TRACKER,
+    Platform.NUMBER,
+    # Platform.BUTTON,
+    # Platform.SWITCH,
+    # Platform.BINARY_SENSOR
+]
 
 # Should probably retreive this from the component, but it's in "DOMAIN" *shrug*
 DOMAIN_PRIVATE_BLE_DEVICE = "private_ble_device"
 
 # Signal names we are using:
 SIGNAL_DEVICE_NEW = f"{DOMAIN}-device-new"
+SIGNAL_SCANNERS_CHANGED = f"{DOMAIN}-scanners-changed"
 
 UPDATE_INTERVAL = 1.05  # Seconds between bluetooth data processing cycles
 # Note: this is separate from the CONF_UPDATE_INTERVAL which allows the
@@ -76,11 +79,14 @@ METADEVICE_TYPE_PRIVATE_BLE_SOURCE: Final = "private_ble_src"  # current (random
 METADEVICE_PRIVATE_BLE_DEVICE: Final = "private_ble_device"  # meta-device create to track private ble device
 
 METADEVICE_SOURCETYPES: Final = {METADEVICE_TYPE_IBEACON_SOURCE, METADEVICE_TYPE_PRIVATE_BLE_SOURCE}
+METADEVICE_DEVICETYPES: Final = {METADEVICE_IBEACON_DEVICE, METADEVICE_PRIVATE_BLE_DEVICE}
 
 # Bluetooth Device Address Type - classify MAC addresses
 BDADDR_TYPE_UNKNOWN: Final = "bd_addr_type_unknown"  # uninitialised
 BDADDR_TYPE_OTHER: Final = "bd_addr_other"  # Default 48bit MAC
-BDADDR_TYPE_PRIVATE_RESOLVABLE: Final = "bd_addr_private_resolvable"
+BDADDR_TYPE_RANDOM_RESOLVABLE: Final = "bd_addr_random_resolvable"
+BDADDR_TYPE_RANDOM_UNRESOLVABLE: Final = "bd_addr_random_unresolvable"
+BDADDR_TYPE_RANDOM_STATIC: Final = "bd_addr_random_static"
 BDADDR_TYPE_NOT_MAC48: Final = "bd_addr_not_mac48"
 # Non-bluetooth address types - for our metadevice entries
 ADDR_TYPE_IBEACON: Final = "addr_type_ibeacon"

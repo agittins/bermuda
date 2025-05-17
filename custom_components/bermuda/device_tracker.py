@@ -33,7 +33,7 @@ async def async_setup_entry(
     created_devices = []  # list of devices we've already created entities for
 
     @callback
-    def device_new(address: str, scanners: list[str]) -> None:  # pylint: disable=unused-argument
+    def device_new(address: str) -> None:
         """
         Create entities for newly-found device.
 
