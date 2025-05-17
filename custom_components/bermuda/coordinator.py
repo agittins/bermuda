@@ -101,7 +101,7 @@ if TYPE_CHECKING:
     from homeassistant.components.bluetooth.manager import HomeAssistantBluetoothManager
 
     from . import BermudaConfigEntry
-    from .bermuda_device_scanner import BermudaDeviceScanner
+    from .bermuda_advert import BermudaAdvert
 
 Cancellable = Callable[[], None]
 
@@ -1303,7 +1303,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     def _refresh_area_by_min_distance(self, device: BermudaDevice):
         """Very basic Area setting by finding closest proxy to a given device."""
         # The current area_scanner (which might be None) is the one to beat.
-        closest_advert: BermudaDeviceScanner | None = device.area_scanner
+        closest_advert: BermudaAdvert | None = device.area_scanner
 
         _max_radius = self.options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS)
         nowstamp = monotonic_time_coarse()

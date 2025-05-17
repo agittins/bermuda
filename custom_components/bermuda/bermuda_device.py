@@ -28,7 +28,7 @@ from homeassistant.const import STATE_HOME, STATE_NOT_HOME, STATE_UNAVAILABLE
 from homeassistant.core import callback
 from homeassistant.util import slugify
 
-from .bermuda_device_scanner import BermudaDeviceScanner
+from .bermuda_advert import BermudaAdvert
 from .const import (
     _LOGGER,
     _LOGGER_SPAM_LESS,
@@ -98,7 +98,7 @@ class BermudaDevice(dict):
 
         self.area_distance: float | None = None  # how far this dev is from that area
         self.area_rssi: float | None = None  # rssi from closest scanner
-        self.area_scanner: BermudaDeviceScanner | None = None  # currently closest BermudaScanner
+        self.area_scanner: BermudaAdvert | None = None  # currently closest BermudaScanner
         self.zone: str = STATE_UNAVAILABLE  # STATE_HOME or STATE_NOT_HOME
         self.manufacturer: str | None = None
         self._hascanner: BaseHaRemoteScanner | BaseHaScanner | None = None  # HA's scanner
@@ -123,7 +123,7 @@ class BermudaDevice(dict):
         self.last_seen: float = 0  # stamp from most recent scanner spotting. monotonic_time_coarse
         self.diag_area_switch: str | None = None  # saves output of AreaTests
         self.adverts: dict[
-            tuple[str, str], BermudaDeviceScanner
+            tuple[str, str], BermudaAdvert
         ] = {}  # str will be a scanner address OR a deviceaddress__scanneraddress
         self._async_process_address_type()
 
@@ -392,7 +392,7 @@ class BermudaDevice(dict):
             # new measurement(s) immediately.
             self.ref_power_changed = monotonic_time_coarse()
 
-    def apply_scanner_selection(self, closest_scanner: BermudaDeviceScanner | None):
+    def apply_scanner_selection(self, closest_scanner: BermudaAdvert | None):
         """
         Given a DeviceScanner entry, apply the distance and area attributes
         from it to this device.
@@ -425,7 +425,7 @@ class BermudaDevice(dict):
                 self.area_name,
             )
 
-    def get_scanner(self, scanner_address) -> BermudaDeviceScanner | None:
+    def get_scanner(self, scanner_address) -> BermudaAdvert | None:
         """
         Given a scanner address, return the most recent BermudaDeviceScanner (advert) that matches.
 
@@ -451,7 +451,7 @@ class BermudaDevice(dict):
         """
         # Run calculate_data on each child scanner of this device:
         for advert in self.adverts.values():
-            if isinstance(advert, BermudaDeviceScanner):
+            if isinstance(advert, BermudaAdvert):
                 # in issue #355 someone had an empty dict instead of a scanner object.
                 # it may be due to a race condition during startup, but we check now
                 # just in case. Was not able to reproduce.
@@ -505,7 +505,7 @@ class BermudaDevice(dict):
             device_advert = self.adverts[advert_tuple]
         else:
             # Create it
-            device_advert = self.adverts[advert_tuple] = BermudaDeviceScanner(
+            device_advert = self.adverts[advert_tuple] = BermudaAdvert(
                 self,
                 advertisementdata,
                 self.options,
@@ -519,7 +519,7 @@ class BermudaDevice(dict):
         if device_advert.stamp is not None and self.last_seen < device_advert.stamp:
             self.last_seen = device_advert.stamp
 
-    def process_manufacturer_data(self, advert: BermudaDeviceScanner):
+    def process_manufacturer_data(self, advert: BermudaAdvert):
         """Parse manufacturer data for maker name and iBeacon etc."""
         # Only override existing manufacturer name if it's "better"
 
