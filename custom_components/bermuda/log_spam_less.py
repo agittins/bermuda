@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from homeassistant.components.bluetooth import MONOTONIC_TIME
+from bluetooth_data_tools import monotonic_time_coarse
 
 if TYPE_CHECKING:
     import logging
@@ -37,11 +37,11 @@ class BermudaLogSpamLess:
         if key in self._keycache:
             # key exists, check timestamps
             cache = self._keycache[key]
-            if cache["stamp"] < MONOTONIC_TIME() - self._interval:
+            if cache["stamp"] < monotonic_time_coarse() - self._interval:
                 # It's time to emit the message
                 count = cache["count"]
                 cache["count"] = 0
-                cache["stamp"] = MONOTONIC_TIME()
+                cache["stamp"] = monotonic_time_coarse()
                 return count
             # We sent this message recently, don't spam
             cache["count"] += 1
@@ -49,7 +49,7 @@ class BermudaLogSpamLess:
         else:
             # Key is completely new, store the new stamp and let it through
             self._keycache[key] = {
-                "stamp": MONOTONIC_TIME(),
+                "stamp": monotonic_time_coarse(),
                 "count": 0,
             }
             return 0

@@ -14,12 +14,9 @@ to the combination of the scanner and the device it is reporting.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final
 
-from homeassistant.components.bluetooth import (
-    MONOTONIC_TIME,
-    BluetoothScannerDevice,
-)
+from bluetooth_data_tools import monotonic_time_coarse
 
 from .const import (
     _LOGGER,
@@ -34,9 +31,11 @@ from .const import (
 )
 
 # from .const import _LOGGER_SPAM_LESS
-from .util import rssi_to_metres
+from .util import clean_charbuf, rssi_to_metres
 
 if TYPE_CHECKING:
+    from bleak.backends.scanner import AdvertisementData
+
     from .bermuda_device import BermudaDevice
 
 # The if instead of min/max triggers PLR1730, but when
@@ -58,15 +57,19 @@ class BermudaDeviceScanner(dict):
     This is created (and updated) by the receipt of an advertisement, which represents
     a BermudaDevice hearing an advert from another BermudaDevice, if that makes sense!
 
-    A BermudaDevice's "scanners" property will contain one of these for each
+    A BermudaDevice's "adverts" property will contain one of these for each
     scanner that has "seen" it.
 
     """
 
+    def __hash__(self) -> int:
+        """The device-mac / scanner mac uniquely identifies a received advertisement pair."""
+        return hash((self.device_address, self.scanner_address))
+
     def __init__(
         self,
         parent_device: BermudaDevice,  # The device being tracked
-        scandata: BluetoothScannerDevice,  # The advertisement info from the device, received by the scanner
+        advertisementdata: AdvertisementData,  # The advertisement info from the device, received by the scanner
         options,
         scanner_device: BermudaDevice,  # The scanner device that "saw" it.
     ) -> None:
@@ -74,19 +77,15 @@ class BermudaDeviceScanner(dict):
         # which is a bit silly, I suspect.
         self.name: str = scanner_device.name  # or scandata.scanner.name
         self.scanner_device = scanner_device  # links to the source device
-        self.adapter: str = scandata.scanner.adapter  # a helpful name, like hci0 or prox-test
-        self.scanner_address = scanner_device.address
-        self.source: str = scandata.scanner.source
+        self.scanner_address: Final[str] = scanner_device.address
         self.area_id: str | None = scanner_device.area_id
         self.area_name: str | None = scanner_device.area_name
         self._device = parent_device
-        self.device_address = parent_device.address
+        self.device_address: Final[str] = parent_device.address
         self.options = options
         self.stamp: float = 0
         # Only remote scanners log timestamps, local usb adaptors do not.
-        self.scanner_sends_stamps = hasattr(scandata.scanner, "discovered_device_timestamps") or hasattr(
-            scandata.scanner, "_discovered_device_timestamps"
-        )
+        self.scanner_sends_stamps = scanner_device.is_remote_scanner
         self.new_stamp: float | None = None  # Set when a new advert is loaded from update
         self.rssi: float | None = None
         self.tx_power: float | None = None
@@ -105,17 +104,15 @@ class BermudaDeviceScanner(dict):
         self.conf_attenuation = self.options.get(CONF_ATTENUATION)
         self.conf_max_velocity = self.options.get(CONF_MAX_VELOCITY)
         self.conf_smoothing_samples = self.options.get(CONF_SMOOTHING_SAMPLES)
-        self.adverts: dict[str, list] = {
-            "manufacturer_data": [],
-            "service_data": [],
-            "service_uuids": [],
-            "platform_data": [],
-        }
+        self.local_name: list[tuple[str, bytes]] = []
+        self.manufacturer_data: list[dict[int, bytes]] = []
+        self.service_data: list[dict[str, bytes]] = []
+        self.service_uuids: list[str] = []
 
         # Just pass the rest on to update...
-        self.update_advertisement(scandata)
+        self.update_advertisement(advertisementdata)
 
-    def update_advertisement(self, scandata: BluetoothScannerDevice):
+    def update_advertisement(self, advertisementdata: AdvertisementData):
         """
         Update gets called every time we see a new packet or
         every time we do a polled update.
@@ -124,57 +121,55 @@ class BermudaDeviceScanner(dict):
         device+scanner combination. This method only gets called when a given scanner
         claims to have data.
         """
-        # In case the scanner has changed it's details since startup:
-        # FIXME: This should probably be a separate function that the refresh_scanners
-        # calls if necessary, rather than re-doing it every cycle.
-        scanner = scandata.scanner
-        # self.name = scanner.name
-        # self.area_id = self.scanner_device.area_id
-        # self.area_name = self.scanner_device.area_name
+        #
+        # We might get called without there being a new advert to process, so
+        # exit quickly if that's the case (ideally we will catch it earlier in future)
+        #
+        scanner = self.scanner_device
         new_stamp: float | None = None
 
         if self.scanner_sends_stamps:
-            # Found a remote scanner which has timestamp history...
-            # Check can be removed when we require 2025.4+
-            if hasattr(scanner, "discovered_device_timestamps"):
-                stamps = scanner.discovered_device_timestamps  # type: ignore
-            else:
-                stamps = scanner._discovered_device_timestamps  # type: ignore #noqa
+            new_stamp = scanner.async_as_scanner_get_stamp(self.device_address)
 
-            # In this dict all MAC address keys are upper-cased
-            uppermac = self.device_address.upper()
-            if uppermac in stamps:
-                if self.stamp is None or (stamps[uppermac] is not None and stamps[uppermac] > self.stamp):
-                    new_stamp = stamps[uppermac]
-                else:
-                    # We have no updated advert in this run.
-                    new_stamp = None
-                    self.stale_update_count += 1
-            else:
-                # This shouldn't happen, as we shouldn't have got a record
-                # of this scanner if it hadn't seen this device.
-                _LOGGER.error(
-                    "Scanner %s has no stamp for %s - very odd",
-                    scanner.source,
-                    self.device_address,
-                )
-                new_stamp = None
-        elif self.rssi != scandata.advertisement.rssi:
+            if new_stamp is None:
+                self.stale_update_count += 1
+                _LOGGER.warning("Advert from %s for %s lacks stamp, unexpected.", scanner.name, self._device.name)
+                return
+
+            if self.stamp > new_stamp:
+                # The existing stamp is NEWER, bail but complain on the way.
+                self.stale_update_count += 1
+                _LOGGER.warning("Advert from %s for %s is OLDER than last recorded", scanner.name, self._device.name)
+                return
+
+            if self.stamp == new_stamp:
+                # We've seen this stamp before. Bail.
+                self.stale_update_count += 1
+                return
+
+        elif self.rssi != advertisementdata.rssi:
             # If the rssi has changed from last time, consider it "new". Since this scanner does
             # not send stamps, this is probably a USB bluetooth adaptor.
-            new_stamp = MONOTONIC_TIME()
+            new_stamp = monotonic_time_coarse() - 3.0  # age usb adaptors slightly, since they are not "fresh"
         else:
-            new_stamp = None
+            # USB Adaptor has nothing new for us, bail.
+            return
 
         # Update our parent scanner's last_seen if we have a new stamp.
-        if new_stamp is not None and new_stamp > self.scanner_device.last_seen:
+        if new_stamp > self.scanner_device.last_seen + 0.01:  # some slight warp seems common.
+            _LOGGER.info(
+                "Advert from %s for %s is %.6fs NEWER than scanner's last_seen, odd",
+                self.scanner_device.name,
+                self._device.name,
+                new_stamp - self.scanner_device.last_seen,
+            )
             self.scanner_device.last_seen = new_stamp
 
         if len(self.hist_stamp) == 0 or new_stamp is not None:
             # this is the first entry or a new one, bring in the new reading
             # and calculate the distance.
 
-            self.rssi = scandata.advertisement.rssi
+            self.rssi = advertisementdata.rssi
             self.hist_rssi.insert(0, self.rssi)
 
             self._update_raw_distance(reading_is_new=True)
@@ -210,21 +205,51 @@ class BermudaDeviceScanner(dict):
         #         self.parent_device_address,
         #         scandata.advertisement.tx_power,
         #     )
-        self.tx_power = scandata.advertisement.tx_power
+        self.tx_power = advertisementdata.tx_power
 
-        # Track each advertisement element as or if they change.
-        for key, data in self.adverts.items():
-            if key == "platform_data":
-                # This duplicates the other keys and doesn't encode to JSON without
-                # extra work.
-                continue
-            new_data = getattr(scandata.advertisement, key, {})
-            if len(new_data) > 0:
-                if len(data) == 0 or data[0] != new_data:
-                    data.insert(0, new_data)
-                    # trim to keep size in check
-                    del data[HIST_KEEP_COUNT:]
+        # Store each of the extra advertisement fields in historical lists.
+        # Track if we should tell the parent device to update its name
+        _want_name_update = False
+        if advertisementdata.local_name is not None:
+            # It's not uncommon to find BT devices with nonascii junk in their
+            # local_name (like nulls, \n, etc). Store a cleaned version as str
+            # and the original as bytes.
+            # Devices may also advert multiple names over time.
+            nametuplet = (clean_charbuf(advertisementdata.local_name), advertisementdata.local_name.encode())
+            if len(self.local_name) == 0 or self.local_name[0] != nametuplet:
+                self.local_name.insert(0, nametuplet)
+                del self.local_name[HIST_KEEP_COUNT:]
+                # Lets see if we should pass the new name up to the parent device.
+                if self._device.name_bt_local_name is None or len(self._device.name_bt_local_name) < len(nametuplet[0]):
+                    self._device.name_bt_local_name = nametuplet[0]
+                    _want_name_update = True
 
+        if len(self.manufacturer_data) == 0 or self.manufacturer_data[0] != advertisementdata.manufacturer_data:
+            self.manufacturer_data.insert(0, advertisementdata.manufacturer_data)
+
+            if advertisementdata.manufacturer_data not in self.manufacturer_data[1:]:
+                # We just stored a manu_data that wasn't in the previous history,
+                # so tell our parent device about it.
+                self._device.process_manufacturer_data(self)
+                _want_name_update = True
+            del self.manufacturer_data[HIST_KEEP_COUNT:]
+
+        if len(self.service_data) == 0 or self.service_data[0] != advertisementdata.service_data:
+            self.service_data.insert(0, advertisementdata.service_data)
+            if advertisementdata.service_data not in self.manufacturer_data[1:]:
+                _want_name_update = True
+            del self.service_data[HIST_KEEP_COUNT:]
+
+        for service_uuid in advertisementdata.service_uuids:
+            if service_uuid not in self.service_uuids:
+                self.service_uuids.insert(0, service_uuid)
+                _want_name_update = True
+                del self.service_uuids[HIST_KEEP_COUNT:]
+
+        if _want_name_update:
+            self._device.make_name()
+
+        # Finally, save the new advert timestamp.
         self.new_stamp = new_stamp
 
     def _update_raw_distance(self, reading_is_new=True) -> float:
@@ -346,7 +371,7 @@ class BermudaDeviceScanner(dict):
                 self.hist_distance_by_interval.clear()
                 self.hist_distance_by_interval.append(self.rssi_distance_raw)
 
-        elif new_stamp is None and (self.stamp is None or self.stamp < MONOTONIC_TIME() - DISTANCE_TIMEOUT):
+        elif new_stamp is None and (self.stamp is None or self.stamp < monotonic_time_coarse() - DISTANCE_TIMEOUT):
             # DEVICE IS AWAY!
             # Last distance reading is stale, mark device distance as unknown.
             self.rssi_distance = None
@@ -459,27 +484,51 @@ class BermudaDeviceScanner(dict):
 
     def to_dict(self):
         """Convert class to serialisable dict for dump_devices."""
+        # using "is" comparisons instead of string matching means
+        # linting and typing can catch errors.
         out = {}
         for var, val in vars(self).items():
-            if var in ["options", "parent_device", "scanner_device"]:
+            if val in [self.options]:
                 # skip certain vars that we don't want in the dump output.
                 continue
-            if var == "adverts":
-                adout = {}
-                for adtype, adarray in val.items():
-                    out_adarray = []
-                    for ad_data in adarray:
-                        if adtype in ["manufacturer_data", "service_data"]:
-                            for ad_key, ad_value in ad_data.items():
-                                out_adarray.append({ad_key: cast("bytes", ad_value).hex()})
-                        else:
-                            out_adarray.append(ad_data)
-                    adout[adtype] = out_adarray
-                out[var] = adout
+            if val in [self.options, self._device, self.scanner_device]:
+                # objects we might want to represent but not fully iterate etc.
+                out[var] = val.__repr__()
                 continue
-            out[var] = val
+            if val is self.local_name:
+                out[var] = {}
+                for namestr, namebytes in self.local_name:
+                    out[var][namestr] = namebytes.hex()
+                continue
+            if val is self.manufacturer_data:
+                out[var] = {}
+                for manrow in self.manufacturer_data:
+                    for manid, manbytes in manrow.items():
+                        out[var][manid] = manbytes.hex()
+                continue
+            if val is self.service_data:
+                out[var] = {}
+                for svrow in self.service_data:
+                    for svid, svbytes in svrow.items():
+                        out[var][svid] = svbytes.hex()
+                continue
+            if isinstance(val, str | int):
+                out[var] = val
+                continue
+            if isinstance(val, float):
+                out[var] = round(val, 4)
+                continue
+            if isinstance(val, list):
+                out[var] = []
+                for row in val:
+                    if isinstance(row, float):
+                        out[var].append(round(row, 4))
+                    else:
+                        out[var].append(row)
+                continue
+            out[var] = val.__repr__()
         return out
 
     def __repr__(self) -> str:
         """Help debugging by giving it a clear name instead of empty dict."""
-        return f"{self.device_address}__{self.scanner_address}"
+        return f"{self.device_address}__{self.scanner_device.name}"
