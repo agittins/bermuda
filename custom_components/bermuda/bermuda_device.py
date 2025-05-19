@@ -170,13 +170,18 @@ class BermudaDevice(dict):
                     self.beacon_unique_id = self.address
                     # If we've been given a private BLE address, then the integration must be up.
                     # register to get callbacks for address changes.
+                    _irk_bytes = binascii.unhexlify(self.address)
                     _pble_coord = pble_coordinator.async_get_coordinator(self._coordinator.hass)
                     self._coordinator.config_entry.async_on_unload(
-                        _pble_coord.async_track_service_info(
-                            self.async_handle_pble_callback, binascii.unhexlify(self.address)
-                        )
+                        _pble_coord.async_track_service_info(self.async_handle_pble_callback, _irk_bytes)
                     )
                     _LOGGER.debug("Private BLE Callback registered for %s, %s", self.name, self.address)
+                    #
+                    # Also register a callback with our own, which can fake the PBLE callbacks.
+                    self._coordinator.config_entry.async_on_unload(
+                        self._coordinator.irk_manager.register_irk_callback(self.async_handle_pble_callback, _irk_bytes)
+                    )
+                    self._coordinator.irk_manager.add_irk(_irk_bytes)
                 else:
                     # We have no idea, currently.
                     # Mark it as such so we don't spend time testing it again.
@@ -189,6 +194,7 @@ class BermudaDevice(dict):
                 elif top_bits & 0b01:  # Addresses where the first char will be 4,5,6 or 7
                     _LOGGER.debug("Identified Resolvable Private (potential IRK source) Address on %s", self.address)
                     self.address_type = BDADDR_TYPE_RANDOM_RESOLVABLE
+                    self._coordinator.irk_manager.check_mac(self.address)
                 elif top_bits & 0b10:
                     self.address_type = "reserved"
                     _LOGGER.debug("Hey, got one of those reserved MACs, %s", self.address)
@@ -335,6 +341,10 @@ class BermudaDevice(dict):
         if address not in self.metadevice_sources:
             self.metadevice_sources.insert(0, address)
             _LOGGER.debug("Got %s callback for new IRK address on %s of %s", change, self.name, address)
+            # Add the new mac/irk pair to our internal tracker so we don't spend
+            # time calculating it on the update. Be wary of causing a loop here, should
+            # be fine because our irk_manager will only fire another callback if the mac is new.
+            self._coordinator.irk_manager.add_macirk(address, bytes.fromhex(self.address))
 
     def make_name(self):
         """

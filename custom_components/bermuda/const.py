@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+from enum import Enum
 from typing import Final
 
 from homeassistant.const import Platform
@@ -92,6 +93,29 @@ BDADDR_TYPE_NOT_MAC48: Final = "bd_addr_not_mac48"
 ADDR_TYPE_IBEACON: Final = "addr_type_ibeacon"
 ADDR_TYPE_PRIVATE_BLE_DEVICE: Final = "addr_type_private_ble_device"
 
+
+class IrkTypes(Enum):
+    """
+    Enum of IRK Types.
+
+    Values used to mark if a device matches a known IRK, or is yet to be checked.
+    Since IRK's are 16-bytes (128bits) long and the spec requires that IRKs be validated
+    against https://doi.org/10.6028/NIST.SP.800-22r1a we can be confident that our use of
+    some short ints must not be capable of matching any valid IRK as they would fail
+    most of the required tests (such as longest run of ones)
+
+    If the irk field does not match any of these values, then it is a valid IRK.
+    """
+
+    ADRESS_NOT_EVALUATED = bytes.fromhex("0000")  # default
+    NOT_RESOLVABLE_ADDRESS = bytes.fromhex("0001")  # address is not a resolvable private address.
+    NO_KNOWN_IRK_MATCH = bytes.fromhex("0002")  # none of the known keys match this address.
+
+    @classmethod
+    def unresolved(cls) -> list[bytes]:
+        return [bytes(k.value) for k in IrkTypes.__members__.values()]
+
+
 # Device entry pruning. Letting the gathered list of devices grow forever makes the
 # processing loop slower. It doesn't seem to have as much impact on memory, but it
 # would certainly use up more, and gets worse in high "traffic" areas.
@@ -112,7 +136,7 @@ PRUNE_TIME_INTERVAL = 180  # Every 3m, prune stale devices
 PRUNE_TIME_DEFAULT = 86400  # Max age of regular device entries (1day)
 PRUNE_TIME_UNKNOWN_IRK = 240  # Resolvable Private addresses change often, prune regularly.
 # see Bluetooth Core Spec, Vol3, Part C, Appendix A, Table A.1: Defined GAP timers
-PRUNE_TIME_KNOWN_IRK = 960  # spec "recommends" 15 min max address age. Round up to 16 :-)
+PRUNE_TIME_KNOWN_IRK: Final[int] = 16 * 60  # spec "recommends" 15 min max address age. Round up to 16 :-)
 
 SAVEOUT_COOLDOWN = 10  # seconds to delay before re-trying config entry save.
 

@@ -52,6 +52,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util.dt import get_age, now
 
 from .bermuda_device import BermudaDevice
+from .bermuda_irk import BermudaIrkManager
 from .const import (
     _LOGGER,
     _LOGGER_SPAM_LESS,
@@ -187,6 +188,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self._hascanner_timestamps: dict[str, dict[str, float]] = {}  # scanner_address, device_address, stamp
         self._scanner_list: set[str] = set()
         self._scanners: set[BermudaDevice] = set()  # Set of all in self.devices that is_scanner=True
+        self.irk_manager = BermudaIrkManager()
 
         self._entity_registry = er.async_get(self.hass)
         self._device_registry = dr.async_get(self.hass)
@@ -792,6 +794,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         stamp_known_irk = nowstamp - PRUNE_TIME_KNOWN_IRK
         stamp_unknown_irk = nowstamp - PRUNE_TIME_UNKNOWN_IRK
 
+        # Prune any IRK MACs that have expired
+        self.irk_manager.async_prune()
+
+        # Prune devices.
         prune_list: list[str] = []  # list of addresses to be pruned
         prunable_stamps: dict[str, float] = {}  # dict of potential prunees if we need to be more aggressive.
 
