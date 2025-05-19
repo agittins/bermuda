@@ -529,12 +529,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         #     service_info,
         # )
 
-        # If there are no configured_devices already present during Bermuda's
-        # initial setup, then no sensors will be created, and no updates will
-        # be triggered on the co-ordinator. So let's check if we haven't updated
-        # recently, and do so...
-        # FIXME: if self.stamp_last_update < monotonic_time_coarse() - (UPDATE_INTERVAL * 2):
-        #     self._async_update_data_internal()
+        # If there are no active entities created after Bermuda's
+        # initial setup, then no updates will be triggered on the co-ordinator.
+        # So let's check if we haven't updated recently, and do so...
+        if self.stamp_last_update < monotonic_time_coarse() - (UPDATE_INTERVAL * 2):
+            self._async_update_data_internal()
 
     def _check_all_platforms_created(self, address):
         """Checks if all platforms have finished loading a device's entities."""
@@ -1892,6 +1891,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             if address not in self.redactions:
                 i += 1
                 self.redactions[address] = f"{address[:2]}::SCANNER_{i}::{address[-2:]}"
+        _LOGGER.debug("Redact scanners: %ss, %d items", monotonic_time_coarse() - _stamp, len(self.redactions))
         # CONFIGURED DEVICES
         for non_lower_address in self.options.get(CONF_DEVICES, []):
             address = non_lower_address.lower()
@@ -1906,6 +1906,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 else:
                     # Don't know what it is, but not a mac.
                     self.redactions[address] = f"CFG_OTHER_{1}_{address}"
+        _LOGGER.debug("Redact confdevs: %ss, %d items", monotonic_time_coarse() - _stamp, len(self.redactions))
         # EVERYTHING ELSE
         for non_lower_address, device in self.devices.items():
             address = non_lower_address.lower()
@@ -1922,10 +1923,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     self.redactions[address] = f"{address[:2]}::OTHER_MAC_{i}::{address[-2:]}"
                 else:
                     # Don't know what it is.
-                    self.redactions[address] = f"OTHER_{1}_{address}"
+                    self.redactions[address] = f"OTHER_{i}_{address}"
+        _LOGGER.debug("Redact therest: %ss, %d items", monotonic_time_coarse() - _stamp, len(self.redactions))
         _elapsed = monotonic_time_coarse() - _stamp
         if _elapsed > 0.5:
-            _LOGGER.warning("Redaction list update took %.3f seconds", _elapsed)
+            _LOGGER.warning("Redaction list update took %.3f seconds, has %d items", _elapsed, len(self.redactions))
+        else:
+            _LOGGER.debug("Redaction list update took %.3f seconds, has %d items", _elapsed, len(self.redactions))
 
     async def purge_redactions(self, hass: HomeAssistant):
         """Empty redactions and free up some memory."""
