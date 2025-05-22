@@ -138,6 +138,8 @@ PRUNE_TIME_UNKNOWN_IRK = 240  # Resolvable Private addresses change often, prune
 # see Bluetooth Core Spec, Vol3, Part C, Appendix A, Table A.1: Defined GAP timers
 PRUNE_TIME_KNOWN_IRK: Final[int] = 16 * 60  # spec "recommends" 15 min max address age. Round up to 16 :-)
 
+PRUNE_TIME_REDACTIONS: Final[int] = 10 * 60  # when to discard redaction data
+
 SAVEOUT_COOLDOWN = 10  # seconds to delay before re-trying config entry save.
 
 DOCS = {}

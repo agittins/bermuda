@@ -61,13 +61,14 @@ def mac_norm(mac: str) -> str:
 
 
 @lru_cache(2048)
-def mac_explode_formats(mac) -> set[str]:
+def mac_explode_formats(mac: str) -> set[str]:
     """
     Take a formatted mac address and return the formats
     likely to be found in our device info, adverts etc
     by replacing ":" with each of "", "-", "_", ".".
     """
-    altmacs = set(mac)
+    altmacs = set()
+    altmacs.add(mac)
     for newsep in ["", "-", "_", "."]:
         altmacs.add(mac.replace(":", newsep))
     return altmacs
