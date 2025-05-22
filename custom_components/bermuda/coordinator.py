@@ -1112,6 +1112,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             # Keep track of whether we want to recalculate the name fields at the end.
             _want_name_update = False
+            _sources_to_remove = []
 
             for source_address in metadevice.metadevice_sources:
                 # Get the BermudaDevice holding those adverts
@@ -1133,7 +1134,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     METADEVICE_IBEACON_DEVICE in metadevice.metadevice_type
                     and metadevice.beacon_unique_id != source_device.beacon_unique_id
                 ):
-                    # iBeacons (specifically Bluecharms) change uuid on movement.
+                    # This source device no longer has the same ibeacon uuid+maj+min as
+                    # the metadevice has.
+                    # Some iBeacons (specifically Bluecharms) change uuid on movement.
                     #
                     # This source device has changed its uuid, so we won't track it against
                     # this metadevice any more / for now, and we will also remove
@@ -1145,9 +1148,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # in an Android 15+), since the old source device will still be a match.
                     # and will be subject to the nomal DEVTRACK_TIMEOUT.
                     #
-                    for key_address, key_scanner in metadevice.adverts:
+                    _LOGGER.debug(
+                        "Source %s for metadev %s changed iBeacon identifiers, severing", source_device, metadevice
+                    )
+                    for key_address, key_scanner in list(metadevice.adverts):
                         if key_address == source_device.address:
                             del metadevice.adverts[(key_address, key_scanner)]
+                    if source_device.address in metadevice.metadevice_sources:
+                        # Remove this source from the list once we're done iterating on it
+                        _sources_to_remove.append(source_device.address)
                     continue  # to next metadevice_source
 
                 # Copy every ADVERT_TUPLE into our metadevice
@@ -1207,6 +1216,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     ):
                         metadevice[key] = val
                         # _want_name_update = True
+            # Done iterating sources, remove any to be dropped
+            for source in _sources_to_remove:
+                metadevice.metadevice_sources.remove(source)
             if _want_name_update:
                 metadevice.make_name()
 
