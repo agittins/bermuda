@@ -287,9 +287,10 @@ class BermudaDevice(dict):
         if scannerstamp > self.last_seen:
             self.last_seen = scannerstamp
         elif self.last_seen - scannerstamp > 0.8:  # For some reason small future-offsets are common.
-            _LOGGER.warning(
-                "Scanner stamps for %s should not go backwards. new %f < last %f",
+            _LOGGER.debug(
+                "Scanner stamp for %s went backwards %.2fs. new %f < last %f",
                 self.name,
+                self.last_seen - scannerstamp,
                 scannerstamp,
                 self.last_seen,
             )

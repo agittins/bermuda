@@ -1119,15 +1119,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # it causes a binge/purge cycle during pruning since it has no adverts on it.
                 source_device = self._get_device(source_address)
                 if source_device is None:
-                    # No ads current in the backend for this one, it will show up
-                    # when it shows up.
-                    _LOGGER_SPAM_LESS.debug(
-                        f"metaNoAdsFor_{metadevice.address}_{source_address}",
-                        "Metadevice %s: no adverts for source MAC %s found during update_metadevices",
-                        metadevice.__repr__(),
-                        source_address,
-                    )
-
+                    # No ads current in the backend for this one. Not an issue, the mac might be old
+                    # or now showing up yet.
+                    # _LOGGER_SPAM_LESS.debug(
+                    #     f"metaNoAdsFor_{metadevice.address}_{source_address}",
+                    #     "Metadevice %s: no adverts for source MAC %s found during update_metadevices",
+                    #     metadevice.__repr__(),
+                    #     source_address,
+                    # )
                     continue
 
                 if (
@@ -1890,7 +1889,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             address = non_lower_address.lower()
             if address not in self.redactions:
                 i += 1
-                self.redactions[address] = f"{address[:2]}::SCANNER_{i}::{address[-2:]}"
+                for altmac in mac_explode_formats(address):
+                    self.redactions[altmac] = f"{address[:2]}::SCANNER_{i}::{address[-2:]}"
         _LOGGER.debug("Redact scanners: %ss, %d items", monotonic_time_coarse() - _stamp, len(self.redactions))
         # CONFIGURED DEVICES
         for non_lower_address in self.options.get(CONF_DEVICES, []):
@@ -1902,7 +1902,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # Raw uuid in advert
                     self.redactions[address.split("_")[0]] = f"{address[:4]}::CFG_iBea_{i}_{address[32:]}::"
                 elif len(address) == 17:
-                    self.redactions[address] = f"{address[:2]}::CFG_MAC_{i}::{address[-2:]}"
+                    for altmac in mac_explode_formats(address):
+                        self.redactions[altmac] = f"{address[:2]}::CFG_MAC_{i}::{address[-2:]}"
                 else:
                     # Don't know what it is, but not a mac.
                     self.redactions[address] = f"CFG_OTHER_{1}_{address}"
@@ -1920,7 +1921,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # Raw uuid in advert
                     self.redactions[address.split("_")[0]] = f"{address[:4]}::OTHER_iBea_{i}_{address[32:]}::"
                 elif len(address) == 17:  # a MAC
-                    self.redactions[address] = f"{address[:2]}::OTHER_MAC_{i}::{address[-2:]}"
+                    for altmac in mac_explode_formats(address):
+                        self.redactions[altmac] = f"{address[:2]}::OTHER_MAC_{i}::{address[-2:]}"
                 else:
                     # Don't know what it is.
                     self.redactions[address] = f"OTHER_{i}_{address}"
@@ -1954,7 +1956,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 self._purge_task.cancel()
                 self._purge_task = None
 
-    def redact_data(self, data, first_run=True):
+    def redact_data(self, data, first_recursion=True):
         """
         Wash any collection of data of any MAC addresses.
 
@@ -1962,27 +1964,25 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         washes any remaining mac-like addresses. This routine is recursive,
         so if you're changing it bear that in mind!
         """
-        if first_run:
+        if first_recursion:
             # On first/outer call, refresh the redaction list to ensure
             # we don't let any new addresses slip through. Might be expensive
             # on first call, but will be much cheaper for subsequent calls.
             self.redaction_list_update()
-            first_run = False
-        if isinstance(data, str):
-            data = data.lower()
+            first_recursion = False
+
+        if isinstance(data, str):  # Base Case
+            datalower = data.lower()
             # the end of the recursive wormhole, do the actual work:
-            if data in self.redactions:
-                # Full string match, easy...
-                data = self.redactions[data]
+            if datalower in self.redactions:
+                # Full string match, a quick short-circuit
+                data = self.redactions[datalower]
             else:
                 # Search for any of the redaction strings in the data.
-                for find_mac, fix in list(self.redactions.items()):
-                    # Include variants of MAC address
-                    for find in mac_explode_formats(find_mac):
-                        if find in data:
-                            self.redactions[data] = data.replace(find, fix)
-                            data = self.redactions[data]
-                            break
+                for find, fix in list(self.redactions.items()):
+                    if find in datalower:
+                        data = datalower.replace(find, fix)
+                        # don't break out because there might be multiple fixes required.
             # redactions done, now replace any remaining MAC addresses
             # We are only looking for xx:xx:xx... format.
             return self._redact_generic_re.sub(self._redact_generic_sub, data)
@@ -1990,5 +1990,5 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             return {self.redact_data(k, False): self.redact_data(v, False) for k, v in data.items()}
         elif isinstance(data, list):
             return [self.redact_data(v, False) for v in data]
-        else:
+        else:  # Base Case
             return data
