@@ -227,11 +227,10 @@ class BermudaAdvert(dict):
         if len(self.manufacturer_data) == 0 or self.manufacturer_data[0] != advertisementdata.manufacturer_data:
             self.manufacturer_data.insert(0, advertisementdata.manufacturer_data)
 
-            if advertisementdata.manufacturer_data not in self.manufacturer_data[1:]:
-                # We just stored a manu_data that wasn't in the previous history,
-                # so tell our parent device about it.
-                self._device.process_manufacturer_data(self)
-                _want_name_update = True
+            # If manufacturing data changes, we call the update. This is because iBeacons might change their
+            # sent details, in which case we need to re-match them.
+            self._device.process_manufacturer_data(self)
+            _want_name_update = True
             del self.manufacturer_data[HIST_KEEP_COUNT:]
 
         if len(self.service_data) == 0 or self.service_data[0] != advertisementdata.service_data:
