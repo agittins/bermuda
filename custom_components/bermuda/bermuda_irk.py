@@ -217,13 +217,17 @@ class BermudaIrkManager:
 
         return _unsubscribe
 
-    def async_diagnostics(self):
+    def async_diagnostics_no_redactions(self):
         """Return diagnostic info. Make sure to run redactions over the results."""
         nowstamp = monotonic_time_coarse()
         macs = {}
         for macirk in self._macs.values():
             if macirk.irk not in [IrkTypes.ADRESS_NOT_EVALUATED.value, IrkTypes.NOT_RESOLVABLE_ADDRESS.value]:
-                macs[macirk.mac] = {"irk": macirk.irk, "expires_in": floor(macirk.expires - nowstamp)}
+                if macirk.irk == IrkTypes.NO_KNOWN_IRK_MATCH.value:
+                    irkout = IrkTypes.NO_KNOWN_IRK_MATCH.name
+                else:
+                    irkout = macirk.irk.hex()
+                macs[macirk.mac] = {"irk": irkout, "expires_in": floor(macirk.expires - nowstamp)}
 
         return {
             "irks": [irk.hex() for irk in self._irks],
