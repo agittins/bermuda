@@ -217,6 +217,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # forcing a scan of the captured info.
         self._scanner_init_pending = True
 
+        self._seed_configured_devices_done = False
+
         # First time go through the private ble devices to see if there's
         # any there for us to track.
         self._do_private_device_init = True
@@ -696,17 +698,20 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # (this prevents them from restoring at startup as "Unavailable" if they
             # are not currently visible, and will instead show as "Unknown" for
             # sensors and "Away" for device_trackers).
-            if self.stamp_last_update == 0:
-                # First run, let's do it.
-                for _source_address in self.options.get(CONF_DEVICES, []):
-                    self._get_or_create_device(_source_address)
+            #
+            # This isn't working right if it runs once. Bodge it for now (cost is low)
+            # and sort it out when moving to device-based restoration (ie using DR/ER
+            # to decide what devices to track and deprecating CONF_DEVICES)
+            #
+            # if not self._seed_configured_devices_done:
+            for _source_address in self.options.get(CONF_DEVICES, []):
+                self._get_or_create_device(_source_address)
+            self._seed_configured_devices_done = True
 
             # Trigger creation of any new entities
             #
             # The devices are all updated now (and any new scanners and beacons seen have been added),
             # so let's ensure any devices that we create sensors for are set up ready to go.
-            # We don't do this sooner because we need to ensure we have every active scanner
-            # already loaded up.
             for address, device in self.devices.items():
                 if device.create_sensor:
                     if not device.create_all_done:
@@ -789,7 +794,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         nowstamp = self.stamp_last_prune = monotonic_time_coarse()
         stamp_known_irk = nowstamp - PRUNE_TIME_KNOWN_IRK
         stamp_unknown_irk = nowstamp - PRUNE_TIME_UNKNOWN_IRK
-
 
         # Prune redaction data
         if self.stamp_redactions_expiry is not None and self.stamp_redactions_expiry < nowstamp:
