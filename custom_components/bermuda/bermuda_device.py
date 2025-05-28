@@ -26,6 +26,8 @@ from homeassistant.components.bluetooth import (
 from homeassistant.components.private_ble_device import coordinator as pble_coordinator
 from homeassistant.const import STATE_HOME, STATE_NOT_HOME
 from homeassistant.core import callback
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import floor_registry as fr
 from homeassistant.util import slugify
 
 from .bermuda_advert import BermudaAdvert
@@ -44,6 +46,8 @@ from .const import (
     CONF_DEVTRACK_TIMEOUT,
     DEFAULT_DEVTRACK_TIMEOUT,
     DOMAIN,
+    ICON_DEFAULT_AREA,
+    ICON_DEFAULT_FLOOR,
     METADEVICE_IBEACON_DEVICE,
     METADEVICE_PRIVATE_BLE_DEVICE,
     METADEVICE_TYPE_IBEACON_SOURCE,
@@ -91,20 +95,33 @@ class BermudaDevice(dict):
         self.unique_id: str | None = _address  # mac address formatted.
         self.address_type = BDADDR_TYPE_UNKNOWN
 
+        self.ar = ar.async_get(self._coordinator.hass)
+        self.fr = fr.async_get(self._coordinator.hass)
+
+        self.area: ar.AreaEntry | None = None
         self.area_id: str | None = None
         self.area_name: str | None = None
+        self.area_icon: str = ICON_DEFAULT_AREA
         self.area_last_seen: str | None = None
         self.area_last_seen_id: str | None = None
+        self.area_last_seen_icon: str = ICON_DEFAULT_AREA
 
         self.area_distance: float | None = None  # how far this dev is from that area
         self.area_rssi: float | None = None  # rssi from closest scanner
-        self.area_scanner: BermudaAdvert | None = None  # currently closest BermudaScanner
+        self.area_advert: BermudaAdvert | None = None  # currently closest BermudaScanner
+
+        self.floor: fr.FloorEntry | None = None
+        self.floor_id: str | None = None
+        self.floor_name: str | None = None
+        self.floor_icon: str = ICON_DEFAULT_FLOOR
+        self.floor_level: str | None = None
+
         self.zone: str = STATE_NOT_HOME  # STATE_HOME or STATE_NOT_HOME
         self.manufacturer: str | None = None
         self._hascanner: BaseHaRemoteScanner | BaseHaScanner | None = None  # HA's scanner
         self._is_scanner: bool = False
         self._is_remote_scanner: bool | None = None
-        self._stamps: dict[str, float] = {}
+        self.stamps: dict[str, float] = {}
         self.metadevice_type: set = set()
         self.metadevice_sources: list[str] = []  # list of MAC addresses that have/should match this beacon
         self.beacon_unique_id: str | None = None  # combined uuid_major_minor for *really* unique id
@@ -232,7 +249,10 @@ class BermudaDevice(dict):
             # Actual object has not changed, we're good.
             return
 
-        _want_update = self._hascanner is None  # Don't screw this up or you'll get an infinite loop.
+        # If we don't already have a self._hascanner, then this must be our
+        # first initialisation. Otherwise we're just updating with a (potentially) new
+        # hascanner.
+        _first_init = self._hascanner is None
 
         self._hascanner = ha_scanner
         self._is_scanner = True
@@ -247,9 +267,10 @@ class BermudaDevice(dict):
         self.async_as_scanner_resolve_device_entries()
 
         # Call the per-update processor as well, but only
-        # if this is our first ha_scanner (ie, it didn't call us!)
-        # Don't screw this up or you'll get an infinite loop.
-        if _want_update:
+        # if this is our first ha_scanner.
+        # This is because we must avoid an infinite loop in the case
+        # where the scanner_update might call us.
+        if _first_init:
             self.async_as_scanner_update(ha_scanner)
 
     def async_as_scanner_resolve_device_entries(self):
@@ -339,7 +360,7 @@ class BermudaDevice(dict):
         # now update any fields that might be new from the device reg.
         # First clear the existing to make prioritising the bt/mac matches
         # easier (feel free to refactor, bear in mind we prefer bt first)
-        self.area_id = None
+        _area_id = None
 
         _bt_name = None
         _mac_name = None
@@ -347,13 +368,13 @@ class BermudaDevice(dict):
         _mac_name_by_user = None
 
         if scanner_devreg_bt is not None:
-            self.area_id = scanner_devreg_bt.area_id
+            _area_id = scanner_devreg_bt.area_id
             self.entry_id = scanner_devreg_bt.id
             _bt_name_by_user = scanner_devreg_bt.name_by_user
             _bt_name = scanner_devreg_bt.name
         if scanner_devreg_mac is not None:
             # Only apply if the bt device entry hasn't been applied:
-            self.area_id = self.area_id or scanner_devreg_mac.area_id
+            _area_id = _area_id or scanner_devreg_mac.area_id
             self.entry_id = self.entry_id or scanner_devreg_mac.id
             _mac_name = scanner_devreg_mac.name
             _mac_name_by_user = scanner_devreg_mac.name_by_user
@@ -392,18 +413,66 @@ class BermudaDevice(dict):
         # Apply any name changes.
         self.make_name()
 
+        self._update_area_and_floor(_area_id)
+
+    def _update_area_and_floor(self, area_id: str | None):
+        """Given an area_id, update the area and floor properties."""
+        if area_id is None:
+            self.area = None
+            self.area_id = None
+            self.area_name = None
+            self.area_icon = ICON_DEFAULT_AREA
+            self.floor = None
+            self.floor_id = None
+            self.floor_name = None
+            self.floor_icon = ICON_DEFAULT_FLOOR
+            self.floor_level = None
+            return
+
         # Look up areas
-        areas = self._coordinator.area_reg.async_get_area(self.area_id) if self.area_id else None
-        if areas is not None and hasattr(areas, "name") and areas.name is not None:
-            self.area_name = areas.name
+        if area := self.ar.async_get_area(area_id):
+            self.area = area
+            self.area_id = area_id
+            self.area_name = area.name
+            self.area_icon = area.icon or ICON_DEFAULT_AREA
+            self.floor_id = area.floor_id
+            if self.floor_id is not None:
+                self.floor = self.fr.async_get_floor(self.floor_id)
+                if self.floor is not None:
+                    self.floor_name = self.floor.name
+                    self.floor_icon = self.floor.icon or ICON_DEFAULT_FLOOR
+                    self.floor_level = self.floor_level
+                else:
+                    # floor_id was invalid
+                    _LOGGER_SPAM_LESS.warning(
+                        f"floor_id invalid for {self.__repr__()}",
+                        "Update of area for %s has invalid floor_id of %s",
+                        self.__repr__(),
+                        self.floor_id,
+                    )
+                    self.floor_id = None
+                    self.floor_name = "Invalid Floor ID"
+                    self.floor_icon = ICON_DEFAULT_FLOOR
+                    self.floor_level = None
+            else:
+                # Floor_id is none
+                self.floor = None
+                self.floor_name = None
+                self.floor_icon = ICON_DEFAULT_FLOOR
         else:
             _LOGGER_SPAM_LESS.warning(
                 f"no_area_on_update{self.name}",
-                "No area name or no area id updating scanner %s, area_id %s",
-                self.name,
-                areas,
+                "Setting area of %s with invalid area id of %s",
+                self.__repr__(),
+                area_id,
             )
+            self.area = None
             self.area_name = f"Invalid Area for {self.name}"
+            self.area_icon = ICON_DEFAULT_AREA
+            self.floor = None
+            self.floor_id = None
+            self.floor_name = None
+            self.floor_icon = ICON_DEFAULT_FLOOR
 
     def async_as_scanner_update(self, ha_scanner: BaseHaScanner):
         """
@@ -456,6 +525,16 @@ class BermudaDevice(dict):
         itself does not provide stamps (such as usb Bluetooth / BlueZ devices).
         """
         if self.is_remote_scanner:
+            if self.stamps is None:
+                _LOGGER_SPAM_LESS.debug(
+                    f"remote_no_stamps{self.address}", "Remote Scanner %s has no stamps dict", self.__repr__()
+                )
+                return None
+            if len(self.stamps) == 0:
+                _LOGGER_SPAM_LESS.debug(
+                    f"remote_stamps_empty{self.address}", "Remote scanner %s has an empty stamps dict", self.__repr__()
+                )
+                return None
             try:
                 return self.stamps[address.upper()]
             except (KeyError, AttributeError):
@@ -542,28 +621,27 @@ class BermudaDevice(dict):
             # new measurement(s) immediately.
             self.ref_power_changed = monotonic_time_coarse()
 
-    def apply_scanner_selection(self, closest_scanner: BermudaAdvert | None):
+    def apply_scanner_selection(self, bermuda_advert: BermudaAdvert | None):
         """
-        Given a DeviceScanner entry, apply the distance and area attributes
+        Given a BermudaAdvert entry, apply the distance and area attributes
         from it to this device.
 
         Used to apply a "winning" scanner's data to the device for setting closest Area.
         """
         old_area = self.area_name
-        if closest_scanner is not None and closest_scanner.rssi_distance is not None:
+        if bermuda_advert is not None and bermuda_advert.rssi_distance is not None:
             # We found a winner
-            self.area_scanner = closest_scanner
-            self.area_id = closest_scanner.area_id
-            self.area_name = closest_scanner.area_name
-            self.area_distance = closest_scanner.rssi_distance
-            self.area_rssi = closest_scanner.rssi
-            self.area_last_seen = closest_scanner.area_name
-            self.area_last_seen_id = closest_scanner.area_id
+            self.area_advert = bermuda_advert
+            self._update_area_and_floor(bermuda_advert.area_id)
+            self.area_distance = bermuda_advert.rssi_distance
+            self.area_rssi = bermuda_advert.rssi
+            self.area_last_seen = self.area_name
+            self.area_last_seen_id = self.area_id
+            self.area_last_seen_icon = self.area_icon
         else:
             # Not close to any scanners, or closest scanner has timed out!
-            self.area_scanner = None
-            self.area_id = None
-            self.area_name = None
+            self.area_advert = None
+            self._update_area_and_floor(None)
             self.area_distance = None
             self.area_rssi = None
 
@@ -643,7 +721,7 @@ class BermudaDevice(dict):
             # If we're a metadevice we should never be in this function.
             _LOGGER_SPAM_LESS.error(
                 f"meta_{self.address}_{advert_tuple}",
-                "Calling process_advertisement on a metadevices (%s) is a bug. Advert tuple: (%s)",
+                "Calling process_advertisement on a metadevice (%s) is a bug. Advert tuple: (%s)",
                 self.__repr__(),
                 advert_tuple,
             )
@@ -735,7 +813,17 @@ class BermudaDevice(dict):
         """Convert class to serialisable dict for dump_devices."""
         out = {}
         for var, val in vars(self).items():
-            if val in [self._coordinator, self._hascanner]:
+            if val is None:
+                # Catch the Nones first, as otherwise they might match some other objects below if
+                # they are None (like self._hascanner), which will prevent them showing at all.
+                out[var] = val
+                continue
+            if val in [self._coordinator, self.floor, self.area, self.ar, self.fr]:
+                # Objects to ignore completely.
+                continue
+            if val in [self._hascanner, self.area, self.floor, self.ar, self.fr]:
+                if hasattr(val, "__repr__"):
+                    out[var] = val.__repr__()
                 continue
             if val is self.adverts:
                 advertout = {}

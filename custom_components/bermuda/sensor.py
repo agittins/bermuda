@@ -71,6 +71,8 @@ async def async_setup_entry(
         if address not in created_devices:
             entities = []
             entities.append(BermudaSensor(coordinator, entry, address))
+            if coordinator.have_floors:
+                entities.append(BermudaSensorFloor(coordinator, entry, address))
             entities.append(BermudaSensorRange(coordinator, entry, address))
             entities.append(BermudaSensorScanner(coordinator, entry, address))
             entities.append(BermudaSensorRssi(coordinator, entry, address))
@@ -181,27 +183,19 @@ class BermudaSensor(BermudaEntity, SensorEntity):
         # because I originally was a bit reckless with the multiple
         # inheritance here. So all the sensors should be restructured
         # a bit to clean up this and other properties.
-        if (
-            self.name in ["Area"]
-            and self._device.area_id
-            and (area := self.area_reg.async_get_area(self._device.area_id))
-            and area.icon
-        ):
-            return area.icon
-        if (
-            self.name in ["Area Last Seen"]
-            and self._device.area_last_seen_id
-            and (area := self.area_reg.async_get_area(self._device.area_last_seen_id))
-            and area.icon
-        ):
-            return area.icon
+        if self.name == "Area":
+            return self._device.area_icon
+        if self.name == "Area Last Seen":
+            return self._device.area_last_seen_icon
+        if self.name == "Floor":
+            return self._device.floor_icon
         return super().icon
         # return "mdi:floor-plan" or "mdi:map-marker-distance" or "mdi:signal-distance-variant"
 
     @property
     def entity_registry_enabled_default(self) -> bool:
         """Declare if entity should be automatically enabled on adding."""
-        return self.name in ["Area", "Distance"]
+        return self.name in ["Area", "Distance", "Floor"]
 
     @property
     def device_class(self):
@@ -231,12 +225,34 @@ class BermudaSensor(BermudaEntity, SensorEntity):
         # since oft-changing attribs cause more db writes than sensors
         # "last_seen": self.coordinator.dt_mono_to_datetime(self._device.last_seen),
         attribs = {}
-        if self.name in ["Area"]:
+        if self.name in ["Area", "Floor"]:
             attribs["area_id"] = self._device.area_id
             attribs["area_name"] = self._device.area_name
+            attribs["floor_id"] = self._device.floor_id
+            attribs["floor_name"] = self._device.floor_name
+            attribs["floor_level"] = self._device.floor_level
         attribs["current_mac"] = current_mac
 
         return attribs
+
+
+class BermudaSensorFloor(BermudaSensor):
+    """Sensor for the Floor of the current Area."""
+
+    @property
+    def unique_id(self):
+        return f"{self._device.unique_id}_floor"
+
+    @property
+    def name(self):
+        return "Floor"
+
+    @property
+    def native_value(self):
+        # Don't use area_scanner.name because it comes from the advert
+        # entry. Instead refer to the BermudaDevice, which takes trouble
+        # to use user-given names etc.
+        return self._device.floor_name
 
 
 class BermudaSensorScanner(BermudaSensor):
@@ -255,8 +271,8 @@ class BermudaSensorScanner(BermudaSensor):
         # Don't use area_scanner.name because it comes from the advert
         # entry. Instead refer to the BermudaDevice, which takes trouble
         # to use user-given names etc.
-        if self._device.area_scanner is not None:
-            return self.coordinator.devices[self._device.area_scanner.scanner_address].name
+        if self._device.area_advert is not None:
+            return self.coordinator.devices[self._device.area_advert.scanner_address].name
         return None
 
 

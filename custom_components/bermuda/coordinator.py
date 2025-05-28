@@ -39,6 +39,9 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 from homeassistant.helpers import (
+    floor_registry as fr,
+)
+from homeassistant.helpers import (
     issue_registry as ir,
 )
 from homeassistant.helpers.device_registry import (
@@ -187,8 +190,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self._scanners: set[BermudaDevice] = set()  # Set of all in self.devices that is_scanner=True
         self.irk_manager = BermudaIrkManager()
 
+        self.ar = ar.async_get(self.hass)
         self.er = er.async_get(self.hass)
         self.dr = dr.async_get(self.hass)
+        self.fr = fr.async_get(self.hass)
+        self.have_floors: bool = self.init_floors()
 
         self._scanners_without_areas: list[str] | None = None  # Tracks any proxies that don't have an area assigned.
 
@@ -263,26 +269,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.devices: dict[str, BermudaDevice] = {}
         # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
 
-        self.area_reg = ar.async_get(hass)
-
-        # *** I don't think we need to do this, we generate the scanner list in realtime now,
-        # and we react to device registry changes.
-        #
-        # Restore the scanners saved in config entry data. We maintain
-        # a list of known scanners so we can
-        # restore the sensor states even if we don't have a full set of
-        # scanner receipts in the discovery data.
-        # self.scanner_list: list[str] = []
-        # if hasattr(entry, "data"):
-        #     for address, saved in entry.data.get(CONFDATA_SCANNERS, {}).items():
-        #         scanner = self._get_or_create_device(address)
-        #         for key, value in saved.items():
-        #             if key != "options":
-        #                 # We don't restore the options, since they may have changed.
-        #                 # the get_or_create will have grabbed the current ones.
-        #                 setattr(scanner, key, value)
-        #         self.scanner_list.append(address)
-
         # Register the dump_devices service
         hass.services.async_register(
             DOMAIN,
@@ -316,6 +302,16 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     @property
     def get_scanners(self) -> set[BermudaDevice]:
         return self._scanners
+
+    def init_floors(self) -> bool:
+        """Check if the system has floors configured, and enable sensors."""
+        _have_floors: bool = False
+        for area in self.ar.async_list_areas():
+            if area.floor_id is not None:
+                _have_floors = True
+                break
+        _LOGGER.debug("Have_floors is %s", _have_floors)
+        return _have_floors
 
     def scanner_list_add(self, scanner_device: BermudaDevice):
         self._scanner_list.add(scanner_device.address)
@@ -402,38 +398,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # Ensure that an issue reading these files (which are optional, really) doesn't stop the whole show.
             self._waitingfor_load_manufacturer_ids = False
 
-    # AJG 2025-04-23 - This is probably no longer necessary, since we now hook a callback
-    # directly in Private_ble_devices to get updates on new MAC addresses.
-    # The device_registry events should cover anything else we need.
-    # @callback
-    # def handle_state_changes(self, ev: Event[EventStateChangedData]):
-    #     """Watch for new mac addresses on private ble devices and act."""
-    #     if ev.event_type == EVENT_STATE_CHANGED:
-    #         event_entity = ev.data.get("entity_id", "invalid_event_entity")
-    #         if event_entity in self.pb_state_sources:
-    #             # It's a state change of an entity we are tracking.
-    #             new_state = ev.data.get("new_state")
-    #             if new_state:
-    #                 # _LOGGER.debug("New state change! %s", new_state)
-    #                 # check new_state.attributes.assumed_state
-    #                 if hasattr(new_state, "attributes"):
-    #                     new_address = new_state.attributes.get("current_address")
-    #                     if new_address is not None and new_address.lower() != self.pb_state_sources[event_entity]:
-    #                         _LOGGER.debug(
-    #                             "Have a new source address for %s, %s",
-    #                             event_entity,
-    #                             new_address,
-    #                         )
-    #                         self.pb_state_sources[event_entity] = new_address.lower()
-    #                         # Flag that we need new pb checks, and work them out:
-    #                         self._do_private_device_init = True
-    #                         # If no sensors have yet been configured, the coordinator
-    #                         # won't be getting polled for fresh data. Since we have
-    #                         # found something, we should get it to do that.
-    #                         # No longer using async_config_entry_first_refresh as it
-    #                         # breaks
-    #                         self.hass.add_job(self.async_refresh())
-
     @callback
     def handle_devreg_changes(self, ev: Event[EventDeviceRegistryUpdatedData]):
         """
@@ -442,16 +406,29 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         This catches area changes (on scanners) and any new/changed
         Private BLE Devices.
         """
-        _LOGGER.debug(
-            "Device registry has changed. ev: %s",
-            ev,
-        )
-        if ev.data["action"] in {"create", "update"}:
-            device_entry = self.dr.async_get(ev.data["device_id"])
-            # if this is an "update" we also get a "changes" dict, but we don't
-            # bother with it yet.
+        if ev.data["action"] == "update":
+            _LOGGER.debug("Device registry UPDATE. ev: %s changes: %s", ev, ev.data["changes"])
+        else:
+            _LOGGER.debug("Device registry has changed. ev: %s", ev)
 
-            if device_entry is not None:
+        device_id = ev.data.get("device_id")
+
+        if ev.data["action"] in {"create", "update"}:
+            if device_id is None:
+                _LOGGER.error("Received Device Registry create/update without a device_id. ev.data: %s", ev.data)
+                return
+
+            # First look for any of our devices that have a stored id on them, it'll be quicker.
+            for device in self.devices.values():
+                if device.entry_id == device_id:
+                    # We matched, most likely a scanner.
+                    if device.is_scanner:
+                        self._refresh_scanners(force=True)
+                        return
+            # Didn't match an existing, work through the connections etc.
+
+            # Pull up the device registry entry for the device_id
+            if device_entry := self.dr.async_get(ev.data["device_id"]):
                 # Work out if it's a device that interests us and respond appropriately.
                 for conn_type, _conn_id in device_entry.connections:
                     if conn_type == "private_ble_device":
@@ -482,7 +459,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         elif ev.data["action"] == "remove":
             device_found = False
             for scanner in self.get_scanners:
-                if scanner.entry_id == ev.data["device_id"]:
+                if scanner.entry_id == device_id:
                     _LOGGER.debug(
                         "Scanner %s removed, trigger update of scanners",
                         scanner.name,
@@ -1247,7 +1224,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         Will return None if the area id does *not* resolve to a single
         known area name.
         """
-        areas = self.area_reg.async_get_area(area_id)
+        areas = self.ar.async_get_area(area_id)
         if hasattr(areas, "name"):
             return getattr(areas, "name", "invalid_area")
         return None
@@ -1328,7 +1305,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     def _refresh_area_by_min_distance(self, device: BermudaDevice):
         """Very basic Area setting by finding closest proxy to a given device."""
         # The current area_scanner (which might be None) is the one to beat.
-        closest_advert: BermudaAdvert | None = device.area_scanner
+        closest_advert: BermudaAdvert | None = device.area_advert
 
         _max_radius = self.options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS)
         nowstamp = monotonic_time_coarse()
@@ -1520,7 +1497,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         _superchatty = False
 
-        if device.area_scanner != closest_advert and tests.reason is not None:
+        if device.area_advert != closest_advert and tests.reason is not None:
             device.diag_area_switch = tests.sensortext()
 
         # Apply the newly-found closest scanner (or apply None if we didn't find one)

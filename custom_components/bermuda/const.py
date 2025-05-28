@@ -26,7 +26,8 @@ ISSUE_URL = "https://github.com/agittins/bermuda/issues"
 
 # Icons
 ICON = "mdi:format-quote-close"
-
+ICON_DEFAULT_AREA: Final = "mdi:land-plots-marker"
+ICON_DEFAULT_FLOOR: Final = "mdi:selection-marker"  # "mdi:floor-plan"
 # Issue/repair translation keys. If you change these you MUST also update the key in the translations/xx.json files.
 REPAIR_SCANNER_WITHOUT_AREA = "scanner_without_area"
 
