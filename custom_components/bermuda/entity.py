@@ -46,8 +46,8 @@ class BermudaEntity(CoordinatorEntity):
         self.address = address
         self._device = coordinator.devices[address]
         self._lastname = self._device.name  # So we can track when we get a new name
-        self.area_reg = ar.async_get(coordinator.hass)
-        self.devreg = dr.async_get(coordinator.hass)
+        self.ar = ar.async_get(coordinator.hass)
+        self.dr = dr.async_get(coordinator.hass)
         self.devreg_init_done = False
 
         self.bermuda_update_interval = config_entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
@@ -97,7 +97,7 @@ class BermudaEntity(CoordinatorEntity):
             self._lastname = self._device.name
             if self.device_entry:
                 # We have a new name locally, so let's update the device registry.
-                self.devreg.async_update_device(self.device_entry.id, name=self._device.name)
+                self.dr.async_update_device(self.device_entry.id, name=self._device.name)
         self.async_write_ha_state()
 
     @property
