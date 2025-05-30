@@ -37,10 +37,10 @@ jobs:
 
       - name: Install Python modules
         run: |
-          pip install --constraint=.github/workflows/constraints.txt pre-commit
+          uv pip install --constraint=.github/workflows/constraints.txt pre-commit
 
       - name: "Install requirements"
-        run: python3 -m pip install -r requirements.txt
+        run: uv pip install -r requirements.txt
 
       - name: Run pre-commit on all files
         run: |
