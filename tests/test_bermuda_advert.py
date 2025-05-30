@@ -68,6 +68,7 @@ def bermuda_advert(mock_parent_device, mock_advertisement_data, mock_scanner_dev
     ba.name = "foo name"
     return ba
 
+
 def test_bermuda_advert_initialization(bermuda_advert):
     """Test BermudaAdvert initialization."""
     assert bermuda_advert.device_address == "aa:bb:cc:dd:ee:ff"

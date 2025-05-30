@@ -30,7 +30,11 @@ async def test_setup_unload_and_reload_entry(
     assert await hass.config_entries.async_reload(setup_bermuda_entry.entry_id)
     assert setup_bermuda_entry.state == ConfigEntryState.LOADED
 
-    assert set(IrkTypes.unresolved()) == {IrkTypes.ADRESS_NOT_EVALUATED.value, IrkTypes.NO_KNOWN_IRK_MATCH.value, IrkTypes.NOT_RESOLVABLE_ADDRESS.value}
+    assert set(IrkTypes.unresolved()) == {
+        IrkTypes.ADRESS_NOT_EVALUATED.value,
+        IrkTypes.NO_KNOWN_IRK_MATCH.value,
+        IrkTypes.NOT_RESOLVABLE_ADDRESS.value,
+    }
 
     # Unload the entry and verify that the data has been removed
     assert await hass.config_entries.async_unload(setup_bermuda_entry.entry_id)
@@ -42,8 +46,6 @@ async def test_setup_entry_exception(hass, error_on_get_data):
     config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_CONFIG, entry_id="test")
 
     assert config_entry is not None
-
-
 
     # In this case we are testing the condition where async_setup_entry raises
     # ConfigEntryNotReady using the `error_on_get_data` fixture which simulates

@@ -26,6 +26,7 @@ def mock_scanner():
     scanner.source = "mock_source"
     return scanner
 
+
 @pytest.fixture
 def mock_remote_scanner():
     """Fixture for mocking BaseHaRemoteScanner."""
@@ -40,11 +41,11 @@ def bermuda_device(mock_coordinator):
     """Fixture for creating a BermudaDevice instance."""
     return BermudaDevice(address="AA:BB:CC:DD:EE:FF", coordinator=mock_coordinator)
 
+
 @pytest.fixture
 def bermuda_scanner(mock_coordinator):
     """Fixture for creating a BermudaDevice Scanner instance."""
     return BermudaDevice(address="11:22:33:44:55:66", coordinator=mock_coordinator)
-
 
 
 def test_bermuda_device_initialization(bermuda_device):
