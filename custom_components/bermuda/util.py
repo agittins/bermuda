@@ -19,7 +19,10 @@ def mac_math_offset(mac, offset=0) -> str | None:
     if mac is None:
         return None
     octet = mac[-2:]
-    octet_int = bytes.fromhex(octet)[0]
+    try:
+        octet_int = bytes.fromhex(octet)[0]
+    except ValueError:
+        return None
     if 0 <= (octet_new := octet_int + offset) <= 255:
         return f"{mac[:-3]}:{(octet_new):02x}"
     return None
