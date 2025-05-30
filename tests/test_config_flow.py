@@ -68,16 +68,16 @@ async def test_options_flow(hass: HomeAssistant, setup_bermuda_entry: MockConfig
     result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
 
     # Verify that the first options step is a user form
-    assert result["type"] == FlowResultType.MENU
-    assert result["step_id"] == "init"
+    assert result.get("type") == FlowResultType.MENU
+    assert result.get("step_id") == "init"
 
     # select the globalopts menu option
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], user_input={"next_step_id": "globalopts"}
     )
 
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "globalopts"
+    assert result.get("type") == FlowResultType.FORM
+    assert result.get("step_id") == "globalopts"
 
     # Enter some fake data into the form
     result = await hass.config_entries.options.async_configure(
@@ -86,8 +86,8 @@ async def test_options_flow(hass: HomeAssistant, setup_bermuda_entry: MockConfig
     )
 
     # Verify that the flow finishes
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["title"] == NAME
+    assert result.get("type") == FlowResultType.CREATE_ENTRY
+    assert result.get("title") == NAME
 
     # Verify that the options were updated
     assert setup_bermuda_entry.options == MOCK_OPTIONS_GLOBALS

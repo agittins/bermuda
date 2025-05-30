@@ -373,7 +373,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             _name = self.company_uuids[uuid]
             _generic = False
         else:
-            return None, None
+            return (None, None)
         return (_name, _generic)
 
     async def async_load_manufacturer_ids(self):
