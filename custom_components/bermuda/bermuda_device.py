@@ -729,7 +729,7 @@ class BermudaDevice(dict):
 
         if advert_tuple in self.adverts:
             # Device already exists, update it
-            self.adverts[advert_tuple].update_advertisement(advertisementdata)
+            self.adverts[advert_tuple].update_advertisement(advertisementdata, scanner_device)
             device_advert = self.adverts[advert_tuple]
         else:
             # Create it
@@ -739,9 +739,6 @@ class BermudaDevice(dict):
                 self.options,
                 scanner_device,
             )
-            # On first creation, we also want to copy our ref_power to it (but not afterwards,
-            # since a metadevice might take over that role later)
-            device_advert.ref_power = self.ref_power
 
         # Let's see if we should update our last_seen based on this...
         if device_advert.stamp is not None and self.last_seen < device_advert.stamp:
