@@ -6,8 +6,6 @@ from __future__ import annotations
 
 from math import floor
 
-from bleach import clean
-
 from custom_components.bermuda import util
 
 
