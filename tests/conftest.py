@@ -62,6 +62,14 @@ def bypass_get_data_fixture():
         yield
 
 
+@pytest.fixture(name="skip_yaml_data_load", autouse=True)
+def skip_yaml_data_load():
+    """Skip loading yaml data files for bluetooth manufacturers"""
+    # because I have *NO* idea how to make it work. Contribs welcome!
+    with patch("custom_components.bermuda.BermudaDataUpdateCoordinator.async_load_manufacturer_ids"):
+        yield
+
+
 # In this fixture, we are forcing calls to async_get_data to raise
 # an Exception. This is useful
 # for exception handling.

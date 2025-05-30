@@ -16,11 +16,14 @@ def test_mac_math_offset():
     assert util.mac_math_offset("aa:bb:cc:dd:ee:ef", -3) == "aa:bb:cc:dd:ee:ec"
     assert util.mac_math_offset("aa:bb:cc:dd:ee:ff", 2) is None
     assert util.mac_math_offset("clearly_not:a-mac_address", 2) == None
+    assert util.mac_math_offset(None, 4) == None
 
 
 def test_mac_norm():
     assert util.mac_norm("AA:bb:CC:88:Ff:00") == "aa:bb:cc:88:ff:00"
     assert util.mac_norm("Not_exactly-a-MAC:address") == "not_exactly-a-mac:address"
+    assert util.mac_norm("aa_bb_CC_dd_ee_ff") == "aa:bb:cc:dd:ee:ff"
+    assert util.mac_norm("aa-77-CC-dd-ee-ff") == "aa:77:cc:dd:ee:ff"
 
 
 def test_mac_explode_formats():

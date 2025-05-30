@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant
 # from homeassistant.exceptions import ConfigEntryNotReady
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.bermuda.const import DOMAIN
+from custom_components.bermuda.const import DOMAIN, IrkTypes
 from custom_components.bermuda.coordinator import BermudaDataUpdateCoordinator
 
 from .const import MOCK_CONFIG
@@ -30,6 +30,12 @@ async def test_setup_unload_and_reload_entry(
     assert await hass.config_entries.async_reload(setup_bermuda_entry.entry_id)
     assert setup_bermuda_entry.state == ConfigEntryState.LOADED
 
+    assert set(IrkTypes.unresolved()) == {
+        IrkTypes.ADRESS_NOT_EVALUATED.value,
+        IrkTypes.NO_KNOWN_IRK_MATCH.value,
+        IrkTypes.NOT_RESOLVABLE_ADDRESS.value,
+    }
+
     # Unload the entry and verify that the data has been removed
     assert await hass.config_entries.async_unload(setup_bermuda_entry.entry_id)
     assert setup_bermuda_entry.state == ConfigEntryState.NOT_LOADED
@@ -49,5 +55,5 @@ async def test_setup_entry_exception(hass, error_on_get_data):
     # handle exceptions, in which it then sets self.last_update_status, which is what
     # async_setup_entry checks in order to raise ConfigEntryNotReady, but I don't think
     # anything will "catch" our over-ridded async_refresh's exception.
-    # with pytest.raises(ConfigEntryNotReady):
+    #  with pytest.raises(ConfigEntryNotReady):
     #     assert await async_setup_entry(hass, config_entry)
