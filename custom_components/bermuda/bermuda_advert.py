@@ -73,25 +73,20 @@ class BermudaAdvert(dict):
         options,
         scanner_device: BermudaDevice,  # The scanner device that "saw" it.
     ) -> None:
-        # I am declaring these just to control their order in the dump,
-        # which is a bit silly, I suspect.
-        self.name: str = scanner_device.name  # or scandata.scanner.name
-        self.scanner_device = scanner_device  # links to the source device
         self.scanner_address: Final[str] = scanner_device.address
-        self.area_id: str | None = scanner_device.area_id
-        self.area_name: str | None = scanner_device.area_name
-        self._device = parent_device
         self.device_address: Final[str] = parent_device.address
+        self._device = parent_device
+        self.ref_power: float = self._device.ref_power  # Take from parent at first, might be changed by metadevice l8r
+        self.apply_new_scanner(scanner_device)
+
         self.options = options
+
         self.stamp: float = 0
-        # Only remote scanners log timestamps, local usb adaptors do not.
-        self.scanner_sends_stamps = scanner_device.is_remote_scanner
         self.new_stamp: float | None = None  # Set when a new advert is loaded from update
         self.rssi: float | None = None
         self.tx_power: float | None = None
         self.rssi_distance: float | None = None
         self.rssi_distance_raw: float
-        self.ref_power: float = 0  # Override of global, set from parent device.
         self.stale_update_count = 0  # How many times we did an update but no new stamps were found.
         self.hist_stamp: list[float] = []
         self.hist_rssi: list[int] = []
@@ -110,9 +105,19 @@ class BermudaAdvert(dict):
         self.service_uuids: list[str] = []
 
         # Just pass the rest on to update...
-        self.update_advertisement(advertisementdata)
+        self.update_advertisement(advertisementdata, self.scanner_device)
 
-    def update_advertisement(self, advertisementdata: AdvertisementData):
+    def apply_new_scanner(self, scanner_device: BermudaDevice):
+        self.name: str = scanner_device.name  # or scandata.scanner.name
+        self.scanner_device = scanner_device  # links to the source device
+        if self.scanner_address != scanner_device.address:
+            _LOGGER.error("Advert %s received new scanner with wrong address %s", self.__repr__(), scanner_device)
+        self.area_id: str | None = scanner_device.area_id
+        self.area_name: str | None = scanner_device.area_name
+        # Only remote scanners log timestamps, local usb adaptors do not.
+        self.scanner_sends_stamps = scanner_device.is_remote_scanner
+
+    def update_advertisement(self, advertisementdata: AdvertisementData, scanner_device: BermudaDevice):
         """
         Update gets called every time we see a new packet or
         every time we do a polled update.
@@ -125,6 +130,12 @@ class BermudaAdvert(dict):
         # We might get called without there being a new advert to process, so
         # exit quickly if that's the case (ideally we will catch it earlier in future)
         #
+        if scanner_device is not self.scanner_device:
+            _LOGGER.warning(
+                "Replacing stale scanner device %s with %s", self.scanner_device.__repr__(), scanner_device.__repr__()
+            )
+            self.apply_new_scanner(scanner_device)
+
         scanner = self.scanner_device
         new_stamp: float | None = None
 
