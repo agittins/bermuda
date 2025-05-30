@@ -12,6 +12,7 @@ on:
 
 env:
   DEFAULT_PYTHON: 3.13
+  UV_SYSTEM_PYTHON: 1
 
 jobs:
   linting:
@@ -21,6 +22,13 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          # Install a specific version of uv.
+          version: "0.7.9"
+          enable-cache: true
+
       - name: Set up Python ${{ env.DEFAULT_PYTHON }}
         uses: actions/setup-python@v5.6.0
         with:
@@ -29,10 +37,10 @@ jobs:
 
       - name: Install Python modules
         run: |
-          pip install --constraint=.github/workflows/constraints.txt pre-commit
+          uv pip install --constraint=.github/workflows/constraints.txt pre-commit
 
       - name: "Install requirements"
-        run: python3 -m pip install -r requirements.txt
+        run: uv pip install -r requirements.txt
 
       - name: Run pre-commit on all files
         run: |
@@ -44,6 +52,13 @@ jobs:
     steps:
       - name: Check out the repository
         uses: "actions/checkout@v4"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          # Install a specific version of uv.
+          version: "0.7.9"
+          enable-cache: true
 
       - name: HACS validation
         uses: "hacs/action@22.5.0"
@@ -67,14 +82,23 @@ jobs:
     steps:
       - name: Check out code from GitHub
         uses: "actions/checkout@v4"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          # Install a specific version of uv.
+          version: "0.7.9"
+          enable-cache: true
+
       - name: Setup Python ${{ env.DEFAULT_PYTHON }}
         uses: "actions/setup-python@v5.6.0"
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
+
       - name: Install requirements
         run: |
-          pip install --constraint=.github/workflows/constraints.txt pip
-          pip install -r requirements_test.txt
+          uv pip install --constraint=.github/workflows/constraints.txt pip
+          uv pip install -r requirements_test.txt
       - name: Tests suite
         run: |
           pytest \
