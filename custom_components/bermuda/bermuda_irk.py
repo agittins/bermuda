@@ -189,7 +189,7 @@ class BermudaIrkManager:
 
         # HA version when BLEDevice went from 4+ params to 3 (bleak 1.0.0, 1.0.1)
         if MAJOR_VERSION > 2025 or (MAJOR_VERSION == 2025 and MINOR_VERSION >= 8):
-            bledevice = BLEDevice(mac, "", None)
+            bledevice = BLEDevice(mac, "", None)  # type: ignore
         else:
             # Include the rssi if we are on an older release.
             bledevice = BLEDevice(mac, "", None, 0)  # type: ignore
