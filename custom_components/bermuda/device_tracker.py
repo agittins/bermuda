@@ -61,7 +61,7 @@ async def async_setup_entry(
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, device_new))
 
     # Now we must tell the co-ord to do initial refresh, so that it will call our callback.
-    await coordinator.async_config_entry_first_refresh()
+    # await coordinator.async_config_entry_first_refresh()
 
 
 class BermudaDeviceTracker(BermudaEntity, BaseTrackerEntity):
