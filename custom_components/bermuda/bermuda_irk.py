@@ -10,6 +10,7 @@ from bleak.backends.device import BLEDevice
 from bluetooth_data_tools import get_cipher_for_irk, monotonic_time_coarse, resolve_private_address
 from habluetooth import BluetoothServiceInfoBleak
 from homeassistant.components.bluetooth import BluetoothChange
+from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
 
 from .const import _LOGGER, DOMAIN, PRUNE_TIME_KNOWN_IRK, IrkTypes
 
@@ -180,7 +181,18 @@ class BermudaIrkManager:
         so that we can fake the PrivateBleDevice callbacks for an easy win.
         """
         # Create bare-shell classes to satisfy the callback signature
-        bledevice = BLEDevice(mac, "", None, 0)
+        # v1.0.1 Jul 1 2025 restores kwargs (but not rssi)
+        # v1.0.0 jun 29 2025 (pretty sure) removes rssi and kwargs from BLEDevice.__init__()
+        #
+        # TODO: Set HA_MINVER to 2025.8 at some point, and remove the bogus rssi param.
+        # FIXME: Ideally though, fix this so we aren't using bt's callbacks.
+
+        # HA version when BLEDevice went from 4+ params to 3 (bleak 1.0.0, 1.0.1)
+        if MAJOR_VERSION > 2025 or (MAJOR_VERSION == 2025 and MINOR_VERSION >= 8):
+            bledevice = BLEDevice(mac, "", None)
+        else:
+            # Include the rssi if we are on an older release.
+            bledevice = BLEDevice(mac, "", None, 0)  # type: ignore
         service_info = BluetoothServiceInfoBleak("", mac, 0, {}, {}, [], DOMAIN, bledevice, None, False, False, 0)
 
         if callbacks := self._irk_callbacks.get(irk):
