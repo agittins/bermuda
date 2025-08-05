@@ -131,7 +131,7 @@ class BermudaAdvert(dict):
         # exit quickly if that's the case (ideally we will catch it earlier in future)
         #
         if scanner_device is not self.scanner_device:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Replacing stale scanner device %s with %s", self.scanner_device.__repr__(), scanner_device.__repr__()
             )
             self.apply_new_scanner(scanner_device)
@@ -144,13 +144,13 @@ class BermudaAdvert(dict):
 
             if new_stamp is None:
                 self.stale_update_count += 1
-                _LOGGER.warning("Advert from %s for %s lacks stamp, unexpected.", scanner.name, self._device.name)
+                _LOGGER.debug("Advert from %s for %s lacks stamp, unexpected.", scanner.name, self._device.name)
                 return
 
             if self.stamp > new_stamp:
                 # The existing stamp is NEWER, bail but complain on the way.
                 self.stale_update_count += 1
-                _LOGGER.warning("Advert from %s for %s is OLDER than last recorded", scanner.name, self._device.name)
+                _LOGGER.debug("Advert from %s for %s is OLDER than last recorded", scanner.name, self._device.name)
                 return
 
             if self.stamp == new_stamp:
@@ -168,7 +168,7 @@ class BermudaAdvert(dict):
 
         # Update our parent scanner's last_seen if we have a new stamp.
         if new_stamp > self.scanner_device.last_seen + 0.01:  # some slight warp seems common.
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Advert from %s for %s is %.6fs NEWER than scanner's last_seen, odd",
                 self.scanner_device.name,
                 self._device.name,
