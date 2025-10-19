@@ -18,6 +18,7 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
+    TextSelector,
 )
 
 from .const import (
@@ -236,11 +237,28 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
     async def async_step_selectdevices(self, user_input=None):
         """Handle a flow initialized by the user."""
         if user_input is not None:
-            self.options.update(user_input)
-            return await self._update_options()
+            # Check if user submitted device selections (not just filtering)
+            selected_devices = []
+            selected_devices.extend(user_input.get("ibeacon_devices", []))
+            selected_devices.extend(user_input.get("standard_devices", []))
+            selected_devices.extend(user_input.get("random_devices", []))
+
+            # If we have device selections, save and exit
+            if selected_devices or (
+                "ibeacon_devices" in user_input
+                or "standard_devices" in user_input
+                or "random_devices" in user_input
+            ):
+                # User is submitting final selection
+                self.options[CONF_DEVICES] = selected_devices
+                return await self._update_options()
+            # Otherwise, user is just filtering - continue to re-show form
 
         # Grab the co-ordinator's device list so we can build a selector from it.
         self.devices = self.config_entry.runtime_data.coordinator.devices
+
+        # Get filter text if it exists
+        filter_text = user_input.get("device_filter", "").lower() if user_input else ""
 
         # Where we store the options before building the selector
         options_list = []
@@ -253,12 +271,24 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
 
             name = device.name
 
+            # Build additional info for better searchability
+            manufacturer_info = f" - {device.manufacturer}" if device.manufacturer else ""
+            rssi_info = f" RSSI:{device.area_rssi:.0f}dBm" if device.area_rssi is not None else ""
+
             if device.is_scanner:
                 # We don't "track" scanner devices, per se
                 continue
             if device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
                 # Private BLE Devices get configured automagically, skip
                 continue
+
+            # Build the full label for filtering
+            full_label = f"{device.address.upper()} {name} {device.manufacturer or ''}"
+
+            # Apply filter if present
+            if filter_text and filter_text not in full_label.lower():
+                continue
+
             if device.address_type == ADDR_TYPE_IBEACON:
                 # This is an iBeacon meta-device
                 if len(device.metadevice_sources) > 0:
@@ -266,11 +296,12 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                 else:
                     source_mac = ""
 
+                device_name = f" {name}" if device.address.upper() != name.upper() else ""
+
                 options_metadevices.append(
                     SelectOptionDict(
                         value=device.address.upper(),
-                        label=f"iBeacon: {device.address.upper()} {source_mac} "
-                        f"{name if device.address.upper() != name.upper() else ''}",
+                        label=f"iBeacon: {device.address.upper()} {source_mac}{device_name}{manufacturer_info}{rssi_info}",
                     )
                 )
                 continue
@@ -285,7 +316,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                 options_randoms.append(
                     SelectOptionDict(
                         value=device.address.upper(),
-                        label=f"[{device.address.upper()}] {name} (Random MAC)",
+                        label=f"[{device.address.upper()}] {name} (Random MAC){manufacturer_info}{rssi_info}",
                     )
                 )
                 continue
@@ -294,7 +325,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             options_otherdevices.append(
                 SelectOptionDict(
                     value=device.address.upper(),
-                    label=f"[{device.address.upper()}] {name}",
+                    label=f"[{device.address.upper()}] {name}{manufacturer_info}{rssi_info}",
                 )
             )
 
@@ -302,6 +333,24 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         options_metadevices.sort(key=lambda item: item["label"])
         options_otherdevices.sort(key=lambda item: item["label"])
         options_randoms.sort(key=lambda item: item["label"])
+
+        # Apply pagination limits (50 devices per category max without filter)
+        MAX_DEVICES_PER_CATEGORY = 50
+        show_pagination_warning = False
+
+        if not filter_text:
+            if len(options_metadevices) > MAX_DEVICES_PER_CATEGORY:
+                options_metadevices = options_metadevices[:MAX_DEVICES_PER_CATEGORY]
+                show_pagination_warning = True
+            if len(options_otherdevices) > MAX_DEVICES_PER_CATEGORY:
+                options_otherdevices = options_otherdevices[:MAX_DEVICES_PER_CATEGORY]
+                show_pagination_warning = True
+            if len(options_randoms) > MAX_DEVICES_PER_CATEGORY:
+                options_randoms = options_randoms[:MAX_DEVICES_PER_CATEGORY]
+                show_pagination_warning = True
+
+        # Merge all lists for legacy single-selector support
+        options_list = []
         options_list.extend(options_metadevices)
         options_list.extend(options_otherdevices)
         options_list.extend(options_randoms)
@@ -314,14 +363,63 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             ):
                 options_list.append(SelectOptionDict(value=address.upper(), label=f"[{address}] (saved)"))
 
+        # Build description with device counts and filter help
+        description_text = (
+            f"**Found {len(options_metadevices)} iBeacon(s), "
+            f"{len(options_otherdevices)} standard device(s), "
+            f"{len(options_randoms)} random MAC device(s)**\n\n"
+        )
+
+        if show_pagination_warning:
+            description_text += (
+                f"⚠️ *Too many devices! Showing first {MAX_DEVICES_PER_CATEGORY} per category. "
+                "Use the filter below to find specific devices.*\n\n"
+            )
+
+        description_text += (
+            "💡 **Tip:** Use the filter to search by MAC address, device name, or manufacturer "
+            "(e.g., 'tile', 'apple', 'AA:BB', etc.)"
+        )
+
+        # Build the form schema with filter field and grouped selectors
         data_schema = {
             vol.Optional(
-                CONF_DEVICES,
-                default=self.options.get(CONF_DEVICES, []),
-            ): SelectSelector(SelectSelectorConfig(options=options_list, multiple=True)),
+                "device_filter",
+                default=filter_text,
+                description={"suggested_value": filter_text},
+            ): TextSelector(),
         }
 
-        return self.async_show_form(step_id="selectdevices", data_schema=vol.Schema(data_schema))
+        # Add grouped selectors by device type
+        if options_metadevices:
+            data_schema[vol.Optional(
+                "ibeacon_devices",
+                default=[d for d in self.options.get(CONF_DEVICES, [])
+                        if any(opt["value"] == d.upper() for opt in options_metadevices)],
+                description="iBeacon devices (iOS, Android with HA App, etc.)",
+            )] = SelectSelector(SelectSelectorConfig(options=options_metadevices, multiple=True))
+
+        if options_otherdevices:
+            data_schema[vol.Optional(
+                "standard_devices",
+                default=[d for d in self.options.get(CONF_DEVICES, [])
+                        if any(opt["value"] == d.upper() for opt in options_otherdevices)],
+                description="Standard BLE devices (Tiles, trackers, sensors, etc.)",
+            )] = SelectSelector(SelectSelectorConfig(options=options_otherdevices, multiple=True))
+
+        if options_randoms:
+            data_schema[vol.Optional(
+                "random_devices",
+                default=[d for d in self.options.get(CONF_DEVICES, [])
+                        if any(opt["value"] == d.upper() for opt in options_randoms)],
+                description="Devices with random MAC addresses",
+            )] = SelectSelector(SelectSelectorConfig(options=options_randoms, multiple=True))
+
+        return self.async_show_form(
+            step_id="selectdevices",
+            data_schema=vol.Schema(data_schema),
+            description_placeholders={"filter_help": description_text},
+        )
 
     async def async_step_calibration1_global(self, user_input=None):
         # FIXME: This is ridiculous. But I can't yet find a better way.
