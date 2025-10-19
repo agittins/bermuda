@@ -23,6 +23,7 @@
       "no_scanners": "You need to configure some bluetooth scanners before Bermuda will have anything to work with. \nAny one of esphome bluetooth_proxy, Shelly bluetooth proxy or local bluetooth adaptor should get you started.",
       "no_devices": "No bluetooth devices are actively being reported from your scanners. \nYou will need to solve this before Bermuda can be of much help."
     },
+    "scanner_table_header": "Status of scanners:",
     "step": {
       "init": {
         "title": "Configure Bermuda",

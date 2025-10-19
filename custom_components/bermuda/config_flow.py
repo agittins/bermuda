@@ -150,21 +150,33 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         messages["scanner_counter_scanners"] = f"{len(self.coordinator.scanner_list)}"
 
         if len(self.coordinator.scanner_list) == 0:
-            messages["status"] = (
-                "You need to configure some bluetooth scanners before Bermuda will have anything to work with. "
-                "Any one of esphome bluetooth_proxy, Shelly bluetooth proxy or local bluetooth adaptor should get "
-                "you started."
+            messages["status"] = self.hass.localize(
+                "component.bermuda.options.error.no_scanners",
+                default=(
+                    "You need to configure some bluetooth scanners before Bermuda will have anything to work with. "
+                    "Any one of esphome bluetooth_proxy, Shelly bluetooth proxy or local bluetooth adaptor should get "
+                    "you started."
+                ),
             )
         elif active_devices == 0:
-            messages["status"] = (
-                "No bluetooth devices are actively being reported from your scanners. "
-                "You will need to solve this before Bermuda can be of much help."
+            messages["status"] = self.hass.localize(
+                "component.bermuda.options.error.no_devices",
+                default=(
+                    "No bluetooth devices are actively being reported from your scanners. "
+                    "You will need to solve this before Bermuda can be of much help."
+                ),
             )
         else:
-            messages["status"] = "You have at least some active devices, this is good."
+            messages["status"] = self.hass.localize(
+                "component.bermuda.options.error.some_active",
+                default="You have at least some active devices, this is good.",
+            )
 
         # Build a markdown table of scanners so the user can see what's up.
-        scanner_table = "\n\nStatus of scanners:\n\n|Scanner|Address|Last advertisement|\n|---|---|---:|\n"
+        scanner_table = "\n\n" + self.hass.localize(
+            "component.bermuda.options.scanner_table_header",
+            default="Status of scanners:",
+        ) + "\n\n|Scanner|Address|Last advertisement|\n|---|---|---:|\n"
         # Use emoji to indicate if age is "good"
         for scanner in self.coordinator.get_active_scanner_summary():
             age = int(scanner.get("last_stamp_age", 999))
