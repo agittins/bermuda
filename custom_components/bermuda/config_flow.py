@@ -301,7 +301,10 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                 options_metadevices.append(
                     SelectOptionDict(
                         value=device.address.upper(),
-                        label=f"iBeacon: {device.address.upper()} {source_mac}{device_name}{manufacturer_info}{rssi_info}",
+                        label=(
+                            f"iBeacon: {device.address.upper()} {source_mac}{device_name}"
+                            f"{manufacturer_info}{rssi_info}"
+                        ),
                     )
                 )
                 continue
@@ -335,18 +338,18 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         options_randoms.sort(key=lambda item: item["label"])
 
         # Apply pagination limits (50 devices per category max without filter)
-        MAX_DEVICES_PER_CATEGORY = 50
+        max_devices_per_category = 50
         show_pagination_warning = False
 
         if not filter_text:
-            if len(options_metadevices) > MAX_DEVICES_PER_CATEGORY:
-                options_metadevices = options_metadevices[:MAX_DEVICES_PER_CATEGORY]
+            if len(options_metadevices) > max_devices_per_category:
+                options_metadevices = options_metadevices[:max_devices_per_category]
                 show_pagination_warning = True
-            if len(options_otherdevices) > MAX_DEVICES_PER_CATEGORY:
-                options_otherdevices = options_otherdevices[:MAX_DEVICES_PER_CATEGORY]
+            if len(options_otherdevices) > max_devices_per_category:
+                options_otherdevices = options_otherdevices[:max_devices_per_category]
                 show_pagination_warning = True
-            if len(options_randoms) > MAX_DEVICES_PER_CATEGORY:
-                options_randoms = options_randoms[:MAX_DEVICES_PER_CATEGORY]
+            if len(options_randoms) > max_devices_per_category:
+                options_randoms = options_randoms[:max_devices_per_category]
                 show_pagination_warning = True
 
         # Merge all lists for legacy single-selector support
