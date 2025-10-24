@@ -718,10 +718,12 @@ class BermudaDevice(dict):
         advert_tuple = (device_address, scanner_address)
 
         if len(self.metadevice_sources) > 0 and not self._is_scanner:
-            # If we're a metadevice we should never be in this function.
-            _LOGGER_SPAM_LESS.error(
+            # If we're a metadevice we should never be in this function,
+            # unless we _used_ to be a scanner but are no longer. Shelly proxies
+            # seem to do this when they go offline. See #608
+            _LOGGER_SPAM_LESS.debug(
                 f"meta_{self.address}_{advert_tuple}",
-                "Calling process_advertisement on a metadevice (%s) is a bug. Advert tuple: (%s)",
+                "process_advertisement called on a metadevice (%s) - probably a dead proxy. Advert tuple: (%s)",
                 self.__repr__(),
                 advert_tuple,
             )
