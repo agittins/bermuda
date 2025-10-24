@@ -52,7 +52,19 @@
       },
       "selectdevices": {
         "title": "Select Devices",
-        "description": "Choose which devices you wish to track. If no devices appear below, then Bermuda is not seeing any data coming from Bluetooth scanners. Ensure you have an esphome ble_proxy device, Shelly devices with bluetooth proxy configured or a local bluetooth adaptor."
+        "description": "{filter_help}\n\nChoose which devices you wish to track. If no devices appear below, then Bermuda is not seeing any data coming from Bluetooth scanners. Ensure you have an esphome ble_proxy device, Shelly devices with bluetooth proxy configured or a local bluetooth adaptor.",
+        "data": {
+          "device_filter": "Filter by name, MAC or manufacturer",
+          "ibeacon_devices": "iBeacon devices",
+          "standard_devices": "Standard BLE devices",
+          "random_devices": "Random MAC devices"
+        },
+        "data_description": {
+          "device_filter": "Type to filter the list (e.g., 'tile', 'apple', 'AA:BB'). Leave empty to see all devices.",
+          "ibeacon_devices": "iBeacon devices (iOS, Android with HA App, etc.)",
+          "standard_devices": "Standard BLE devices (Tiles, trackers, sensors, etc.)",
+          "random_devices": "Devices with random MAC addresses"
+        }
       },
       "calibration1_global": {
         "title": "Calibration 1: Global",
