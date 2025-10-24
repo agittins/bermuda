@@ -1305,7 +1305,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     def _refresh_area_by_min_distance(self, device: BermudaDevice):
         """Very basic Area setting by finding closest proxy to a given device."""
         # The current area_scanner (which might be None) is the one to beat.
-        closest_advert: BermudaAdvert | None = device.area_advert
+        incumbent: BermudaAdvert | None = device.area_advert
 
         _max_radius = self.options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS)
         nowstamp = monotonic_time_coarse()
@@ -1317,7 +1317,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # if device.name in ("Ash Pixel IRK", "Garage", "Melinda iPhone"):
         #     _superchatty = True
 
-        for advert in device.adverts.values():
+        for challenger in device.adverts.values():
             # Check each scanner and any time one is found to be closer / better than
             # the existing closest_scanner, replace it. At the end we should have the
             # right one. In theory.
@@ -1327,8 +1327,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             #
             # Every loop, every test is just a two-way race.
 
-            # no competing against ourselves...
-            if closest_advert is advert:
+            # Is the challenger an invalid contender?
+            if (
+                # no competing against ourselves...
+                incumbent is challenger  # no competing against ourselves.
+            ):
                 continue
 
             # No winning with stale adverts. If we didn't win back when it was fresh,
@@ -1339,24 +1342,37 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # ignoring valid reports from slow proxies (or if our processing loop is
             # delayed / lengthened). Too long and we add needless jumping around for a
             # device that isn't actually being actively detected.
-            if advert.stamp < nowstamp - AREA_MAX_AD_AGE:
+            if challenger.stamp < nowstamp - AREA_MAX_AD_AGE:
+                # our ad is too old.
                 continue
+
+            # If we are too far away or don't have an area, we cannot win...
+            if (
+                challenger.rssi_distance is None
+                or challenger.rssi_distance > _max_radius
+                or challenger.area_id is None
+            ):
+                continue
+
+            # At this point the challenger is a vaild contender...
+
+            # Is the incumbent a valid contender?
 
             # If closest scanner lacks critical data, we win.
             if (
-                closest_advert is None
-                or closest_advert.rssi_distance is None
-                or closest_advert.area_id is None
+                incumbent is None
+                or incumbent.rssi_distance is None
+                or incumbent.area_id is None
                 # Extra checks that are redundant but make linting easier later...
-                or closest_advert.hist_distance_by_interval is None
+                # or closest_advert.hist_distance_by_interval is None
             ):
                 # Default Instawin!
-                closest_advert = advert
+                incumbent = challenger
                 if _superchatty:
                     _LOGGER.debug(
                         "%s IS closesr to %s: Encumbant is invalid",
                         device.name,
-                        advert.name,
+                        challenger.name,
                     )
                 continue
 
@@ -1365,91 +1381,37 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # not a contender, but otherwise build a set of test scores and make a determination at the
             # end.
 
-            # If we lack critical data we cannot win...
-            if (
-                advert.rssi_distance is None
-                or advert.rssi_distance > _max_radius
-                or advert.area_id is None
-                # Add others that are redundant, but make the linter happy
-                # in future comparisons
-                or advert.hist_distance_by_interval is None
-            ):
-                # if _superchatty:
-                #     _LOGGER.debug(
-                #         "%s not closest to %s vs %s: we lack the basics",
-                #         device.name,
-                #         scanner.name,
-                #         closest_scanner.name,
-                #     )
-                continue
-
             # If we ARE NOT ACTUALLY CLOSER(!) we can not win.
-            if closest_advert.rssi_distance < advert.rssi_distance:
+            if incumbent.rssi_distance < challenger.rssi_distance:
                 # we are not even closer!
                 continue
 
             tests.reason = None  # ensure we don't trigger logging if no decision was made.
-            tests.same_area = closest_advert.area_id == advert.area_id
-            tests.areas = (closest_advert.area_name or "", advert.area_name or "")
-            tests.scannername = (closest_advert.name, advert.name)
-            tests.distance = (closest_advert.rssi_distance, advert.rssi_distance)
+            tests.same_area = incumbent.area_id == challenger.area_id
+            tests.areas = (incumbent.area_name or "", challenger.area_name or "")
+            tests.scannername = (incumbent.name, challenger.name)
+            tests.distance = (incumbent.rssi_distance, challenger.rssi_distance)
             # tests.velocity = (
             #     next((val for val in closest_scanner.hist_velocity), 0),
             #     next((val for val in scanner.hist_velocity), 0),
             # )
 
-            # _old_last_detection = 999.9
-            # _new_last_detection = 999.9
-            # if (_closest_hascanner := self.devices[closest_scanner.scanner_address]._hascanner) is not None:
-            #     _old_last_detection = _closest_hascanner.time_since_last_detection() or 999
-
-            # if (_new_hascanner := self.devices[scanner.scanner_address]._hascanner) is not None:
-            #     _new_last_detection = _new_hascanner.time_since_last_detection() or 999.0
-
-            # tests.last_detection = (_old_last_detection, _new_last_detection)
-
+            # How recently have we heard from the scanners themselves (not just for this device's adverts)?
             tests.last_ad_age = (
-                nowstamp - closest_advert.scanner_device.last_seen,
-                nowstamp - advert.scanner_device.last_seen,
+                nowstamp - incumbent.scanner_device.last_seen,
+                nowstamp - challenger.scanner_device.last_seen,
             )
+
+            # How old are the ads?
             tests.this_ad_age = (
-                nowstamp - closest_advert.stamp,
-                nowstamp - advert.stamp,
+                nowstamp - incumbent.stamp,
+                nowstamp - challenger.stamp,
             )
 
-            # when_old_was_last_this_close = 999.9
-            # for seconds, old_dist in enumerate(closest_scanner.hist_distance_by_interval):
-            #     if old_dist >= scanner.rssi_distance:
-            #         when_old_was_last_this_close = seconds
-            #         continue
-
-            # time_new_has_been_closer_for = 999.9
-            # for seconds, old_dist in enumerate(closest_scanner.hist_distance_by_interval):
-            #     if old_dist >= max(scanner.hist_distance_by_interval[0 : seconds + 1]):
-            #         time_new_has_been_closer_for = seconds
-            #         continue
-
-            # tests.last_closer = (
-            #     # How recently closest_scanner was as close as new scanner is now
-            #     when_old_was_last_this_close,
-            #     # How long new scanner has been closer
-            #     time_new_has_been_closer_for,
-            # )
-            # if tests.last_closer[0] < 3:
-            #     # Our worst hasn't yet beat its best, we're out.
-            #     if _superchatty:
-            #         _LOGGER.debug(
-            #             "%s not closest to %s vs %s: we need to dwell more\n%s",
-            #             device.name,
-            #             scanner.name,
-            #             closest_scanner.name,
-            #             tests,
-            #         )
-            #     continue
-
-            _pda = advert.rssi_distance
-            _pdb = closest_advert.rssi_distance
-            tests.pcnt_diff = abs(_pda - _pdb) / (_pda + _pdb) / 2
+            # Calculate the percentage difference between the challenger and incumbent's distances
+            _pda = challenger.rssi_distance
+            _pdb = incumbent.rssi_distance
+            tests.pcnt_diff = abs(_pda - _pdb) / ((_pda + _pdb) / 2)
 
             # Same area. Confirm freshness and distance.
             if (
@@ -1458,26 +1420,31 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 and tests.distance[0] >= tests.distance[1]
             ):
                 tests.reason = "WIN awarded for same area, newer, closer advert"
-                closest_advert = advert
+                incumbent = challenger
                 continue
 
-            # Win by historical min/max. Confirm available history and sufficient %diff.
-            min_seconds = 3
-            max_seconds = 5
-            if len(advert.hist_distance_by_interval) > min_seconds:
+            # Hysteresis.
+            # If our worst reading in max_seconds is still closer than the incumbent's **best** reading
+            # in that time, and we are over a PD threshold, we win.
+            #
+            min_history = 3  # we must have at least this much history
+            history_window = 5  # the time period to compare between us and incumbent
+            pdiff_outright = 0.30  # Percentage difference to win outright / instantly
+            pdiff_historical = 0.15  # Percentage difference required to win on historical test
+            if len(challenger.hist_distance_by_interval) > min_history:  # we have enough history, let's go..
                 tests.hist_min_max = (
-                    min(closest_advert.hist_distance_by_interval[:max_seconds]),  # Oldest min
-                    max(advert.hist_distance_by_interval[:max_seconds]),  # Newest max
+                    min(incumbent.hist_distance_by_interval[:history_window]),  # The closest that the incumbent has been
+                    max(challenger.hist_distance_by_interval[:history_window]),  # The **furthest** we have been in that time
                 )
                 if (
                     tests.hist_min_max[1] < tests.hist_min_max[0]
-                    and tests.pcnt_diff > 0.15  # and we're significantly closer.
+                    and tests.pcnt_diff > pdiff_historical  # and we're significantly closer.
                 ):
                     tests.reason = "WIN on historical min/max"
-                    closest_advert = advert
+                    incumbent = challenger
                     continue
 
-            if tests.pcnt_diff < 0.18:
+            if tests.pcnt_diff < pdiff_outright:
                 # Didn't make the cut. We're not "different enough" given how
                 # recently the previous nearest was updated.
                 tests.reason = "LOSS - failed on percentage_difference"
@@ -1486,7 +1453,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # If we made it through all of that, we're winning, so far!
             tests.reason = "WIN by not losing!"
 
-            closest_advert = advert
+            incumbent = challenger
 
         if _superchatty and tests.reason is not None:
             _LOGGER.info(
@@ -1497,11 +1464,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
         _superchatty = False
 
-        if device.area_advert != closest_advert and tests.reason is not None:
+        if device.area_advert != incumbent and tests.reason is not None:
             device.diag_area_switch = tests.sensortext()
 
         # Apply the newly-found closest scanner (or apply None if we didn't find one)
-        device.apply_scanner_selection(closest_advert)
+        device.apply_scanner_selection(incumbent)
 
     def _refresh_scanners(self, force=False):
         """
