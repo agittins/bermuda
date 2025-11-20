@@ -1360,11 +1360,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 continue
 
             # If we are too far away or don't have an area, we cannot win...
-            if (
-                challenger.rssi_distance is None
-                or challenger.rssi_distance > _max_radius
-                or challenger.area_id is None
-            ):
+            if challenger.rssi_distance is None or challenger.rssi_distance > _max_radius or challenger.area_id is None:
                 continue
 
             # At this point the challenger is a vaild contender...
@@ -1373,9 +1369,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             # If closest scanner lacks critical data, we win.
             if (
-                incumbent is None
-                or incumbent.rssi_distance is None
-                or incumbent.area_id is None
+                incumbent is None or incumbent.rssi_distance is None or incumbent.area_id is None
                 # Extra checks that are redundant but make linting easier later...
                 # or closest_advert.hist_distance_by_interval is None
             ):
@@ -1446,8 +1440,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             pdiff_historical = 0.15  # Percentage difference required to win on historical test
             if len(challenger.hist_distance_by_interval) > min_history:  # we have enough history, let's go..
                 tests.hist_min_max = (
-                    min(incumbent.hist_distance_by_interval[:history_window]),  # The closest that the incumbent has been
-                    max(challenger.hist_distance_by_interval[:history_window]),  # The **furthest** we have been in that time
+                    min(
+                        incumbent.hist_distance_by_interval[:history_window]
+                    ),  # The closest that the incumbent has been
+                    max(
+                        challenger.hist_distance_by_interval[:history_window]
+                    ),  # The **furthest** we have been in that time
                 )
                 if (
                     tests.hist_min_max[1] < tests.hist_min_max[0]
