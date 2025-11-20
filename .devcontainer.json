@@ -1,8 +1,11 @@
 {
   "name": "ludeeus/integration_blueprint",
-  "image": "mcr.microsoft.com/devcontainers/python:3.12",
-  "postCreateCommand": "scripts/setup",
-  "forwardPorts": [8123, 5678],
+  "image": "mcr.microsoft.com/devcontainers/python:3.13",
+  "postCreateCommand": "bash -lc 'curl -LsSf https://astral.sh/uv/install.sh | sh && scripts/setup'",
+  "forwardPorts": [
+    8123,
+    5678
+  ],
   "portsAttributes": {
     "8123": {
       "label": "Home Assistant",

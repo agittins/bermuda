@@ -28,3 +28,17 @@ uv pip install git+https://github.com/boto/botocore
 
 uv pip install --requirement requirements.txt
 uv pip install --requirement requirements_test.txt
+
+# Make sure the dev HA instance sees this checkout directly.
+CONFIG_DIR="${PWD}/config"
+CUSTOM_DIR="${CONFIG_DIR}/custom_components"
+COMPONENT_SRC="${PWD}/custom_components/bermuda"
+COMPONENT_DEST="${CUSTOM_DIR}/bermuda"
+
+mkdir -p "${CUSTOM_DIR}"
+
+if [[ -e "${COMPONENT_DEST}" && ! -L "${COMPONENT_DEST}" ]]; then
+    echo "WARNING: ${COMPONENT_DEST} exists and is not a symlink, skipping link creation."
+else
+    ln -sfn "${COMPONENT_SRC}" "${COMPONENT_DEST}"
+fi
