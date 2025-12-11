@@ -33,7 +33,7 @@ class BermudaPoint():
 			self.beacon_address = beacon.address
 			self.data = {}
 			for scanner in beacon.coordinator.get_scanners:
-				_LOGGER.debug("  scanner.scanner_device.name: %s", scanner.name)
+				_LOGGER.debug("  scanner.scanner_device.name: %s dist: %s dist_raw: %s", scanner.name, scanner.area_distance, scanner.area_distance_raw)
 				# self.data[scanner.name] = scanner.rssi_distance
 				self.data[scanner.name] = {
 					'stamp' : scanner.last_seen,

@@ -79,9 +79,9 @@ async def async_setup_entry(
             entities.append(BermudaSensorAreaLastSeen(coordinator, entry, address))
             entities.append(BermudaSensorAreaSwitchReason(coordinator, entry, address))
 
-            for scanner in scanners:
-                entities.append(BermudaSensorScannerRange(coordinator, entry, address, scanner))
-                entities.append(BermudaSensorScannerRangeRaw(coordinator, entry, address, scanner))
+            # for scanner in scanners:
+                # entities.append(BermudaSensorScannerRange(coordinator, entry, address, scanner))
+                # entities.append(BermudaSensorScannerRangeRaw(coordinator, entry, address, scanner))
 
             #TODO how to add them at runtime?
             entities.append(BermudaSensorValue(coordinator, entry, address, 'time_raw'))
@@ -528,7 +528,7 @@ class BermudaSensorValue(BermudaSensor):#TODO obviously not meters...
 
     @property
     def state_class(self):
-        return SensorStateClass.MEASUREMENT
+        return SensorStateClass.TOTAL
 
 class BermudaSensorAreaValue(BermudaSensor):#TODO obviously not meters...
     """Create sensors for range to each scanner. Extends closest-range class."""
@@ -577,7 +577,7 @@ class BermudaSensorAreaValue(BermudaSensor):#TODO obviously not meters...
 
     @property
     def state_class(self):
-        return SensorStateClass.MEASUREMENT
+        return SensorStateClass.TOTAL
 
 
 class BermudaGlobalSensor(BermudaGlobalEntity, SensorEntity):

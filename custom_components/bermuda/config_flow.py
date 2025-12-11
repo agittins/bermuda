@@ -662,7 +662,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
 
         messages = {}
         messages["area"] = self.coordinator.cal_area
-        messages["device"] = self.coordinator.cal_device.prefname
+        messages["device"] = self.coordinator.cal_device.name_by_user
 
         if self._last_area not in area_points:
             messages["count"] = "0"

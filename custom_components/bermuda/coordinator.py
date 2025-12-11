@@ -673,19 +673,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # Recalculate smoothed distances, last_seen etc
                 device.calculate_data()
 
-            if self.cal:
-                beacon = self.cal_device
-
-                # point, stamp = beacon.get_point_fresh()
-                point = beacon.get_point()
-
-                if self.cal_area not in self.bmap._area_points:
-                    self.bmap._area_points[self.cal_area] = []
-
-                self.bmap._area_points[self.cal_area].append(point)
-
-            self._refresh_areas_by_min_distance()
-
             # We might need to freshen deliberately on first start if no new scanners
             # were discovered in the first scan update. This is likely if nothing has changed
             # since the last time we booted.
@@ -725,6 +712,19 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             # Device Pruning (only runs periodically)
             self.prune_devices()
+
+            if self.cal:
+                beacon = self.cal_device
+
+                # point, stamp = beacon.get_point_fresh()
+                point = beacon.get_point()
+
+                if self.cal_area not in self.bmap._area_points:
+                    self.bmap._area_points[self.cal_area] = []
+
+                self.bmap._area_points[self.cal_area].append(point)
+
+            self._refresh_areas_by_min_distance()
 
         finally:
             # end of async update
