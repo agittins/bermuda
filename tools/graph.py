@@ -10,6 +10,8 @@ from matplotlib.widgets import RadioButtons, CheckButtons
 # import mpl_interactions.ipyplot as iplt
 
 import sys, os
+# from line_profiler import profile
+
 # sys.path.insert(1, '../custom_components/bermuda')	#ehhh
 # sys.path.insert(1, '../')	#ehhh
 # sys.path.insert(1, '../custom_components')	#ehhh
@@ -61,7 +63,7 @@ for m in measures:
 	data[m] = {}
 	data[fm] = {}
 	for area, points in bmap._area_points.items():
-		if points:
+		# if points:
 			data[m][area] = []
 			data[fm][area] = []
 			for s in scanners:
@@ -138,6 +140,7 @@ def test(mx, my):
 				return get_area_col(area)
 		return (0.0, 0.0, 0.0, 0.0)
 
+	# return (0.0, 0.0, 0.0, 0.0)
 	ret = bmap._point_probs(tuple(coord))
 
 	area = mesh_area
@@ -162,9 +165,10 @@ def update_mesh():
 	axes = ax['main']
 
 	# mx, my = np.mgrid[-3:3:complex(0, N), -2:2:complex(0, N)]
-	extent = [-1, 30, -1, 30]
 	res = np.linspace(-1, 30, 100)
 	ires = len(res)
+	extent = [-1, 30, -1, 30]
+	extent = [res[0], res[-1], res[0], res[-1]]
 
 	# mx, my = np.meshgrid(res, res)
 	# print('mx', mx)

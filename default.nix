@@ -9,8 +9,11 @@ stdenv.mkDerivation {
 		python3Packages.pytest
 # 		python3Packages.json
 		python3Packages.numpy
-		python3Packages.pytorch
+		python3Packages.torch
 		python3Packages.matplotlib
+
+# 		python3Packages.line-profiler
+		py-spy
 	];
 }
 
