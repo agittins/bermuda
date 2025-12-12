@@ -635,6 +635,11 @@ class BermudaDevice(dict):
 
         Used to apply a "winning" scanner's data to the device for setting closest Area.
         """
+        # _LOGGER.debug(
+        #     "apply_scanner_selection %s bermuda_advert.rssi_distance %s",
+        #     self.name,
+        #     bermuda_advert.rssi_distance,
+        # )
         old_area = self.area_name
         if bermuda_advert is not None and bermuda_advert.rssi_distance is not None:
             # We found a winner

@@ -3,6 +3,9 @@ import bisect
 import math
 import json
 
+
+POINT_FRESH_CUT: float  = 1.5
+
 TOOLS = False
 try:
 	from ..bermuda_device import BermudaDevice
@@ -29,49 +32,70 @@ class BermudaPoint():
 
 	if not TOOLS:
 		def _init(self, beacon: BermudaDevice) -> None:
-			_LOGGER.debug("device: %s", beacon.name)
+			# _LOGGER.debug("device: %s", beacon.name)
+			self.beacon_name = beacon.name
 			self.beacon_address = beacon.address
 			self.data = {}
-			for scanner in beacon.coordinator.get_scanners:
-				_LOGGER.debug("  scanner.scanner_device.name: %s dist: %s dist_raw: %s", scanner.name, scanner.area_distance, scanner.area_distance_raw)
-				# self.data[scanner.name] = scanner.rssi_distance
-				self.data[scanner.name] = {
-					'stamp' : scanner.last_seen,
-					'dist' : scanner.area_distance,
-					'dist_raw' : scanner.area_distance_raw,
-					'rssi' : scanner.area_rssi,
+
+			for advert in beacon.adverts.values():
+				# rawdist = advert.set_ref_power(new_ref_power)
+				# _LOGGER.debug("  advert.scanner_device.name: %s dist: %s dist_raw: %s", advert.scanner_device.name, advert.rssi_distance, advert.rssi_distance_raw)
+				# _LOGGER.debug("name: %64s  stamp: %32s  dist: %32s  dist_raw: %32s", advert.scanner_device.name, advert.stamp, advert.rssi_distance, advert.rssi_distance_raw)
+				self.data[advert.scanner_device.name] = {
+					'stamp' : advert.stamp,
+					'dist' : advert.rssi_distance,
+					'dist_raw' : advert.rssi_distance_raw,
+					'rssi' : advert.rssi,
 				}
 
+			_LOGGER.debug("Point  norm:  %s", beacon.name)
+			self.log()
+
 		@classmethod
-		def get_fresh(self, beacon: BermudaDevice):# -> BermudaPoint: #seriously wtf?
+		def get_fresh(self, beacon: BermudaDevice, time_cut: float = POINT_FRESH_CUT):# -> BermudaPoint: #seriously wtf?
 			ret = BermudaPoint()
+			ret.beacon_name = beacon.name
 			ret.beacon_address = beacon.address
 
-			stamp = 0.0
-			for scanner in beacon.coordinator.get_scanners:
-				stamp = max(stamp, scanner.last_seen)
+			ms = 0.0
+			for advert in beacon.adverts.values():
+				ms = max(stamp, advert.stamp)
 
 			ret.data = {}
-			for scanner in beacon.coordinator.get_scanners:
-				if stamp - scanner.last_seen <= 0.5:
-					ret.data[scanner.name] = {
-						'stamp' : scanner.last_seen,
-						'dist' : scanner.area_distance,
-						'dist_raw' : scanner.area_distance_raw,
-						'rssi' : scanner.area_rssi,
-						}
+			for advert in beacon.adverts.values():
+				if ms - advert.stamp < time_cut:
+					ret.data[advert.scanner_device.name] = {
+						'stamp' : advert.stamp,
+						'dist' : advert.rssi_distance,
+						'dist_raw' : advert.rssi_distance_raw,
+						'rssi' : advert.rssi,
+					}
+
+			_LOGGER.debug("Point fresh:  %s", beacon.name)
+			self.log()
 			return ret
 
-	def fresh_cut(self, time_cut: float = 0.2):
+		def log(self):
+			ms = self.get_max_stamp()
+			for name in self.data.keys():
+				_LOGGER.debug("\tname: %32s  stamp: %6.2f  rssi: %4s  dist: %6.2f  dist_raw: %6.2f", name, self.data[name]['stamp'] - ms, self.data[name]['rssi'], self.data[name]['dist'], self.data[name]['dist_raw'])
+
+	def get_max_stamp(self):
 		ms = 0.0
-		for name in self.data.keys():
-			ms = max(ms, self.data[name]['stamp'])
+		for adv in self.data.values():
+			ms = max(ms, adv['stamp'])
+		return ms
+
+	def fresh_cut(self, time_cut: float = POINT_FRESH_CUT):
+		ms = self.get_max_stamp()
 
 		ret = BermudaPoint(self.to_dict())
 		for name in self.data.keys():
 			if ms - self.data[name]['stamp'] >= time_cut:
 				ret.data.pop(name)
-
+		if not TOOLS:
+			_LOGGER.debug("Point   cut:  %s", getattr(self, 'beacon_name', 'None'))
+			ret.log()
 		return ret
 
 	def from_dict(self, d) -> None:

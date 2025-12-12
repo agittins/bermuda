@@ -1491,7 +1491,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         #
         # if device.area_advert != incumbent and tests.reason is not None:
         #     device.diag_area_switch = tests.sensortext()
-
+        #
         # Apply the newly-found closest scanner (or apply None if we didn't find one)
         device.apply_scanner_selection(incumbent)
         if not device.create_sensor:

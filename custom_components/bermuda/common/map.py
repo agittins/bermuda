@@ -868,7 +868,7 @@ class BermudaMapTrack():
 
 			sv = 0.00001
 
-			DBG('self.time_raw = {}', self.time_raw)
+			# DBG('self.time_raw = {}', self.time_raw)
 
 			#TODO make it more 'pythonic'... ehh...
 
