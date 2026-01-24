@@ -438,7 +438,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         # this was probably us, nothing else to do
                         pass
                     else:
-                        for ident_type, ident_id in device_entry.identifiers:
+                        for identifier in device_entry.identifiers:
+                            if len(identifier) >= 2:
+                                ident_type, ident_id = identifier[0], identifier[1]
+                            else:
+                                continue
                             if ident_type == DOMAIN:
                                 # One of our sensor devices!
                                 try:
