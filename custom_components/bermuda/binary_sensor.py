@@ -17,7 +17,7 @@ async def async_setup_entry(hass, entry, async_add_devices):
 
 
 class BermudaBinarySensor(BermudaEntity, BinarySensorEntity):
-    """bermuda binary_sensor class."""
+    """permuda binary_sensor class."""
 
     @property
     def name(self):

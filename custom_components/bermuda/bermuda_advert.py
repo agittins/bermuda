@@ -70,16 +70,17 @@ class BermudaAdvert(dict):
         self,
         parent_device: BermudaDevice,  # The device being tracked
         advertisementdata: AdvertisementData,  # The advertisement info from the device, received by the scanner
-        options,
+        coordinator,
         scanner_device: BermudaDevice,  # The scanner device that "saw" it.
     ) -> None:
+        self.coordinator = coordinator
         self.scanner_address: Final[str] = scanner_device.address
         self.device_address: Final[str] = parent_device.address
         self._device = parent_device
         self.ref_power: float = self._device.ref_power  # Take from parent at first, might be changed by metadevice l8r
         self.apply_new_scanner(scanner_device)
 
-        self.options = options
+        self.options = coordinator.options
 
         self.stamp: float = 0
         self.new_stamp: float | None = None  # Set when a new advert is loaded from update

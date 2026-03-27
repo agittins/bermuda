@@ -126,9 +126,9 @@ class BermudaEntity(CoordinatorEntity):
             # except for received iBeacons.
             connections = {
                 # Keeps the distance_to entities the same across pre/post 2025.3
-                (dr.CONNECTION_NETWORK_MAC, (self._device.address_wifi_mac or self._device.address).lower()),
+                (dr.CONNECTION_NETWORK_MAC, (DOMAIN + (self._device.address_wifi_mac or self._device.address)).lower()),
                 # Ensures we can also match the Bluetooth integration entities.
-                (dr.CONNECTION_BLUETOOTH, (self._device.address_ble_mac or self._device.address).upper()),
+                (dr.CONNECTION_BLUETOOTH, (DOMAIN + (self._device.address_ble_mac or self._device.address)).upper()),
             }
         elif self._device.address_type == ADDR_TYPE_IBEACON:
             # ibeacon doesn't (yet) actually set a "connection", but
@@ -138,7 +138,7 @@ class BermudaEntity(CoordinatorEntity):
         elif self._device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
             # Private BLE Device integration doesn't specify "connection" tuples,
             # so we use what it defines for the "identifier" instead.
-            connections = {("private_ble_device", self._device.address.lower())}
+            connections = {(DOMAIN_PRIVATE_BLE_DEVICE, self._device.address.lower())}
             # We don't set the model since the Private BLE integration should have
             # already named it nicely.
             # model = f"IRK: {self._device.address.lower()[:4]}"
@@ -152,6 +152,7 @@ class BermudaEntity(CoordinatorEntity):
             domain_name = DOMAIN_PRIVATE_BLE_DEVICE
         else:
             connections = {(dr.CONNECTION_BLUETOOTH, self._device.address.upper())}
+            # connections = {(DOMAIN_PRIVATE_BLE_DEVICE, self._device.address.upper())}
             # No need to set model, since MAC address will be shown via connection.
             # model = f"Bermuda: {self._device.address.lower()}"
 
@@ -218,6 +219,6 @@ class BermudaGlobalEntity(CoordinatorEntity):
     def device_info(self):
         """Implementing this creates an entry in the device registry."""
         return {
-            "identifiers": {(DOMAIN, "BERMUDA_GLOBAL")},
-            "name": "Bermuda Global",
+            "identifiers": {(DOMAIN, "PERMUDA_GLOBAL")},
+            "name": "Permuda Global",
         }

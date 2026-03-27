@@ -13,6 +13,9 @@ for them, so we can use them to contribute towards measurements.
 from __future__ import annotations
 
 import binascii
+
+from typing import TYPE_CHECKING, cast
+
 import re
 from typing import TYPE_CHECKING, Final
 
@@ -59,6 +62,8 @@ if TYPE_CHECKING:
 
     from .coordinator import BermudaDataUpdateCoordinator
 
+if TYPE_CHECKING:
+    from .coordinator import BermudaDataUpdateCoordinator
 
 class BermudaDevice(dict):
     """
@@ -89,6 +94,7 @@ class BermudaDevice(dict):
         self.address_wifi_mac: str | None = None
         # We use a weakref to avoid any possible GC issues (only likely if we add a __del__ method, but *shrug*)
         self._coordinator: BermudaDataUpdateCoordinator = coordinator
+        self.coordinator = coordinator
         self.ref_power: float = 0  # If non-zero, use in place of global ref_power.
         self.ref_power_changed: float = 0  # Stamp for last change to ref_power, for cache zapping.
         self.options = self._coordinator.options
@@ -107,6 +113,7 @@ class BermudaDevice(dict):
         self.area_last_seen_icon: str = ICON_DEFAULT_AREA
 
         self.area_distance: float | None = None  # how far this dev is from that area
+        self.area_distance_raw: float | None = None  # how far this dev is from that area
         self.area_rssi: float | None = None  # rssi from closest scanner
         self.area_advert: BermudaAdvert | None = None  # currently closest BermudaScanner
 
@@ -628,12 +635,18 @@ class BermudaDevice(dict):
 
         Used to apply a "winning" scanner's data to the device for setting closest Area.
         """
+        # _LOGGER.debug(
+        #     "apply_scanner_selection %s bermuda_advert.rssi_distance %s",
+        #     self.name,
+        #     bermuda_advert.rssi_distance,
+        # )
         old_area = self.area_name
         if bermuda_advert is not None and bermuda_advert.rssi_distance is not None:
             # We found a winner
             self.area_advert = bermuda_advert
             self._update_area_and_floor(bermuda_advert.area_id)
             self.area_distance = bermuda_advert.rssi_distance
+            self.area_distance_raw = bermuda_advert.rssi_distance_raw
             self.area_rssi = bermuda_advert.rssi
             self.area_last_seen = self.area_name
             self.area_last_seen_id = self.area_id
@@ -643,6 +656,7 @@ class BermudaDevice(dict):
             self.area_advert = None
             self._update_area_and_floor(None)
             self.area_distance = None
+            self.area_distance_raw = None
             self.area_rssi = None
 
         if (old_area != self.area_name) and self.create_sensor:
@@ -653,23 +667,34 @@ class BermudaDevice(dict):
                 self.area_name,
             )
 
-    def get_scanner(self, scanner_address) -> BermudaAdvert | None:
-        """
-        Given a scanner address, return the most recent BermudaDeviceScanner (advert) that matches.
 
-        This is required as the list of device.scanners is keyed by [address, scanner], and
-        a device might switch back and forth between multiple addresses.
-        """
-        _stamp = 0
-        _found_scanner = None
-        for advert in self.adverts.values():
-            if advert.scanner_address == scanner_address:
-                # we have matched the scanner, but is it the most recent address?
-                if _stamp == 0 or (advert.stamp is not None and advert.stamp > _stamp):
-                    _found_scanner = advert
-                    _stamp = _found_scanner.stamp or 0
+    def get_point(self):
+        from .common.point import BermudaPoint # ehhh
+        return BermudaPoint(self)
 
-        return _found_scanner
+    def get_point_fresh(self):
+        return BermudaPoint.get_fresh()
+
+    def apply_area(self, dist, area, maybe = None):
+        # _LOGGER.debug("apply_area: %s, %s, %s", dist, area, maybe)
+        self.maybe_area = maybe
+        # self.area_id = closest_scanner.area_id
+        self.area_distance = dist
+        # self.area_distance_raw = dist
+        if self.area_name != area:
+            self.area_prev = self.area_name
+            self.area_name = area
+            # _LOGGER.debug(": %s", got[0][1])
+
+        # old_area = self.area_name
+        # if (old_area != self.area_name) and self.create_sensor:
+        #     # Our area has changed!
+        #     _LOGGER.debug(
+        #         "Device %s was in '%s', now '%s'",
+        #         self.name,
+        #         old_area,
+        #         self.area_name,
+        #     )
 
     def calculate_data(self):
         """
@@ -699,7 +724,7 @@ class BermudaDevice(dict):
         else:
             self.zone = STATE_NOT_HOME
 
-        if self.address.upper() in self.options.get(CONF_DEVICES, []):
+        if self.address.upper() in self.coordinator.options.get(CONF_DEVICES, []):
             # We are a device we track. Flag for set-up:
             self.create_sensor = True
 
@@ -738,7 +763,7 @@ class BermudaDevice(dict):
             device_advert = self.adverts[advert_tuple] = BermudaAdvert(
                 self,
                 advertisementdata,
-                self.options,
+                self.coordinator,
                 scanner_device,
             )
 

@@ -1,0 +1,34 @@
+As mentioned in #402 this is just to show the concept and allow anyone to test it, and not an actual "pull request".
+
+The extension is renamed to 'Permuda' and all entities are prefixed with 'permuda' so that it can be used besides Bermuda and shouldn't conflict with it.
+
+To test it just copy/link the 'custom_components/bermuda' folder as e.g. /var/lib/hass/custom_components/permuda then add the integration in home-assistant.
+
+Currently I don't do any beacon power compensation, although the original code does and that might still work, I haven't tested it because I only have one...
+So I'd recommend adding and callibrating only with one device at first, it has to be something that advertises continuously preferably quite often (more than once per-second).
+Just checkmark it in "Configure / Select Devices" like in Bermuda.
+
+To map an area:
+1. go to the area with a phone and your beacon device (probably also the same phone)
+2. click "Configure / Calibration 3: Mapping Areas"
+3. select your beacon device and the area you're in
+4. click submit to start gathering points for the map
+5. walk around the area with your beacon device,
+	a. preferably naturaly pretending to do things you'd normally be doing
+	b. you can click refresh to see how many points were captured
+	c. note abort doesn't work atm... so don't accidentally walk into another area...
+6. once you've gathered enough data click Finish (initially aim for ~5-10sec of mapping, later you can add more)
+
+You can clear specific areas or the whole mapping in
+
+Note that the area and some debug values are exposed as new entities "sensor.permuda_<mac> Area" etc so you'd have to rename it or change your automations to actually use this instead of regular Bermuda.
+Instead (at least initially) I'd recommend just opening the device and you'll see both the Bermuda and Permuda entities listed, there you can observe whether the Area changes differently and whether it's actually better or worse and where.
+
+At the moment areas extend past their gathered points, so don't be surprised that you're likely mapped to (sometimes weird) areas when you're in a not-yet-mapped location.
+You can try to limit that by mapping additional areas like "garden" or "" something.
+
+In tools there's a grah.py for visualizing the gathered points and tuning heuristics.
+Just click "Download diagnostics" under the 3 dots next to "Configure", and run it: ./graph.py /path/to/diagnostics.json
+
+Don't hessitate to ask questions or hack anything in the code, there's a bunch of tunables and alternative code that isn't exposed in the config yet.
+
