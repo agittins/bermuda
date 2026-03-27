@@ -6,6 +6,11 @@ stdenv.mkDerivation {
 	nativeBuildInputs = [
 		platformio
 		python3Packages.pip
+
+# 		python3Packages.pex	# for packaging
+# 		python3Packages.pyc
+		python3Packages.cython
+
 		python3Packages.pytest
 # 		python3Packages.json
 		python3Packages.numpy

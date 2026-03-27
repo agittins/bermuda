@@ -27,10 +27,10 @@ from common.point import *
 path = 'data.json'
 # print ('argument list', sys.argv)
 if len(sys.argv) == 2:
-    path = sys.argv[1]
+	path = sys.argv[1]
 
 with open(path, 'r') as file:
-    data = json.load(file)
+	data = json.load(file)
 
 bmap = BermudaMap(data['data']['options']['bmap'])
 
@@ -191,6 +191,37 @@ def update_mesh():
 	# plt.draw()
 
 
+def plt_scatter(name, mi, axes):
+	dat = data[measures[mi]][name]
+
+# 	a = 0
+# 	if name in st_areas:
+# 		a = al
+# 	axes.scatter(dat[x], dat[y], alpha=a, label=name)
+# #	axes.plot(dat[x], dat[y], alpha=a, label=name)
+
+	fuu = np.stack((dat[x], dat[y]), axis=-1)
+	fu = []
+	# fu = np.trim_zeros(fuu)
+	for i in range(len(fuu)):
+		if fuu[i][0] >= 0 or fuu[i][1] >= 0:
+			fu.append(fuu[i])
+
+	values, counts = np.unique(fuu, axis = 0, return_inverse=False, return_counts=True)
+	# values, counts = np.unique(fu, axis = 0, return_inverse=False, return_counts=True)
+	# print('\nvalues:\n')
+	# print(values)
+	# print('\n\ncounts:\n')
+	# print(counts)
+	for i in range(len(counts)):
+		counts[i] *= plt.rcParams['lines.markersize'] ** 2
+	a = 0
+	if name in st_areas:
+		a = al
+	if len(values):
+		axes.scatter(values[:,0], values[:,1], s=counts, alpha=a, label=name)
+
+
 def update_ms():
 	global al, x, y, mm, sm
 
@@ -203,12 +234,7 @@ def update_ms():
 	# 	if name in st_areas:
 	# 		axes.scatter(dat[x], dat[y], alpha=al, label=name)
 	for name in bmap.areas:
-		dat = data[measures[mm]][name]
-		a = 0
-		if name in st_areas:
-			a = al
-		axes.scatter(dat[x], dat[y], alpha=a, label=name)
-		# axes.plot(dat[x], dat[y], alpha=a, label=name)
+		plt_scatter(name, mm, axes)
 
 	# axes.set_xlabel(scanners[x])
 	# axes.set_ylabel(scanners[y])
@@ -229,6 +255,8 @@ def update_ss():
 	# 	if name in st_areas:
 	# 		axes.scatter(dat[x], dat[y], alpha=al, label=name)
 	for name in bmap.areas:
+		plt_scatter(name, sm, axes)
+		continue
 		dat = data[measures[sm]][name]
 		# print(name)
 
@@ -369,4 +397,9 @@ tune_update(0)
 # update()
 
 plt.show()
+
+# profiling:
+# py-spy record -o profile.svg -- ./graph.py
+# time python3 -m cProfile ./graph.py
+# python3 -X importtime ./graph.py
 
