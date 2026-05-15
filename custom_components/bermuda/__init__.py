@@ -10,14 +10,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from homeassistant.core import callback
-from homeassistant.exceptions import ConfigEntryNotReady
+import voluptuous as vol
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import SupportsResponse
+from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.entity_registry import async_migrate_entries
 
 from .const import _LOGGER, DOMAIN, PLATFORMS, STARTUP_MESSAGE
 from .coordinator import BermudaDataUpdateCoordinator
-from .util import mac_math_offset, mac_norm
+from .util import mac_norm
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -36,6 +37,39 @@ class BermudaData:
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
+SERVICE_DUMP_DEVICES = "dump_devices"
+SERVICE_DUMP_DEVICES_SCHEMA = vol.Schema(
+    {
+        vol.Optional("addresses"): cv.string,
+        vol.Optional("configured_devices"): cv.boolean,
+        vol.Optional("redact"): cv.boolean,
+    }
+)
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Set up Bermuda services."""
+
+    async def async_dump_devices(call):
+        """Return a dump of beacon advertisements by receiver."""
+        loaded_entries = [
+            entry for entry in hass.config_entries.async_entries(DOMAIN) if entry.state is ConfigEntryState.LOADED
+        ]
+        if not loaded_entries:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="not_loaded")
+
+        coordinator = loaded_entries[0].runtime_data.coordinator
+        return await coordinator.service_dump_devices(call)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DUMP_DEVICES,
+        async_dump_devices,
+        SERVICE_DUMP_DEVICES_SCHEMA,
+        SupportsResponse.ONLY,
+    )
+    return True
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> bool:
     """Set up this integration using UI."""
@@ -44,17 +78,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> b
     coordinator = BermudaDataUpdateCoordinator(hass, entry)
     entry.runtime_data = BermudaData(coordinator)
 
-    async def on_failure():
-        _LOGGER.debug("Coordinator last update failed, raising ConfigEntryNotReady")
-        raise ConfigEntryNotReady
-
     try:
         await coordinator.async_refresh()
-    except Exception:  # noqa: BLE001
+    except Exception as err:
         _LOGGER.exception("Error during coordinator refresh")
-        await on_failure()
+        raise ConfigEntryNotReady from err
     if not coordinator.last_update_success:
-        await on_failure()
+        _LOGGER.debug("Coordinator last update failed, raising ConfigEntryNotReady")
+        raise ConfigEntryNotReady
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -66,35 +97,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> b
 async def async_migrate_entry(hass: HomeAssistant, config_entry: BermudaConfigEntry) -> bool:
     """Migrate previous config entries."""
     _LOGGER.debug("Migrating config from version %s.%s", config_entry.version, config_entry.minor_version)
-    _oldversion = f"{config_entry.version}.{config_entry.minor_version}"
-
-    if config_entry.version == 3:  # it won't be.
-        # Bogus version for now, wanted to placeholder the migrate_entries / unique_id thing.
-        # If we need to manage unique_id of sensors, we probably just need
-        # to manage the callback, but not worry about the hass update.
-        #
-        # This is lifted from the discussion at https://community.home-assistant.io/t/migrating-unique-ids/348512
-        #
-        # Also worth looking at https://github.com/home-assistant/core/pull/115265/files for an example
-        # of migrating unique_ids from one form to another.
-        #
-        old_unique_id = config_entry.unique_id
-        new_unique_id = mac_math_offset(old_unique_id, 3)
-
-        @callback
-        def update_unique_id(entity_entry):
-            """Update unique_id of an entity."""
-            return {"new_unique_id": entity_entry.unique_id.replace(old_unique_id, new_unique_id)}
-
-        if old_unique_id != new_unique_id:
-            await async_migrate_entries(hass, config_entry.entry_id, update_unique_id)
-            hass.config_entries.async_update_entry(config_entry, unique_id=new_unique_id)
-
-        return False
-
-    if f"{config_entry.version}.{config_entry.minor_version}" != _oldversion:
-        _LOGGER.info("Migrated config entry to version %s.%s", config_entry.version, config_entry.minor_version)
-
+    # No migrations are currently required; config entries remain at version 1.
     return True
 
 
@@ -106,10 +109,15 @@ async def async_remove_config_entry_device(
     address = None
     for domain, ident in device_entry.identifiers:
         if domain == DOMAIN:
-            # The identifier is the base device address, possibly with suffix like "_range".
-            # Extract just the address part (MAC, IRK, or iBeacon uuid).
-            address = ident.split("_")[0]
-            break
+            # The identifier is normally the base device address. Some legacy
+            # entries may have a trailing suffix like "_range"; use rsplit so
+            # iBeacon ids in uuid_major_minor form stay intact.
+            for candidate in (ident, ident.rsplit("_", 1)[0]):
+                if (normalized := mac_norm(candidate)) in coordinator.devices:
+                    address = normalized
+                    break
+            if address is not None:
+                break
     if address is not None:
         try:
             coordinator.devices[mac_norm(address)].create_sensor = False

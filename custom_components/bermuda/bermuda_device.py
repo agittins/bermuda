@@ -61,7 +61,7 @@ if TYPE_CHECKING:
     from .coordinator import BermudaDataUpdateCoordinator
 
 
-class BermudaDevice(dict):
+class BermudaDevice:
     """
     This class is to represent a single bluetooth "device" tracked by Bermuda.
 
@@ -825,12 +825,11 @@ class BermudaDevice(dict):
                 # they are None (like self._hascanner), which will prevent them showing at all.
                 out[var] = val
                 continue
-            if val in [self._coordinator, self.floor, self.area, self.ar, self.fr]:
+            if val is self._coordinator or val is self.floor or val is self.area or val is self.ar or val is self.fr:
                 # Objects to ignore completely.
                 continue
-            if val in [self._hascanner, self.area, self.floor, self.ar, self.fr]:
-                if hasattr(val, "__repr__"):
-                    out[var] = val.__repr__()
+            if val is self._hascanner:
+                out[var] = val.__repr__()
                 continue
             if val is self.adverts:
                 advertout = {}

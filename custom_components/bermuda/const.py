@@ -21,27 +21,19 @@ DOMAIN_DATA = f"{DOMAIN}_data"
 # either way it works).
 VERSION = "0.0.0"
 
-ATTRIBUTION = "Data provided by http://jsonplaceholder.typicode.com/"
 ISSUE_URL = "https://github.com/agittins/bermuda/issues"
 
 # Icons
-ICON = "mdi:format-quote-close"
 ICON_DEFAULT_AREA: Final = "mdi:land-plots-marker"
 ICON_DEFAULT_FLOOR: Final = "mdi:selection-marker"  # "mdi:floor-plan"
 # Issue/repair translation keys. If you change these you MUST also update the key in the translations/xx.json files.
 REPAIR_SCANNER_WITHOUT_AREA = "scanner_without_area"
-
-# Device classes
-BINARY_SENSOR_DEVICE_CLASS = "connectivity"
 
 # Platforms
 PLATFORMS = [
     Platform.SENSOR,
     Platform.DEVICE_TRACKER,
     Platform.NUMBER,
-    # Platform.BUTTON,
-    # Platform.SWITCH,
-    # Platform.BINARY_SENSOR
 ]
 
 # Should probably retrieve this from the component, but it's in "DOMAIN" *shrug*
@@ -194,9 +186,6 @@ DOCS[CONF_SMOOTHING_SAMPLES] = (
     "How many samples to average distance smoothing. Bigger numbers"
     " make for slower distance increases. 10 or 20 seems good."
 )
-
-# Defaults
-DEFAULT_NAME = DOMAIN
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 _LOGGER_SPAM_LESS = BermudaLogSpamLess(_LOGGER, LOGSPAM_INTERVAL)

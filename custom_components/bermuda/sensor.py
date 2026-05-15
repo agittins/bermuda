@@ -380,7 +380,7 @@ class BermudaSensorScannerRange(BermudaSensorRange):
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
         """We need to reimplement this, since the attributes need to be scanner-specific."""
         devscanner = self._device.get_scanner(self._scanner.address)
-        if hasattr(devscanner, "source"):
+        if devscanner is not None:
             return {
                 "area_id": self._scanner.area_id,
                 "area_name": self._scanner.area_name,
