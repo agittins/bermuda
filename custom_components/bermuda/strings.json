@@ -63,6 +63,11 @@
       }
     }
   },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Bermuda is not loaded. Set up the integration before calling this service."
+    }
+  },
   "issues": {
     "scanner_without_area": {
       "description": "Bermuda requires all bluetooth proxies to have a valid area assigned in order to work correctly. Assign an area by visiting each proxy's device page (via `Devices and Services`), and click the pencil icon in the top-right to assign an area. The following proxies are missing an area assignment:\n\n{scannerlist}",

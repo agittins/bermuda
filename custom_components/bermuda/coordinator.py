@@ -490,7 +490,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # initial setup, then no updates will be triggered on the co-ordinator.
         # So let's check if we haven't updated recently, and do so...
         if self.stamp_last_update < monotonic_time_coarse() - (UPDATE_INTERVAL * 2):
-            self.hass.async_create_task(self._async_update_data_internal())
+            # Use a config-entry-bound background task so it is tracked and
+            # cancelled cleanly on unload.
+            self.config_entry.async_create_background_task(
+                self.hass, self._async_update_data_internal(), "bermuda_advert_triggered_update"
+            )
 
     def _check_all_platforms_created(self, address):
         """Checks if all platforms have finished loading a device's entities."""
@@ -1658,10 +1662,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # Search for any of the redaction strings in the data, applying
                 # every match cumulatively so that strings containing multiple
                 # addresses get all of them redacted (not just the last match).
-                data = datalower
+                redacted = datalower
                 for find, fix in list(self.redactions.items()):
-                    if find in data:
-                        data = data.replace(find, fix)
+                    if find in redacted:
+                        redacted = redacted.replace(find, fix)
+                if redacted != datalower:
+                    # Only adopt the (lower-cased) redacted form if we actually
+                    # redacted something; otherwise keep the original casing.
+                    data = redacted
             # redactions done, now replace any remaining MAC addresses
             # We are only looking for xx:xx:xx... format.
             return self._redact_generic_re.sub(self._redact_generic_sub, data)

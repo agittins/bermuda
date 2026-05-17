@@ -13,7 +13,7 @@ dump_devices:
     configured_devices:
       required: false
       example: "False"
-      default: true
+      default: false
       selector:
         boolean:
     redact:
