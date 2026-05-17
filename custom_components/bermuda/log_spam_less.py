@@ -20,11 +20,12 @@ class BermudaLogSpamLess:
 
     _logger: logging.Logger
     _interval: float
-    _keycache = {}
 
     def __init__(self, logger: logging.Logger, spam_interval: float) -> None:
         self._logger = logger
         self._interval = spam_interval
+        # Per-instance cache so multiple instances don't share rate-limit state.
+        self._keycache: dict[str, dict] = {}
 
     def _check_key(self, key):
         """

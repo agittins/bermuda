@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, cast
 
 import aiofiles
-import voluptuous as vol
 import yaml
 from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.components import bluetooth
@@ -24,14 +23,10 @@ from homeassistant.core import (
     HomeAssistant,
     ServiceCall,
     ServiceResponse,
-    SupportsResponse,
     callback,
 )
 from homeassistant.helpers import (
     area_registry as ar,
-)
-from homeassistant.helpers import (
-    config_validation as cv,
 )
 from homeassistant.helpers import (
     device_registry as dr,
@@ -144,7 +139,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.sensor_interval = entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
 
         # set some version flags
-        self.hass_version_min_2025_2 = HA_VERSION_MAJ > 2025 or (HA_VERSION_MAJ == 2025 and HA_VERSION_MIN >= 2)
         # when habasescanner.discovered_device_timestamps became a public method.
         self.hass_version_min_2025_4 = HA_VERSION_MAJ > 2025 or (HA_VERSION_MAJ == 2025 and HA_VERSION_MIN >= 4)
 
@@ -272,21 +266,6 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.devices: dict[str, BermudaDevice] = {}
         # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
 
-        # Register the dump_devices service
-        hass.services.async_register(
-            DOMAIN,
-            "dump_devices",
-            self.service_dump_devices,
-            vol.Schema(
-                {
-                    vol.Optional("addresses"): cv.string,
-                    vol.Optional("configured_devices"): cv.boolean,
-                    vol.Optional("redact"): cv.boolean,
-                }
-            ),
-            SupportsResponse.ONLY,
-        )
-
         # Register for newly discovered / changed BLE devices
         if self.config_entry is not None:
             self.config_entry.async_on_unload(
@@ -397,8 +376,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             async with aiofiles.open(file_path) as f:
                 ci_yaml = yaml.safe_load(await f.read())["company_identifiers"]
             self.company_uuids: dict[int, str] = {member["value"]: member["name"] for member in ci_yaml}
+        except (OSError, KeyError, TypeError, yaml.YAMLError):
+            # These mappings improve labels only; Bermuda must still load if the
+            # optional files are missing or malformed.
+            _LOGGER.debug("Unable to load Bluetooth manufacturer metadata", exc_info=True)
         finally:
-            # Ensure that an issue reading these files (which are optional, really) doesn't stop the whole show.
             self._waitingfor_load_manufacturer_ids = False
 
     @callback
@@ -508,7 +490,11 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # initial setup, then no updates will be triggered on the co-ordinator.
         # So let's check if we haven't updated recently, and do so...
         if self.stamp_last_update < monotonic_time_coarse() - (UPDATE_INTERVAL * 2):
-            self.hass.async_create_task(self._async_update_data_internal())
+            # Use a config-entry-bound background task so it is tracked and
+            # cancelled cleanly on unload.
+            self.config_entry.async_create_background_task(
+                self.hass, self._async_update_data_internal(), "bermuda_advert_triggered_update"
+            )
 
     def _check_all_platforms_created(self, address):
         """Checks if all platforms have finished loading a device's entities."""
@@ -840,7 +826,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # should totally be pruned if it's no longer around.
             if (
                 device_address not in metadevice_source_keepers
-                and device not in self.metadevices
+                and device_address not in self.metadevices
                 and device_address not in self.scanner_list
                 and (not device.create_sensor)  # Not if we track the device
                 and (not device.is_scanner)  # redundant, but whatevs.
@@ -1167,32 +1153,20 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 if source_device.ref_power != metadevice.ref_power:
                     source_device.set_ref_power(metadevice.ref_power)
 
-                # anything that isn't already set to something interesting, overwrite
-                # it with the new device's data.
-                for key, val in source_device.items():
-                    if val in (
-                        source_device.name_bt_local_name,
-                        source_device.name_bt_serviceinfo,
-                        source_device.manufacturer,
-                    ) and metadevice[key] in (None, False):
-                        metadevice[key] = val
+                # Copy naming / manufacturer fields from the source device, but
+                # only where the metadevice doesn't already have a value.
+                for _attr in ("name_bt_local_name", "name_bt_serviceinfo", "manufacturer"):
+                    _srcval = getattr(source_device, _attr)
+                    if _srcval is not None and getattr(metadevice, _attr) in (None, False):
+                        setattr(metadevice, _attr, _srcval)
                         _want_name_update = True
 
-                if _want_name_update:
-                    metadevice.make_name()
-
-                # Anything that's VERY interesting, overwrite it regardless of what's already there:
-                # INTERESTING:
-                for key, val in source_device.items():
-                    if val in (
-                        source_device.beacon_major,
-                        source_device.beacon_minor,
-                        source_device.beacon_power,
-                        source_device.beacon_unique_id,
-                        source_device.beacon_uuid,
-                    ):
-                        metadevice[key] = val
-                        # _want_name_update = True
+                # Always propagate the beacon identity fields, since these are
+                # what define the metadevice.
+                for _attr in ("beacon_major", "beacon_minor", "beacon_power", "beacon_unique_id", "beacon_uuid"):
+                    _srcval = getattr(source_device, _attr)
+                    if _srcval is not None:
+                        setattr(metadevice, _attr, _srcval)
             # Done iterating sources, remove any to be dropped
             for source in _sources_to_remove:
                 metadevice.metadevice_sources.remove(source)
@@ -1355,7 +1329,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 incumbent = challenger
                 if _superchatty:
                     _LOGGER.debug(
-                        "%s IS closesr to %s: Encumbant is invalid",
+                        "%s IS closer to %s: incumbent is invalid",
                         device.name,
                         challenger.name,
                     )
@@ -1585,7 +1559,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             addresses += self.scanner_list
             addresses += self.options.get(CONF_DEVICES, [])
             # known IRK/Private BLE Devices
-            addresses += self.pb_state_sources
+            addresses += [address for address in self.pb_state_sources.values() if address is not None]
 
         # lowercase all the addresses for matching
         addresses = list(map(str.lower, addresses))
@@ -1639,7 +1613,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         self.redactions[altmac] = f"{address[:2]}::CFG_MAC_{i}::{address[-2:]}"
                 else:
                     # Don't know what it is, but not a mac.
-                    self.redactions[address] = f"CFG_OTHER_{1}_{address}"
+                    self.redactions[address] = f"CFG_OTHER_{i}_{address}"
         # EVERYTHING ELSE
         for non_lower_address, device in self.devices.items():
             address = non_lower_address.lower()
@@ -1685,11 +1659,17 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # Full string match, a quick short-circuit
                 data = self.redactions[datalower]
             else:
-                # Search for any of the redaction strings in the data.
+                # Search for any of the redaction strings in the data, applying
+                # every match cumulatively so that strings containing multiple
+                # addresses get all of them redacted (not just the last match).
+                redacted = datalower
                 for find, fix in list(self.redactions.items()):
-                    if find in datalower:
-                        data = datalower.replace(find, fix)
-                        # don't break out because there might be multiple fixes required.
+                    if find in redacted:
+                        redacted = redacted.replace(find, fix)
+                if redacted != datalower:
+                    # Only adopt the (lower-cased) redacted form if we actually
+                    # redacted something; otherwise keep the original casing.
+                    data = redacted
             # redactions done, now replace any remaining MAC addresses
             # We are only looking for xx:xx:xx... format.
             return self._redact_generic_re.sub(self._redact_generic_sub, data)

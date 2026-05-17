@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 # ruff: noqa: PLR1730
 
 
-class BermudaAdvert(dict):
+class BermudaAdvert:
     """
     Represents details from a scanner relevant to a specific device.
 
@@ -86,7 +86,7 @@ class BermudaAdvert(dict):
         self.rssi: float | None = None
         self.tx_power: float | None = None
         self.rssi_distance: float | None = None
-        self.rssi_distance_raw: float
+        self.rssi_distance_raw: float | None = None
         self.stale_update_count = 0  # How many times we did an update but no new stamps were found.
         self.hist_stamp: list[float] = []
         self.hist_rssi: list[int] = []
@@ -238,7 +238,7 @@ class BermudaAdvert(dict):
 
         if len(self.service_data) == 0 or self.service_data[0] != advertisementdata.service_data:
             self.service_data.insert(0, advertisementdata.service_data)
-            if advertisementdata.service_data not in self.manufacturer_data[1:]:
+            if advertisementdata.service_data not in self.service_data[1:]:
                 _want_name_update = True
             del self.service_data[HIST_KEEP_COUNT:]
 
@@ -254,7 +254,7 @@ class BermudaAdvert(dict):
         # Finally, save the new advert timestamp.
         self.new_stamp = new_stamp
 
-    def _update_raw_distance(self, reading_is_new=True) -> float:
+    def _update_raw_distance(self, reading_is_new=True) -> float | None:
         """
         Converts rssi to raw distance and updates history stack and
         returns the new raw distance.
@@ -271,6 +271,11 @@ class BermudaAdvert(dict):
             ref_power = self.conf_ref_power
         else:
             ref_power = self.ref_power
+
+        if self.rssi is None:
+            # No rssi reading yet (advert created but the first update was a
+            # stale / no-stamp early-return). Nothing to recalculate yet.
+            return self.rssi_distance_raw
 
         distance = rssi_to_metres(self.rssi + self.conf_rssi_offset, ref_power, self.conf_attenuation)
         self.rssi_distance_raw = distance
@@ -490,10 +495,10 @@ class BermudaAdvert(dict):
         # linting and typing can catch errors.
         out = {}
         for var, val in vars(self).items():
-            if val in [self.options]:
+            if val is self.options:
                 # skip certain vars that we don't want in the dump output.
                 continue
-            if val in [self.options, self._device, self.scanner_device]:
+            if val is self._device or val is self.scanner_device:
                 # objects we might want to represent but not fully iterate etc.
                 out[var] = val.__repr__()
                 continue

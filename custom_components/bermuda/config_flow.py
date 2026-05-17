@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import contextlib
+from copy import deepcopy
 from typing import TYPE_CHECKING
 
 import voluptuous as vol
 from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant import config_entries
-from homeassistant.config_entries import OptionsFlowWithConfigEntry
+from homeassistant.config_entries import OptionsFlow
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import (
@@ -112,7 +113,6 @@ if TYPE_CHECKING:
     from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
     from homeassistant.config_entries import ConfigFlowResult
 
-    from . import BermudaConfigEntry
     from .bermuda_device import BermudaDevice
     from .coordinator import BermudaDataUpdateCoordinator
 
@@ -165,8 +165,8 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
-        return BermudaOptionsFlowHandler(config_entry)
+    def async_get_options_flow(config_entry):  # noqa: ARG004
+        return BermudaOptionsFlowHandler()
 
     # async def _show_config_form(self, user_input):  # pylint: disable=unused-argument
     #     """Show the configuration form to edit location data."""
@@ -179,12 +179,11 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     #     )
 
 
-class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
+class BermudaOptionsFlowHandler(OptionsFlow):
     """Config flow options handler for bermuda."""
 
-    def __init__(self, config_entry: BermudaConfigEntry) -> None:
-        """Initialize HACS options flow."""
-        super().__init__(config_entry)
+    def __init__(self) -> None:
+        """Initialize Bermuda options flow."""
         self.coordinator: BermudaDataUpdateCoordinator
         self.devices: dict[str, BermudaDevice]
         self._last_ref_power = None
@@ -192,7 +191,16 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         self._last_scanner = None
         self._last_attenuation = None
         self._last_scanner_info = None
+        self._last_device_filter = ""
         self._translations_cache: dict[str, str] | None = None
+        self._options: dict | None = None
+
+    @property
+    def options(self) -> dict:
+        """Return a mutable working copy of the config entry options."""
+        if self._options is None:
+            self._options = deepcopy(dict(self.config_entry.options))
+        return self._options
 
     async def _get_options_translation(self, key: str, **kwargs: str) -> str:
         """
@@ -317,15 +325,17 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
 
     async def async_step_selectdevices(self, user_input=None):
         """Handle a flow initialized by the user."""
+        device_selector_keys = ("ibeacon_devices", "standard_devices", "random_devices")
         if user_input is not None:
+            submitted_filter = user_input.get("device_filter", "").lower()
             # Check if user submitted device selections (not just filtering)
             selected_devices = []
-            selected_devices.extend(user_input.get("ibeacon_devices", []))
-            selected_devices.extend(user_input.get("standard_devices", []))
-            selected_devices.extend(user_input.get("random_devices", []))
+            for selector_key in device_selector_keys:
+                selected_devices.extend(user_input.get(selector_key, []))
 
-            # If we have actual device selections (not empty lists), save and exit
-            if selected_devices:
+            if submitted_filter != self._last_device_filter:
+                self._last_device_filter = submitted_filter
+            elif any(selector_key in user_input for selector_key in device_selector_keys):
                 self.options[CONF_DEVICES] = selected_devices
                 return await self._update_options()
 
@@ -333,7 +343,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         self.devices = self.config_entry.runtime_data.coordinator.devices
 
         # Get search text if it exists
-        filter_text = user_input.get("device_filter", "").lower() if user_input else ""
+        filter_text = self._last_device_filter
 
         # Where we store the options before building the selector
         options_list = []
@@ -488,7 +498,6 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                         for d in self.options.get(CONF_DEVICES, [])
                         if any(opt["value"] == d.upper() for opt in options_metadevices)
                     ],
-                    description="iBeacon devices (iOS, Android with HA App, etc.)",
                 )
             ] = SelectSelector(SelectSelectorConfig(options=options_metadevices, multiple=True))
 
@@ -501,7 +510,6 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                         for d in self.options.get(CONF_DEVICES, [])
                         if any(opt["value"] == d.upper() for opt in options_otherdevices)
                     ],
-                    description="Standard BLE devices (Tiles, trackers, sensors, etc.)",
                 )
             ] = SelectSelector(SelectSelectorConfig(options=options_otherdevices, multiple=True))
 
@@ -514,7 +522,6 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                         for d in self.options.get(CONF_DEVICES, [])
                         if any(opt["value"] == d.upper() for opt in options_randoms)
                     ],
-                    description="Devices with random MAC addresses",
                 )
             ] = SelectSelector(SelectSelectorConfig(options=options_randoms, multiple=True))
 
@@ -724,6 +731,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                     "suffix": await self._get_options_translation("description_text.calibration_submit_hint")
                 },
             )
+        device = None
         if isinstance(self._last_device, str):
             device = self._get_bermuda_device_from_registry(self._last_device)
         results_str = ""
@@ -780,7 +788,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                     device_address = connection[1]
                     break
             if device_address is not None:
-                return self.coordinator.devices[device_address.lower()]
+                return self.coordinator.devices.get(device_address.lower())
         # We couldn't match the HA device id to a bermuda device mac.
         return None
 

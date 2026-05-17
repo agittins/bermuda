@@ -63,6 +63,11 @@
       }
     }
   },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Bermuda n'est pas chargé. Configurez l'intégration avant d'appeler ce service."
+    }
+  },
   "issues": {
     "scanner_without_area": {
       "description": "Bermuda nécessite que tous les proxys Bluetooth aient une zone valide assignée pour fonctionner correctement. Assignez une zone en visitant la page de chaque proxy (via `Appareils et services`), et cliquez sur l'icône crayon en haut à droite pour assigner une zone. Les proxys suivants n'ont pas de zone assignée :\n\n{scannerlist}",
