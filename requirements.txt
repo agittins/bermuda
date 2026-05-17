@@ -7,3 +7,4 @@ ruff==0.15.13
 pyudev
 pyserial-asyncio==0.6
 pyserial==3.5
+serialx
