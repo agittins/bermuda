@@ -4,8 +4,9 @@ name: Release
 # Lifted shamelessly from https://github.com/custom-components/grocy
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v*"
 
 permissions: {}
 
@@ -25,7 +26,7 @@ jobs:
       - name: Set release version number in files
         shell: bash
         run: |
-          version="${{ github.event.release.tag_name }}"
+          version="${{ github.ref_name }}"
           version="${version,,}"
           version="${version#v}"
           # update const.py
@@ -46,7 +47,9 @@ jobs:
         with:
           inputs: "${{ env.BERMUDA_ROOT_DIR }}/bermuda.zip"
 
-      - name: "Upload the ZIP file to the release"
+      - name: "Publish the release with the ZIP file"
         uses: softprops/action-gh-release@v2.6.1
         with:
           files: ${{ env.BERMUDA_ROOT_DIR }}/bermuda.zip
+          tag_name: ${{ github.ref_name }}
+          draft: false
