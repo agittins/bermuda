@@ -23,6 +23,22 @@ from .const import MOCK_CONFIG
 pytest_plugins = "pytest_homeassistant_custom_component"
 
 
+@pytest.fixture
+def expected_lingering_timers() -> bool:
+    """Tolerate lingering timers from the HA bluetooth scanner backend.
+
+    The bluetooth scanners schedule device-expiry timers that are not torn
+    down within a single test; this is backend behaviour, not a Bermuda leak.
+    """
+    return True
+
+
+@pytest.fixture
+def expected_lingering_tasks() -> bool:
+    """Tolerate lingering tasks from the HA bluetooth scanner backend."""
+    return True
+
+
 @pytest.fixture(autouse=True)
 def mock_bluetooth(enable_bluetooth):
     """Auto mock bluetooth."""
