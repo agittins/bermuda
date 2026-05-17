@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-05-17
+
+### Fixed
+- Propagate naming, manufacturer and beacon fields from source devices to metadevices (the previous dict-iteration path never ran)
+- Reference-power calibration changes now refresh sensors immediately (the cache-busting window was never triggered)
+- Per-scanner range sensors now expose their `area_id` / `area_name` attributes
+- `redact_data` fully redacts strings containing multiple addresses, and keeps the original casing when nothing is redacted
+- Guard against a missing RSSI value in the advert raw-distance calculation
+- Add the missing `not_loaded` translation raised by the `dump_devices` service when no entry is loaded
+- Advert-triggered updates now run as a config-entry-bound background task, cancelled cleanly on unload
+- Align the `services.yaml` `configured_devices` default with the code
+
+### Changed
+- Migrate the options flow off the deprecated `OptionsFlowWithConfigEntry`
+- Update bundled GitHub Actions and Python dependencies (Dependabot)
+- Align CI with Home Assistant 2026.5 (Python 3.14, `serialx`, `aioesphomeapi`, stricter test teardown)
+- Remove unused stub platforms and dead code
+
 ## [0.9.1] - 2026-02-13
 
 ### Fixed
