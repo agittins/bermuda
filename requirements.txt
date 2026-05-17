@@ -1,7 +1,7 @@
 aiofiles
 aiousbwatcher
 colorlog==6.10.1
-homeassistant>=2025.3.0
+homeassistant>=2026.5.2
 pip>=26.1.1,<26.2
 ruff==0.15.0
 pyudev
