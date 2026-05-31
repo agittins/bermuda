@@ -37,6 +37,23 @@ jobs:
           jq ".version = \"${version}\"" "${{ env.BERMUDA_ROOT_DIR }}/manifest.json" > "${{ env.BERMUDA_ROOT_DIR }}/manifest.json.tmp"
           mv "${{ env.BERMUDA_ROOT_DIR }}/manifest.json.tmp" "${{ env.BERMUDA_ROOT_DIR }}/manifest.json"
 
+      - name: Extract release notes from CHANGELOG
+        shell: bash
+        run: |
+          version="${{ github.ref_name }}"
+          version="${version#v}"
+          # Extract the section for this version (between its heading and the next "## [" line).
+          awk -v ver="$version" '
+            $0 ~ "^## \\[" ver "\\]" { in_section = 1; next }
+            in_section && /^## \[/ { exit }
+            in_section { print }
+          ' CHANGELOG.md > /tmp/release_notes.md
+          if [ ! -s /tmp/release_notes.md ]; then
+            echo "Release ${version}" > /tmp/release_notes.md
+          fi
+          echo "----- release notes -----"
+          cat /tmp/release_notes.md
+
       - name: Zip the integration directory
         run: |
           cd "${{ env.BERMUDA_ROOT_DIR }}"
@@ -53,3 +70,4 @@ jobs:
           files: ${{ env.BERMUDA_ROOT_DIR }}/bermuda.zip
           tag_name: ${{ github.ref_name }}
           draft: false
+          body_path: /tmp/release_notes.md
