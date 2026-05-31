@@ -791,7 +791,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.irk_manager.async_prune()
 
         # Prune devices.
-        prune_list: list[str] = []  # list of addresses to be pruned
+        # Use a set so addresses queued by both the metadevice-source pass and
+        # the per-device pass do not get deleted twice (which raises KeyError).
+        prune_list: set[str] = set()  # addresses to be pruned
         prunable_stamps: dict[str, float] = {}  # dict of potential prunees if we need to be more aggressive.
 
         metadevice_source_keepers = set()
@@ -810,7 +812,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         else:
                             # It's too old to be an IRK, and otherwise we'll auto-detect it,
                             # so let's be rid of it.
-                            prune_list.append(address)
+                            prune_list.add(address)
 
         for device_address, device in self.devices.items():
             # Prune any devices that haven't been heard from for too long, but only
@@ -839,7 +841,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     # in high-density situations, and *we* don't need to hang on to new
                     # enrollments because we'll seed them from PBLE.
                     if device.last_seen < stamp_unknown_irk:
-                        prune_list.append(device_address)
+                        prune_list.add(device_address)
                     elif device.last_seen < nowstamp - 200:  # BlueZ cache time
                         # It's not stale, but we will prune it if we can't make our
                         # quota of PRUNE_MAX_COUNT we'll shave these off too.
@@ -853,7 +855,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                 elif device.last_seen < nowstamp - PRUNE_TIME_DEFAULT:
                     # It's a static address, and stale.
-                    prune_list.append(device_address)
+                    prune_list.add(device_address)
                 else:
                     # Device is static, not tracked, not so old, but we might have to prune it anyway
                     prunable_stamps[device_address] = device.last_seen
@@ -871,7 +873,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 cutoff_index = min(len(sorted_addresses), prune_quota_shortfall)
                 # pylint: disable-next=unused-variable
                 for _stamp, address in sorted_addresses[:cutoff_index]:
-                    prune_list.append(address)
+                    prune_list.add(address)
             else:
                 _LOGGER.warning(
                     "Need to prune another %s devices to make quota, but no extra prunables available",
