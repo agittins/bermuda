@@ -123,8 +123,14 @@ class BermudaIrkManager:
             result = self._validate_mac_irk(address, irk, cipher)
             if result == irk:
                 return irk
-        # Failed to match anything, we should save it so we know.
-        return self._update_saved_mac(address, IrkTypes.NO_KNOWN_IRK_MATCH.value)
+        # No IRK matched. Classify by address format so a non-resolvable-private
+        # address is marked distinctly (NOT_RESOLVABLE_ADDRESS) from a
+        # resolvable-format address that simply matched no known IRK. Both are in
+        # IrkTypes.unresolved(), so callers treat them the same, but the marker
+        # avoids re-testing addresses that can never be resolvable.
+        if int(address[0], 16) & 0x04:
+            return self._update_saved_mac(address, IrkTypes.NO_KNOWN_IRK_MATCH.value)
+        return self._update_saved_mac(address, IrkTypes.NOT_RESOLVABLE_ADDRESS.value)
 
     def _validate_mac_irk(self, address: str, irk: bytes, cipher: Cipher | None) -> bytes:
         """
@@ -217,18 +223,26 @@ class BermudaIrkManager:
         return _unsubscribe
 
     def async_diagnostics_no_redactions(self):
-        """Return diagnostic info. Make sure to run redactions over the results."""
+        """
+        Return diagnostic info (MAC addresses still need washing by redact_data).
+
+        IRK key material is cryptographically sensitive and must never appear in
+        diagnostics, so each known IRK is shown as a stable non-secret label
+        (``IRK_0``, ``IRK_1`` ...) rather than its raw value.
+        """
         nowstamp = monotonic_time_coarse()
+        # Stable, non-secret label per known IRK (never expose the key itself).
+        irk_labels = {irk: f"IRK_{index}" for index, irk in enumerate(self._irks)}
         macs = {}
         for macirk in self._macs.values():
             if macirk.irk not in [IrkTypes.ADRESS_NOT_EVALUATED.value, IrkTypes.NOT_RESOLVABLE_ADDRESS.value]:
                 if macirk.irk == IrkTypes.NO_KNOWN_IRK_MATCH.value:
                     irkout = IrkTypes.NO_KNOWN_IRK_MATCH.name
                 else:
-                    irkout = macirk.irk.hex()
+                    irkout = irk_labels.get(macirk.irk, "IRK_unknown")
                 macs[macirk.mac] = {"irk": irkout, "expires_in": floor(macirk.expires - nowstamp)}
 
         return {
-            "irks": [irk.hex() for irk in self._irks],
+            "irks": list(irk_labels.values()),
             "macs": macs,
         }
