@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Security:** IRK cryptographic key material no longer leaks into diagnostics — keys are shown as stable labels (`IRK_0`…) instead of their raw hex value (the MAC-only redactor never washed them)
+- Update bookkeeping stamps now advance even if an update cycle raises, so a failed cycle no longer makes every incoming advert spawn a redundant background update or defeat the skip-already-processed optimisation; the advert-triggered path now records `last_update_success` too
+- Options-flow scanner calibration no longer crashes the flow when the free-form scanner-info editor has a missing key or a non-numeric value (defaults safely)
+- Stale-device pruning no longer drops a user-tracked device or a scanner just because it is a stale, non-most-recent metadevice source, nor a source that another metadevice still keeps as its most-recent
+- Parse the large (~192KB) manufacturer YAML off the event loop (`async_add_executor_job`) instead of blocking it
+- Restored `area_last_seen` no longer turns a `None` into the literal string `"None"`
+- `peak_retreat_velocity` guards against `None` entries in the distance/stamp history (consistent with the rest of the smoothing module)
+- `get_scanner` picks the most-recent matching advert deterministically even when a matched advert has a zero/None stamp
+- Options flow: a configured device that is no longer being discovered is now still offered (labelled "(saved)") in the device selector, instead of silently disappearing — saving the form previously dropped it from the tracked devices
+- IRK: a non-resolvable-format address is now classified `NOT_RESOLVABLE_ADDRESS` instead of being masked as `NO_KNOWN_IRK_MATCH` by the post-loop fallback (avoids needlessly re-testing it)
+- Remove an unused `_timestamp_cutoff` variable in the advert-gather path
+
+### Changed
+- Type the coordinator as `DataUpdateCoordinator[None]`
+- Isolate the private bluetooth-manager API behind a single guarded method and switch scanner enumeration to the public `bluetooth.async_current_scanners()` API, so a future Home Assistant change degrades diagnostics gracefully instead of breaking integration load
+- Extract the distance-smoothing maths into a pure, unit-tested `distance_filter` module
+- Extract the area-selection (trilateration) race into a dedicated `trilateration` module
+- Extract Bluetooth manufacturer-id loading/lookup into a `manufacturers` module
+- Extract MAC redaction into a `redaction` module and stale-device pruning into a `pruning` module
+- Move the options/calibration flow into `options_flow.py` (config_flow.py 792 → 83 lines)
+- Split `sensor.py` (580 → 171 lines) into `sensor_entities.py` (per-device) and `sensor_global.py` (hub-wide), keeping `sensor.py` as the platform entry point
+- Decompose the coordinator god-object from ~1684 to ~1230 lines across the above modules
+- Centralise experience-tuned constants (area hysteresis thresholds, distance-smoothing timing) in `const.py`
+- Fix the diagnostics module docstring (was "WLED")
+
+### Removed
+- Dead code: unused `DOMAIN_DATA` and `DOCS` constants, stale `binary_sensor`/`switch` bytecode, never-enabled verbose area logging, and the legacy flake8/isort config superseded by ruff
+
+### Tests
+- Add a `unique_id` regression snapshot pinning every entity `unique_id`, device-registry identity, translation-key mapping and the device-removal suffix handling
+- Add characterization tests for distance smoothing and area selection (behaviour frozen before refactor)
+- Add a comprehensive test suite across coordinator, config flow, devices, IRK, entities, redaction, manufacturers and helpers — raising coverage from 48% to 92% (29 → 322 tests)
+
+### Docs
+- Add `ARCHITECTURE.md`
+
 ## [0.9.3] - 2026-05-31
 
 ### Fixed
