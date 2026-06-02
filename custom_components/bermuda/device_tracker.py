@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.device_tracker.config_entry import BaseTrackerEntity
+try:
+    from homeassistant.components.device_tracker import BaseTrackerEntity
+except ImportError:
+    from homeassistant.components.device_tracker.config_entry import BaseTrackerEntity
 from homeassistant.components.device_tracker.const import SourceType
 from homeassistant.const import STATE_HOME
 from homeassistant.core import HomeAssistant, callback
