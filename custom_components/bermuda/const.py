@@ -13,7 +13,6 @@ from .log_spam_less import BermudaLogSpamLess
 
 NAME = "Bermuda BLE Trilateration"
 DOMAIN = "bermuda"
-DOMAIN_DATA = f"{DOMAIN}_data"
 # Version gets updated by github workflow during release.
 # The version in the repository should always be 0.0.0 to reflect
 # that the component has been checked out from git, not pulled from
@@ -136,56 +135,49 @@ PRUNE_TIME_REDACTIONS: Final[int] = 10 * 60  # when to discard redaction data
 
 SAVEOUT_COOLDOWN = 10  # seconds to delay before re-trying config entry save.
 
-DOCS = {}
-
-
 HIST_KEEP_COUNT = 10  # How many old timestamps, rssi, etc to keep for each device/scanner pairing.
 
 # Config entry DATA entries
 
 CONFDATA_SCANNERS = "scanners"
-DOCS[CONFDATA_SCANNERS] = "Persisted set of known scanners (proxies)"
 
 # Configuration and options
 
 CONF_DEVICES = "configured_devices"
-DOCS[CONF_DEVICES] = "Identifies which bluetooth devices we wish to expose"
 
 CONF_SCANNERS = "configured_scanners"
 
 
 CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS = "max_area_radius", 20
-DOCS[CONF_MAX_RADIUS] = "For simple area-detection, max radius from receiver"
 
 CONF_MAX_VELOCITY, DEFAULT_MAX_VELOCITY = "max_velocity", 3
-DOCS[CONF_MAX_VELOCITY] = (
-    "In metres per second - ignore readings that imply movement away faster than",
-    "this limit. 3m/s (10km/h) is good.",
-)
 
 CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT = "devtracker_nothome_timeout", 30
-DOCS[CONF_DEVTRACK_TIMEOUT] = "Timeout in seconds for setting devices as `Not Home` / `Away`."  # fmt: skip
 
 CONF_ATTENUATION, DEFAULT_ATTENUATION = "attenuation", 3
-DOCS[CONF_ATTENUATION] = "Factor for environmental signal attenuation."
 CONF_REF_POWER, DEFAULT_REF_POWER = "ref_power", -55.0
-DOCS[CONF_REF_POWER] = "Default RSSI for signal at 1 metre."
 
 CONF_SAVE_AND_CLOSE = "save_and_close"
 CONF_SCANNER_INFO = "scanner_info"
 CONF_RSSI_OFFSETS = "rssi_offsets"
 
 CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL = "update_interval", 10
-DOCS[CONF_UPDATE_INTERVAL] = (
-    "Maximum time between sensor updates in seconds. Smaller intervals",
-    "means more data, bigger database.",
-)
 
 CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES = "smoothing_samples", 20
-DOCS[CONF_SMOOTHING_SAMPLES] = (
-    "How many samples to average distance smoothing. Bigger numbers"
-    " make for slower distance increases. 10 or 20 seems good."
-)
+
+# Area-selection / trilateration tuning (centralised from coordinator).
+# These are experience-tuned; keep values identical when refactoring.
+AREA_MIN_HISTORY: Final = 3  # minimum history samples before the historical test applies
+AREA_HISTORY_WINDOW: Final = 5  # how many recent samples to compare between incumbent and challenger
+AREA_PCNT_DIFF_OUTRIGHT: Final = 0.30  # percentage distance gap required to win outright
+AREA_PCNT_DIFF_HISTORICAL: Final = 0.15  # percentage distance gap required to win on the historical min/max test
+
+# Distance-smoothing timing (centralised from bermuda_advert).
+USB_ADVERT_AGE_OFFSET: Final = 3.0  # seconds to age USB-adaptor adverts (they carry no stamps)
+STAMP_WARP_TOLERANCE: Final = 0.01  # tolerate slight clock warp when advancing a scanner's last_seen
+
+# Misc
+DIAG_TEXT_MAX_LENGTH: Final = 255  # cap for diagnostic text and string attributes
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 _LOGGER_SPAM_LESS = BermudaLogSpamLess(_LOGGER, LOGSPAM_INTERVAL)
