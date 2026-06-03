@@ -62,12 +62,13 @@ class BermudaEntity(CoordinatorEntity):
         If interval is specified the cache will use that (in seconds), otherwise the default is
         the CONF_UPPDATE_INTERVAL (typically suitable for fast-close slow-far sensors)
         """
-        if interval is not None:
-            self.bermuda_update_interval = interval
+        # Use the per-call interval if given, without mutating the entity's
+        # configured default (a one-off interval must not stick for later calls).
+        effective_interval = interval if interval is not None else self.bermuda_update_interval
 
         nowstamp = monotonic_time_coarse()
         if (
-            (self.bermuda_last_stamp < nowstamp - self.bermuda_update_interval)  # Cache is stale
+            (self.bermuda_last_stamp < nowstamp - effective_interval)  # Cache is stale
             or (self._device.ref_power_changed > nowstamp - 2)  # ref power changed in last 2sec
             or (self.bermuda_last_state is None)  # Nothing compares to you.
             or (statevalue is None)  # or you.
@@ -193,11 +194,11 @@ class BermudaGlobalEntity(CoordinatorEntity):
 
     def _cached_ratelimit(self, statevalue: Any, interval: int | None = None):
         """A simple way to rate-limit sensor updates."""
-        if interval is not None:
-            self._cache_ratelimit_interval = interval
+        # Per-call interval without mutating the entity's default.
+        effective_interval = interval if interval is not None else self._cache_ratelimit_interval
         nowstamp = monotonic_time_coarse()
 
-        if nowstamp > self._cache_ratelimit_stamp + self._cache_ratelimit_interval:
+        if nowstamp > self._cache_ratelimit_stamp + effective_interval:
             self._cache_ratelimit_stamp = nowstamp
             self._cache_ratelimit_value = statevalue
             return statevalue

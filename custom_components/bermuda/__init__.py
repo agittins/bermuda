@@ -75,6 +75,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> b
     """Set up this integration using UI."""
     if hass.data.get(DOMAIN) is None:
         _LOGGER.info(STARTUP_MESSAGE)
+        # Mark the banner as shown so it is logged once per HA process, not on
+        # every entry setup/reload (the integration itself uses runtime_data).
+        hass.data[DOMAIN] = True
     coordinator = BermudaDataUpdateCoordinator(hass, entry)
     entry.runtime_data = BermudaData(coordinator)
 

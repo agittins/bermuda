@@ -25,24 +25,16 @@ from .const import (
     CONF_REF_POWER,
     CONF_RSSI_OFFSETS,
     CONF_SMOOTHING_SAMPLES,
-    DISTANCE_INFINITE,
     DISTANCE_TIMEOUT,
     HIST_KEEP_COUNT,
 )
-
-# from .const import _LOGGER_SPAM_LESS
+from .distance_filter import minimum_hugging_average, peak_retreat_velocity
 from .util import clean_charbuf, rssi_to_metres
 
 if TYPE_CHECKING:
     from bleak.backends.scanner import AdvertisementData
 
     from .bermuda_device import BermudaDevice
-
-# The if instead of min/max triggers PLR1730, but when
-# split over two lines, ruff removes it, then complains again.
-# so we're just disabling it for the whole file.
-# https://github.com/astral-sh/ruff/issues/4244
-# ruff: noqa: PLR1730
 
 
 class BermudaAdvert:
@@ -391,46 +383,9 @@ class BermudaAdvert:
             # a historical log that is evenly spaced by update_interval.
 
             # Verify the new reading is vaguely sensible. If it isn't, we
-            # ignore it by duplicating the last cycle's reading.
-            if len(self.hist_stamp) > 1:
-                # How far (away) did it travel in how long?
-                # we check this reading against the recent readings to find
-                # the peak average velocity we are alleged to have reached.
-                velo_newdistance = self.hist_distance[0]
-                velo_newstamp = self.hist_stamp[0]
-                peak_velocity = 0
-                # walk through the history of distances/stamps, and find
-                # the peak
-                delta_t = velo_newstamp - self.hist_stamp[1]
-                delta_d = velo_newdistance - self.hist_distance[1]
-                if delta_t > 0:
-                    peak_velocity = delta_d / delta_t
-                # if our initial reading is an approach, we are done here
-                if peak_velocity >= 0:
-                    for old_distance, old_stamp in zip(self.hist_distance[2:], self.hist_stamp[2:], strict=False):
-                        if old_stamp is None:
-                            continue  # Skip this iteration if hist_stamp[i] is None
-
-                        delta_t = velo_newstamp - old_stamp
-                        if delta_t <= 0:
-                            # Additionally, skip if delta_t is zero or negative
-                            # to avoid division by zero
-                            continue
-                        delta_d = velo_newdistance - old_distance
-
-                        velocity = delta_d / delta_t
-
-                        # Don't use max() as it's slower.
-                        if velocity > peak_velocity:  # noqa: RUF100, PLR1730
-                            # but on subsequent comparisons we only care if they're faster retreats
-                            peak_velocity = velocity
-                # we've been through the history and have peak velo retreat, or the most recent
-                # approach velo.
-                velocity = peak_velocity
-            else:
-                # There's no history, so no velocity
-                velocity = 0
-
+            # ignore it by duplicating the last cycle's reading. The peak
+            # retreat velocity over recent history tells us if it looks bogus.
+            velocity = peak_retreat_velocity(self.hist_distance, self.hist_stamp)
             self.hist_velocity.insert(0, velocity)
 
             if velocity > self.conf_max_velocity:
@@ -454,26 +409,9 @@ class BermudaAdvert:
             if len(self.hist_distance_by_interval) > self.conf_smoothing_samples:
                 del self.hist_distance_by_interval[self.conf_smoothing_samples :]
 
-            # Calculate a moving-window average, that only includes
-            # historical values if they're "closer" (ie more reliable).
-            #
-            # This might be improved by weighting the values by age, but
-            # already does a fairly reasonable job of hugging the bottom
-            # of the noisy rssi data. A better way to control the maximum
-            # slope angle (other than increasing bucket count) might be
-            # helpful, but probably dependent on use-case.
-            #
-            dist_total: float = 0
-            local_min: float = self.rssi_distance_raw or DISTANCE_INFINITE
-            for distance in self.hist_distance_by_interval:
-                if distance is not None and distance <= local_min:
-                    local_min = distance
-                dist_total += local_min
-
-            if (_hist_dist_len := len(self.hist_distance_by_interval)) > 0:
-                movavg = dist_total / _hist_dist_len
-            else:
-                movavg = local_min
+            # Calculate a moving-window average that hugs the closest (most
+            # reliable) recent readings. See distance_filter for the rationale.
+            movavg = minimum_hugging_average(self.hist_distance_by_interval, self.rssi_distance_raw)
 
             # Finally, set the new, smoothed rssi_distance value.
             # The average is only helpful if it's lower than the actual reading.
