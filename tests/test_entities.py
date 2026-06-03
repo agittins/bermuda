@@ -308,13 +308,15 @@ def test_cached_ratelimit_none_statevalue_published():
 
 
 def test_cached_ratelimit_interval_override_makes_fresh():
-    """Passing interval overrides the stored update interval used for staleness."""
+    """A per-call interval controls staleness without mutating the stored default."""
     ent = _make_entity(BermudaSensorRange)
     _prime_cache(ent, last_state=42)
+    stored = ent.bermuda_update_interval
     # huge interval => cache considered fresh, and value is not falling/rising
     result = ent._cached_ratelimit(43, fast_falling=False, fast_rising=False, interval=100000)
     assert result == 42  # cached
-    assert ent.bermuda_update_interval == 100000
+    # The one-off interval must not stick to the entity's configured default.
+    assert ent.bermuda_update_interval == stored
 
 
 # --------------------------------------------------------------------------- #
@@ -534,12 +536,14 @@ def test_global_cached_ratelimit_publishes_when_stale():
 
 
 def test_global_cached_ratelimit_interval_override():
-    """Passing interval changes the stored interval used for the freshness window."""
+    """A per-call interval drives the freshness window without mutating the stored default."""
     ent = _make_entity(BermudaTotalProxyCount)
     _prime_global_cache(ent, value=5, fresh=False)
+    stored = ent._cache_ratelimit_interval
     # tiny interval and a stale-ish stamp => new value published
     assert ent._cached_ratelimit(8, interval=0) == 8
-    assert ent._cache_ratelimit_interval == 0
+    # The one-off interval must not stick to the entity's configured default.
+    assert ent._cache_ratelimit_interval == stored
 
 
 # --------------------------------------------------------------------------- #

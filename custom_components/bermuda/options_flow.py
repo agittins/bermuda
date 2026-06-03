@@ -113,7 +113,7 @@ class BermudaOptionsFlowHandler(OptionsFlow):
             full_key = f"component.{DOMAIN}.options.{key}"
             text = self._translations_cache.get(full_key, "")
         if kwargs:
-            with contextlib.suppress(KeyError, IndexError):
+            with contextlib.suppress(KeyError, IndexError, ValueError):
                 text = text.format(**kwargs)
         return text
 

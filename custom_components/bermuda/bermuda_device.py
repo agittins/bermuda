@@ -219,11 +219,10 @@ class BermudaDevice(BermudaScannerDeviceMixin):
                     self.address_type = BDADDR_TYPE_RANDOM_STATIC
 
             else:
-                # This is a normal MAC address.
+                # Fallback for any other colon-form address shape.
+                # (No OUI->manufacturer lookup here: the SIG tables are keyed by
+                # 16-bit company IDs, so a 24-bit OUI prefix never matches.)
                 self.address_type = BDADDR_TYPE_OTHER
-                name, generic = self._coordinator.get_manufacturer_from_id(self.address[:8])
-                if name and (self.manufacturer is None or not generic):
-                    self.manufacturer = name
 
     @callback
     def async_handle_pble_callback(

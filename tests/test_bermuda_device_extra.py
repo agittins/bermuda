@@ -104,20 +104,19 @@ def test_address_type_random_static(mock_coordinator):
     assert dev.address_type == BDADDR_TYPE_RANDOM_STATIC
 
 
-def test_address_type_normal_mac_applies_manufacturer(mock_coordinator):
-    """A 'normal' (public) MAC fetches a manufacturer name from the OUI."""
-    # nibble 'a' -> 1010 -> top two bits 10 ... wait that is reserved.
-    # To reach the BDADDR_TYPE_OTHER branch the address must NOT be 17 chars
-    # of mac form with len()==17. Public MACs are still 17 chars though, so
-    # the only way to land in the final else is len != 17. Use a 12-char
-    # un-separated form which mac_norm expands to a 17-char mac... that would
-    # be len 17 again. Instead exercise OTHER via the documented path: the
-    # final else triggers when address has 5 colons but len != 17 (e.g. a
-    # short octet). mac_norm leaves odd forms unchanged.
-    mock_coordinator.get_manufacturer_from_id.return_value = ("Acme Corp", False)
+def test_address_type_other_no_oui_manufacturer_lookup(mock_coordinator):
+    """A colon-form address that isn't a 17-char MAC lands in OTHER with no OUI lookup.
+
+    A 16-char address (5 colons, len != 17) falls through to the final ``else``
+    branch. Bermuda no longer derives a manufacturer from the address OUI prefix
+    there: the SIG tables are keyed by 16-bit company IDs, so a 24-bit OUI prefix
+    never matches -- the lookup was dead code and has been removed.
+    """
     dev = BermudaDevice(address="a:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
     assert dev.address_type == BDADDR_TYPE_OTHER
-    assert dev.manufacturer == "Acme Corp"
+    # No manufacturer is derived from the address during construction.
+    assert dev.manufacturer is None
+    mock_coordinator.get_manufacturer_from_id.assert_not_called()
 
 
 def test_address_type_ibeacon_metadevice(mock_coordinator):

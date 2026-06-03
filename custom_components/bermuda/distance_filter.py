@@ -21,8 +21,8 @@ def peak_retreat_velocity(hist_distance: list[float], hist_stamp: list[float]) -
 
     We compare the newest reading against each older reading to find the fastest
     *retreat* across the window; this is used to reject readings that imply the
-    device moved away implausibly quickly (a noise spike). Returns 0 when the
-    device is approaching or there is insufficient history.
+    device moved away implausibly quickly (a noise spike). Returns 0 only when
+    there is insufficient history; an approach yields a negative velocity.
     """
     if len(hist_stamp) <= 1:
         # There's no history, so no velocity.
