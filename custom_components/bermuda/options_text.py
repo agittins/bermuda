@@ -42,8 +42,8 @@ _DESCRIPTION_TEXTS: dict[str, dict[str, str]] = {
         ),
         "calibration_row_estimate": "Estimation (m)",
         "calibration_row_rssi": "RSSI réel",
-        "calibration_submit_hint": "Après avoir cliqué sur Soumettre, les nouvelles distances seront affichées ici.",
-        "filter_active": "🔍 **Filtrage par :** '{filter_text}'",
+        "calibration_submit_hint": "Après avoir cliqué sur Valider, les nouvelles distances seront affichées ici.",
+        "filter_active": "🔍 **Filtrage par :** « {filter_text} »",
         "found_devices": (
             "**{ibeacon_count} iBeacon, {standard_count} appareil(s) standard,"
             " {random_count} appareil(s) MAC aléatoire trouvé(s)**"
