@@ -16,5 +16,5 @@
   "issue_tracker": "https://github.com/agittins/bermuda/issues",
   "loggers": ["custom_components.bermuda"],
   "requirements": [],
-  "version": "0.9.3"
+  "version": "0.9.4"
 }

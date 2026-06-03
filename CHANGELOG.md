@@ -5,9 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.4] - 2026-06-03
 
 ### Fixed
+- Per-call rate-limit interval no longer mutates the entity's configured default (a one-off interval used to persist for every later read)
+- Remove a dead OUI→manufacturer lookup that could never match (the Bluetooth SIG tables are keyed by 16-bit company IDs, not 24-bit OUI prefixes)
 - **Security:** IRK cryptographic key material no longer leaks into diagnostics — keys are shown as stable labels (`IRK_0`…) instead of their raw hex value (the MAC-only redactor never washed them)
 - Update bookkeeping stamps now advance even if an update cycle raises, so a failed cycle no longer makes every incoming advert spawn a redundant background update or defeat the skip-already-processed optimisation; the advert-triggered path now records `last_update_success` too
 - Options-flow scanner calibration no longer crashes the flow when the free-form scanner-info editor has a missing key or a non-numeric value (defaults safely)
@@ -32,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Decompose the coordinator god-object from ~1684 to ~1230 lines across the above modules
 - Centralise experience-tuned constants (area hysteresis thresholds, distance-smoothing timing) in `const.py`
 - Fix the diagnostics module docstring (was "WLED")
+- French translations: typographic polish (non-breaking spaces before units and double punctuation, em dashes), reference the submit button as « Valider » (its actual HA French label), `AREA`→`ZONE` wording consistency, and a faux-ami fix (`retourner`→`renvoyer`)
+- Log the startup banner once per Home Assistant process instead of on every entry setup/reload
 
 ### Removed
 - Dead code: unused `DOMAIN_DATA` and `DOCS` constants, stale `binary_sensor`/`switch` bytecode, never-enabled verbose area logging, and the legacy flake8/isort config superseded by ruff
@@ -39,10 +43,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Tests
 - Add a `unique_id` regression snapshot pinning every entity `unique_id`, device-registry identity, translation-key mapping and the device-removal suffix handling
 - Add characterization tests for distance smoothing and area selection (behaviour frozen before refactor)
-- Add a comprehensive test suite across coordinator, config flow, devices, IRK, entities, redaction, manufacturers and helpers — raising coverage from 48% to 92% (29 → 322 tests)
+- Add a comprehensive test suite across coordinator, config flow, devices, IRK, entities, redaction, manufacturers and helpers — raising coverage from 48% to 93% (29 → 325 tests)
 
 ### Docs
 - Add `ARCHITECTURE.md`
+
+### Dependencies
+- Bump the Home Assistant requirement to >= 2026.5.4
+- Bump ruff to 0.15.15, black to 26.5.1, pip to >= 26.1.2
+- Bump release-drafter to 7.3.1 and softprops/action-gh-release to 3.0.0
 
 ## [0.9.3] - 2026-05-31
 
