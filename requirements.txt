@@ -2,7 +2,7 @@ aiofiles
 aiousbwatcher
 colorlog==6.10.1
 homeassistant>=2026.5.4
-pip>=26.1.1,<26.2
+pip>=26.1.2,<26.2
 ruff==0.15.15
 pyudev
 pyserial-asyncio==0.6
