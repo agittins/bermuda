@@ -70,14 +70,15 @@ async def async_setup_entry(
 
         if address not in created_devices:
             entities = []
-            entities.append(BermudaSensor(coordinator, entry, address))
+            entities.append(BermudaSensorArea(coordinator, entry, address))
+            entities.append(BermudaSensorAreaLastSeen(coordinator, entry, address))
+            entities.append(BermudaSensorAreaSwitchDiagnostic(coordinator, entry, address))
+            entities.append(BermudaSensorAreaSwitchReason(coordinator, entry, address))
             if coordinator.have_floors:
                 entities.append(BermudaSensorFloor(coordinator, entry, address))
-            entities.append(BermudaSensorRange(coordinator, entry, address))
             entities.append(BermudaSensorScanner(coordinator, entry, address))
             entities.append(BermudaSensorRssi(coordinator, entry, address))
-            entities.append(BermudaSensorAreaLastSeen(coordinator, entry, address))
-            entities.append(BermudaSensorAreaSwitchReason(coordinator, entry, address))
+            entities.append(BermudaSensorRange(coordinator, entry, address))
 
             # _LOGGER.debug("Sensor received new_device signal for %s", address)
             # We set update before add to False because we are being
@@ -146,16 +147,14 @@ async def async_setup_entry(
     )
 
 
+# Main Sensor Class with overrides that go everywhere.
 class BermudaSensor(BermudaEntity, SensorEntity):
     """bermuda Sensor class."""
 
     @property
-    def unique_id(self):
-        """
-        "Uniquely identify this sensor so that it gets stored in the entity_registry,
-        and can be maintained / renamed etc by the user.
-        """
-        return self._device.unique_id
+    def entity_registry_enabled_default(self) -> bool:
+        """Declare if entity should be automatically enabled on adding."""
+        return False
 
     @property
     def has_entity_name(self) -> bool:
@@ -164,44 +163,6 @@ class BermudaSensor(BermudaEntity, SensorEntity):
         so that HA should prepend the device name for the user.
         """
         return True
-
-    @property
-    def name(self):
-        """Return the name of the sensor."""
-        return "Area"
-
-    @property
-    def native_value(self):
-        """Return the state of the sensor."""
-        # return self.coordinator.data.get("body")
-        return self._device.area_name
-
-    @property
-    def icon(self):
-        """Provide a custom icon for particular entities."""
-        # TODO: This is ugly doing a check on name, and is a kludge
-        # because I originally was a bit reckless with the multiple
-        # inheritance here. So all the sensors should be restructured
-        # a bit to clean up this and other properties.
-        if self.name == "Area":
-            return self._device.area_icon
-        if self.name == "Area Last Seen":
-            return self._device.area_last_seen_icon
-        if self.name == "Floor":
-            return self._device.floor_icon
-        return super().icon
-        # return "mdi:floor-plan" or "mdi:map-marker-distance" or "mdi:signal-distance-variant"
-
-    @property
-    def entity_registry_enabled_default(self) -> bool:
-        """Declare if entity should be automatically enabled on adding."""
-        return self.name in ["Area", "Distance", "Floor"]
-
-    @property
-    def device_class(self):
-        """Return de device class of the sensor."""
-        # There isn't one for "Area Names" so we'll arbitrarily define our own.
-        return "bermuda__custom_device_class"
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
@@ -236,98 +197,19 @@ class BermudaSensor(BermudaEntity, SensorEntity):
         return attribs
 
 
-class BermudaSensorFloor(BermudaSensor):
-    """Sensor for the Floor of the current Area."""
+# Class for Default sesnors for devices.
+class BermudaDefaultSensor(BermudaSensor):
+    """bermuda Sensor class which are enabled by default."""
 
     @property
-    def unique_id(self):
-        return f"{self._device.unique_id}_floor"
-
-    @property
-    def name(self):
-        return "Floor"
-
-    @property
-    def native_value(self):
-        # Don't use area_scanner.name because it comes from the advert
-        # entry. Instead refer to the BermudaDevice, which takes trouble
-        # to use user-given names etc.
-        return self._device.floor_name
+    def entity_registry_enabled_default(self) -> bool:
+        """Declare if entity should be automatically enabled on adding."""
+        return True
 
 
-class BermudaSensorScanner(BermudaSensor):
-    """Sensor for name of nearest detected scanner."""
-
-    @property
-    def unique_id(self):
-        return f"{self._device.unique_id}_scanner"
-
-    @property
-    def name(self):
-        return "Nearest Scanner"
-
-    @property
-    def native_value(self):
-        # Don't use area_scanner.name because it comes from the advert
-        # entry. Instead refer to the BermudaDevice, which takes trouble
-        # to use user-given names etc.
-        if self._device.area_advert is not None:
-            return self.coordinator.devices[self._device.area_advert.scanner_address].name
-        return None
-
-
-class BermudaSensorRssi(BermudaSensor):
-    """Sensor for RSSI of closest scanner."""
-
-    @property
-    def unique_id(self):
-        """Return unique id for the entity."""
-        return f"{self._device.unique_id}_rssi"
-
-    @property
-    def name(self):
-        return "Nearest RSSI"
-
-    @property
-    def native_value(self):
-        return self._cached_ratelimit(self._device.area_rssi, fast_falling=False, fast_rising=True)
-
-    @property
-    def device_class(self):
-        return SensorDeviceClass.SIGNAL_STRENGTH
-
-    @property
-    def native_unit_of_measurement(self):
-        return SIGNAL_STRENGTH_DECIBELS_MILLIWATT
-
-    @property
-    def state_class(self):
-        """These are graphable measurements."""
-        return SensorStateClass.MEASUREMENT
-
-
-class BermudaSensorRange(BermudaSensor):
-    """Extra sensor for range-to-closest-area."""
-
-    @property
-    def unique_id(self):
-        """
-        "Uniquely identify this sensor so that it gets stored in the entity_registry,
-        and can be maintained / renamed etc by the user.
-        """
-        return f"{self._device.unique_id}_range"
-
-    @property
-    def name(self):
-        return "Distance"
-
-    @property
-    def native_value(self):
-        """Return the native value of the sensor."""
-        distance = self._device.area_distance
-        if distance is not None:
-            return self._cached_ratelimit(round(distance, 1))
-        return None
+# Class for Distance sensors.
+class BermudaDistanceSensor(BermudaSensor):
+    """bermuda Sensor class which set common distance properties."""
 
     @property
     def device_class(self):
@@ -342,6 +224,245 @@ class BermudaSensorRange(BermudaSensor):
     def state_class(self):
         """Measurement should result in graphed results."""
         return SensorStateClass.MEASUREMENT
+
+
+### Area Sensors
+class BermudaSensorArea(BermudaDefaultSensor):
+    """Sensor for name of current area."""
+
+    @property
+    def icon(self):
+        """Provide a custom icon for particular entities."""
+        return self._device.area_icon
+
+    @property
+    def name(self):
+        """Return the name of the sensor."""
+        return "Area"
+
+    @property
+    def native_value(self):
+        """Return the state of the sensor."""
+        return self._device.area_name
+
+    @property
+    def state(self) -> str:
+        """Return the state of the device."""
+        return self._device.area_name
+
+    @property
+    def unique_id(self):
+        """
+        "Uniquely identify this sensor so that it gets stored in the entity_registry,
+        and can be maintained / renamed etc by the user.
+        """
+        return f"{self._device.unique_id}_area"
+
+
+class BermudaSensorAreaLastSeen(BermudaDefaultSensor, RestoreSensor):
+    """Sensor for name of last seen area."""
+
+    @property
+    def icon(self):
+        """Provide a custom icon for particular entities."""
+        return self._device.area_last_seen_icon
+
+    @property
+    def name(self):
+        return "Area Last Seen"
+
+    @property
+    def native_value(self):
+        return self._device.area_last_seen
+
+    @property
+    def state(self) -> str:
+        """Return the state of the device."""
+        return self._device.area_last_seen
+
+    @property
+    def unique_id(self):
+        return f"{self._device.unique_id}_area_last_seen"
+
+    async def async_added_to_hass(self) -> None:
+        """Restore last saved value before adding to HASS."""
+        await super().async_added_to_hass()
+        if (sensor_data := await self.async_get_last_sensor_data()) is not None:
+            self._attr_native_value = str(sensor_data.native_value)
+            self._device.area_last_seen = str(sensor_data.native_value)
+
+
+class BermudaSensorAreaSwitchDiagnostic(BermudaSensor):
+    """Sensor for area switch diagnostic text."""
+
+    @property
+    def entity_category(self):
+        return EntityCategory.DIAGNOSTIC
+
+    @property
+    def name(self):
+        return "Area Switch Diagnostic"
+
+    @property
+    def native_value(self):
+        if self._device.diag_area_switch is not None:
+            return self._device.diag_area_switch[:255]
+        return None
+
+    @property
+    def state(self) -> str:
+        """Return the state of the device."""
+        return self._device.diag_area_switch[:255]
+
+    @property
+    def unique_id(self):
+        return f"{self._device.unique_id}_area_switch_diagnostic"
+
+
+class BermudaSensorAreaSwitchReason(BermudaSensor):
+    """Sensor for area switch reason."""
+
+    @property
+    def entity_category(self):
+        return EntityCategory.DIAGNOSTIC
+
+    @property
+    def name(self):
+        return "Area Switch Reason"
+
+    @property
+    def native_value(self):
+        return self._device.diag_area_switch_reason
+
+    @property
+    def state(self) -> str:
+        """Return the state of the device."""
+        return self._device.diag_area_switch_reason
+
+    @property
+    def unique_id(self):
+        return f"{self._device.unique_id}_area_switch_reason"
+
+
+class BermudaSensorFloor(BermudaDefaultSensor):
+    """Sensor for the Floor of the current Area."""
+
+    @property
+    def icon(self):
+        """Provide a custom icon for particular entities."""
+        return self._device.floor_icon
+
+    @property
+    def name(self):
+        return "Floor"
+
+    @property
+    def native_value(self):
+        # Don't use area_scanner.name because it comes from the advert
+        # entry. Instead refer to the BermudaDevice, which takes trouble
+        # to use user-given names etc.
+        return self._device.floor_name
+
+    @property
+    def state(self) -> str:
+        """Return the state of the device."""
+        return self._device.floor_name
+
+    @property
+    def unique_id(self):
+        return f"{self._device.unique_id}_floor"
+
+
+class BermudaSensorScanner(BermudaSensor):
+    """Sensor for name of nearest detected scanner."""
+
+    @property
+    def name(self):
+        return "Nearest Scanner"
+
+    @property
+    def native_value(self):
+        # Don't use area_scanner.name because it comes from the advert
+        # entry. Instead refer to the BermudaDevice, which takes trouble
+        # to use user-given names etc.
+        if self._device.area_advert is not None:
+            return self.coordinator.devices[self._device.area_advert.scanner_address].name
+        return None
+
+    @property
+    def state(self) -> str:
+        """Return the state of the device."""
+        if self._device.area_advert is not None:
+            return self.coordinator.devices[self._device.area_advert.scanner_address].name
+        return None
+
+    @property
+    def unique_id(self):
+        return f"{self._device.unique_id}_scanner"
+
+
+### Distance / Signal Strength Sensors
+
+
+## Signal Strength Sensors
+class BermudaSensorRssi(BermudaSensor):
+    """Sensor for RSSI of closest scanner."""
+
+    @property
+    def device_class(self):
+        return SensorDeviceClass.SIGNAL_STRENGTH
+
+    @property
+    def name(self):
+        return "Nearest RSSI"
+
+    @property
+    def native_unit_of_measurement(self):
+        return SIGNAL_STRENGTH_DECIBELS_MILLIWATT
+
+    @property
+    def native_value(self):
+        return self._cached_ratelimit(self._device.area_rssi, fast_falling=False, fast_rising=True)
+
+    @property
+    def state_class(self):
+        """These are graphable measurements."""
+        return SensorStateClass.MEASUREMENT
+
+    @property
+    def unique_id(self):
+        """Return unique id for the entity."""
+        return f"{self._device.unique_id}_rssi"
+
+
+## Distance Sensors
+class BermudaSensorRange(BermudaDistanceSensor):
+    """Extra sensor for range-to-closest-area."""
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        """Declare if entity should be automatically enabled on adding."""
+        return True
+
+    @property
+    def name(self):
+        return "Distance"
+
+    @property
+    def native_value(self):
+        """Return the native value of the sensor."""
+        distance = self._device.area_distance
+        if distance is not None:
+            return self._cached_ratelimit(round(distance, 1))
+        return None
+
+    @property
+    def unique_id(self):
+        """
+        "Uniquely identify this sensor so that it gets stored in the entity_registry,
+        and can be maintained / renamed etc by the user.
+        """
+        return f"{self._device.unique_id}_range"
 
 
 class BermudaSensorScannerRange(BermudaSensorRange):
@@ -361,9 +482,9 @@ class BermudaSensorScannerRange(BermudaSensorRange):
         self._scanner = coordinator.devices[scanner_address]
 
     @property
-    def unique_id(self):
-        # Retaining legacy wifi mac for unique_id
-        return f"{self._device.unique_id}_{self._scanner.address_wifi_mac or self._scanner.address}_range"
+    def entity_registry_enabled_default(self) -> bool:
+        """Declare if entity should be automatically enabled on adding."""
+        return False
 
     @property
     def name(self):
@@ -382,6 +503,11 @@ class BermudaSensorScannerRange(BermudaSensorRange):
         if distance is not None:
             return self._cached_ratelimit(round(distance, 3))
         return None
+
+    @property
+    def unique_id(self):
+        # Retaining legacy wifi mac for unique_id
+        return f"{self._device.unique_id}_{self._scanner.address_wifi_mac or self._scanner.address}_range"
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
@@ -426,55 +552,7 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
         return None
 
 
-class BermudaSensorAreaSwitchReason(BermudaSensor):
-    """Sensor for area switch reason."""
-
-    # _attr_entity_registry_enabled_default = False
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    @property
-    def entity_registry_enabled_default(self) -> bool:
-        """Declare if entity should be automatically enabled on adding."""
-        return False
-
-    @property
-    def name(self):
-        return "Area Switch Diagnostic"
-
-    @property
-    def unique_id(self):
-        return f"{self._device.unique_id}_area_switch_reason"
-
-    @property
-    def native_value(self):
-        if self._device.diag_area_switch is not None:
-            return self._device.diag_area_switch[:255]
-        return None
-
-
-class BermudaSensorAreaLastSeen(BermudaSensor, RestoreSensor):
-    """Sensor for name of last seen area."""
-
-    @property
-    def unique_id(self):
-        return f"{self._device.unique_id}_area_last_seen"
-
-    @property
-    def name(self):
-        return "Area Last Seen"
-
-    @property
-    def native_value(self):
-        return self._device.area_last_seen
-
-    async def async_added_to_hass(self) -> None:
-        """Restore last saved value before adding to HASS."""
-        await super().async_added_to_hass()
-        if (sensor_data := await self.async_get_last_sensor_data()) is not None:
-            self._attr_native_value = str(sensor_data.native_value)
-            self._device.area_last_seen = str(sensor_data.native_value)
-
-
+## Global Sensors
 class BermudaGlobalSensor(BermudaGlobalEntity, SensorEntity):
     """bermuda Global Sensor class."""
 
@@ -483,7 +561,7 @@ class BermudaGlobalSensor(BermudaGlobalEntity, SensorEntity):
     @property
     def name(self):
         """Return the name of the sensor."""
-        return "Area"
+        return "Unnamed Global Sensor"
 
     @property
     def device_class(self):
