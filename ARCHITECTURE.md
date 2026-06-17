@@ -20,7 +20,9 @@ BermudaDataUpdateCoordinator._async_update_data_internal()   (coordinator.py)
    1. gather adverts            → BermudaAdvert per (device, scanner)   (bermuda_advert.py)
    2. update metadevices        → iBeacon / IRK / Private-BLE handling
    3. per-device calculate_data → distance smoothing                    (distance_filter.py)
-   4. area refresh              → closest-scanner race w/ hysteresis     (trilateration.py)
+   4. area refresh              → score-based, mobility-aware arbitration (trilateration.py)
+   4a. presence-entity override → triggered HA entity wins area on dist.  (area_entity.py)
+   4b. micro-location refine    → sub-area RF fingerprint match           (coordinator_microlocation.py)
    5. periodic pruning
         │  coordinator.devices[address] state
         ▼
@@ -39,24 +41,31 @@ dynamically as devices/scanners appear, via the `SIGNAL_DEVICE_NEW` /
 |---|---|
 | `__init__.py` | Setup/unload of the config entry, `dump_devices` service, device-removal. |
 | `coordinator.py` | The update orchestrator: advert ingest, scanner & metadevice management, registry-change handling, pruning, redaction, the dump service. |
-| `bermuda_device.py` | `BermudaDevice` — internal state for one tracked device or scanner (address typing, names, area/floor, beacon ids). |
+| `bermuda_device.py` | `BermudaDevice` — internal state for one tracked device or scanner (address typing, names, area/floor, beacon ids, InPlay IN100 `0x0505` telemetry decode). |
 | `bermuda_advert.py` | `BermudaAdvert` — one (device, scanner) relationship; advert history + `calculate_data()`. |
-| `distance_filter.py` | **Pure** distance-smoothing maths (velocity/anti-teleport filter, minimum-hugging average). |
-| `trilateration.py` | `AreaTests` + the closest-scanner race with hysteresis (`refresh_area_by_min_distance`). |
+| `distance_filter.py` | **Pure** smoothing maths (velocity/anti-teleport filter, minimum-hugging average, MAD). |
+| `trilateration.py` | Score-based, mobility-aware area arbitration with adaptive hysteresis + the explicit `Unknown` outcome (`refresh_area_by_min_distance`, `AreaTests`). |
+| `area_entity.py` | Presence-entity area overrides: HA entities whose area, while *on*, competes with BLE at a per-entity "virtual distance" (`BermudaAreaEntityManager`), applied as a coordinator post-pass over the BLE result. |
+| `location_fingerprints.py` | **Pure** RF-fingerprint engine (`Fingerprint`, `FingerprintMatcher`) + `Store`-backed `FingerprintStore` for sub-area micro-locations. |
+| `coordinator_microlocation.py` | Coordinator mixin: per-cycle fingerprint matching with hysteresis, calibration, and the micro-location/config **services** (the MCP-friendly API). |
+| `intents.py` | Voice/Assist intents (`BermudaWhereIs`, `BermudaCalibrateLocation`, `BermudaListLocations`) so micro-locations are reachable from MCP. |
 | `manufacturers.py` | Bluetooth SIG UUID → manufacturer name loading and opinionated lookup. |
 | `bermuda_irk.py` | IRK / resolvable-private-address resolution for Private BLE devices. |
 | `entity.py` | `BermudaEntity` / `BermudaGlobalEntity` bases (unique_id, device_info, rate-limiting). |
-| `sensor.py` · `number.py` · `device_tracker.py` | Entity platforms. |
+| `sensor.py` · `number.py` · `device_tracker.py` · `select.py` | Entity platforms (`select.py` = per-device mobility mode). |
 | `config_flow.py` | `BermudaFlowHandler` (config) + `BermudaOptionsFlowHandler` (options + calibration wizards). |
 | `diagnostics.py` | `async_get_config_entry_diagnostics` (redacted dump + manager diagnostics). |
-| `const.py` | All constants (no logic). `util.py` | Pure helpers (mac formatting, rssi→metres). |
+| `system_health.py` | System Health page info callback (proxy/device counts). |
+| `const.py` | All constants (no logic). `util.py` | Pure helpers (mac formatting, rssi→metres, resolvable-address test). |
 | `log_spam_less.py` | Rate-limited logging wrapper. |
+| `quality_scale.yaml` | Quality Scale self-assessment / roadmap (metadata, not yet declared in the manifest). |
 
 ## `unique_id` scheme (do NOT change without migration)
 
 All entity `unique_id`s derive from `BermudaDevice.unique_id` (the normalised MAC).
 Suffixes: device_tracker & area sensor = base (no suffix); `_floor`, `_scanner`,
-`_rssi`, `_range`, `_area_switch_reason`, `_area_last_seen`, `_ref_power`; per-scanner
+`_rssi`, `_range`, `_area_switch_reason`, `_area_last_seen`, `_ref_power`,
+`_micro_location`, `_mobility`; per-scanner
 range = `{base}_{scanner.address_wifi_mac or scanner.address}_range` (+ `_range_raw`).
 Four global sensors use fixed literals (`BERMUDA_GLOBAL_*`). Scanner devices are
 pinned to the ESPHome/Shelly **wifi MAC** (not the BLE MAC). iBeacon ids are

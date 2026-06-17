@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import binascii
 import re
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.components.private_ble_device import coordinator as pble_coordinator
@@ -41,12 +41,17 @@ from .const import (
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
     DEFAULT_DEVTRACK_TIMEOUT,
+    DEFAULT_MOBILITY_TYPE,
     DOMAIN,
     ICON_DEFAULT_AREA,
     ICON_DEFAULT_FLOOR,
+    IN100_PAYLOAD_LEN,
+    MANUFACTURER_ID_INPLAY,
     METADEVICE_IBEACON_DEVICE,
     METADEVICE_PRIVATE_BLE_DEVICE,
     METADEVICE_TYPE_IBEACON_SOURCE,
+    MOBILITY_MOVING,
+    MOBILITY_OPTIONS,
 )
 from .util import mac_norm
 
@@ -112,6 +117,24 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         self.area_rssi: float | None = None  # rssi from closest scanner
         self.area_advert: BermudaAdvert | None = None  # currently closest BermudaScanner
 
+        # Mobility-aware area resolution: the device's mobility mode (set by the
+        # mobility select), whether the area is the explicit "Unknown" outcome, and
+        # the rolling decision state used to smooth area switches (lazily created by
+        # the trilateration module so this stays decoupled from it).
+        self.mobility_type: str = DEFAULT_MOBILITY_TYPE
+        self.area_is_unknown: bool = False
+        self.area_decision_state: Any = None
+
+        # Micro-location (sub-area RF fingerprint match): a named spot like "Key hook",
+        # finer than an Area, set by the coordinator each cycle when a saved fingerprint
+        # for this device matches confidently.
+        self.micro_location_id: str | None = None
+        self.micro_location_name: str | None = None
+        self.micro_location_confidence: float | None = None
+        self.micro_location_last_seen: str | None = None
+        # (candidate_id, consecutive_cycles) used for switch hysteresis.
+        self.micro_location_streak: tuple[str | None, int] = (None, 0)
+
         self.floor: fr.FloorEntry | None = None
         self.floor_id: str | None = None
         self.floor_name: str | None = None
@@ -133,14 +156,16 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         self.beacon_power: float | None = None
 
         self.entry_id: str | None = None  # used for scanner devices
+        self.scanner_entity_id: str | None = None  # if this device is a scanner: its HA switch/light entity_id
         self.create_sensor: bool = False  # Create/update a sensor for this device
         self.create_sensor_done: bool = False  # Sensor should now exist
         self.create_tracker_done: bool = False  # device_tracker should now exist
         self.create_number_done: bool = False
-        self.create_button_done: bool = False
+        self.create_select_done: bool = False
         self.create_all_done: bool = False  # All platform entities are done and ready.
         self.last_seen: float = 0  # stamp from most recent scanner spotting. monotonic_time_coarse
-        self.diag_area_switch: str | None = None  # saves output of AreaTests
+        self.diag_area_switch: str | None = None  # saves the full AreaTests diagnostic dump
+        self.diag_area_switch_reason: str | None = None  # saves the concise AreaTests reason string
         self.adverts: dict[
             tuple[str, str], BermudaAdvert
         ] = {}  # str will be a scanner address OR a deviceaddress__scanneraddress
@@ -194,7 +219,8 @@ class BermudaDevice(BermudaScannerDeviceMixin):
                     self._coordinator.config_entry.async_on_unload(
                         _pble_coord.async_track_service_info(self.async_handle_pble_callback, _irk_bytes)
                     )
-                    _LOGGER.debug("Private BLE Callback registered for %s, %s", self.name, self.address)
+                    # self.address is the raw IRK here; log only a short prefix (key material).
+                    _LOGGER.debug("Private BLE Callback registered for %s (irk %s…)", self.name, self.address[:4])
                     #
                     # Also register a callback with our own, which can fake the PBLE callbacks.
                     self._coordinator.config_entry.async_on_unload(

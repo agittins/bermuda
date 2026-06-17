@@ -60,6 +60,27 @@
       },
       "visible_device_count": {
         "name": "Visible device count"
+      },
+      "micro_location": {
+        "name": "Micro-location"
+      },
+      "in100_vcc": {
+        "name": "IN100 supply voltage"
+      },
+      "in100_temperature": {
+        "name": "IN100 temperature"
+      },
+      "in100_adc_voltage": {
+        "name": "IN100 ADC voltage"
+      }
+    },
+    "select": {
+      "mobility_type": {
+        "name": "Mobility Type",
+        "state": {
+          "moving": "Moving",
+          "stationary": "Stationary"
+        }
       }
     }
   },

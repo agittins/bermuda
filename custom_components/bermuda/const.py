@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from enum import Enum
 from typing import Final
 
@@ -40,7 +41,14 @@ DOMAIN_PRIVATE_BLE_DEVICE = "private_ble_device"
 
 # Signal names we are using:
 SIGNAL_DEVICE_NEW = f"{DOMAIN}-device-new"
+SIGNAL_DEVICE_IN100_NEW = f"{DOMAIN}-device-in100-new"  # a tracked device started broadcasting IN100 telemetry
 SIGNAL_SCANNERS_CHANGED = f"{DOMAIN}-scanners-changed"
+
+# InPlay IN100 / DFRobot Fermion BLE beacon telemetry (manufacturer data 0x0505).
+# The first 5 bytes encode supply voltage, temperature and an ADC voltage.
+# Ported/adapted from kamilzierke/bermuda.
+MANUFACTURER_ID_INPLAY: Final = 0x0505
+IN100_PAYLOAD_LEN: Final = 5
 
 UPDATE_INTERVAL = 1.05  # Seconds between bluetooth data processing cycles
 # Note: this is separate from the CONF_UPDATE_INTERVAL which allows the
@@ -100,7 +108,7 @@ class IrkTypes(Enum):
     If the irk field does not match any of these values, then it is a valid IRK.
     """
 
-    ADRESS_NOT_EVALUATED = bytes.fromhex("0000")  # default
+    ADDRESS_NOT_EVALUATED = bytes.fromhex("0000")  # default
     NOT_RESOLVABLE_ADDRESS = bytes.fromhex("0001")  # address is not a resolvable private address.
     NO_KNOWN_IRK_MATCH = bytes.fromhex("0002")  # none of the known keys match this address.
 
@@ -161,9 +169,28 @@ CONF_SAVE_AND_CLOSE = "save_and_close"
 CONF_SCANNER_INFO = "scanner_info"
 CONF_RSSI_OFFSETS = "rssi_offsets"
 
+# Area-entity presence overrides (ported/adapted from knoop7/bermuda-intent).
+# HA entities (motion/contact/etc.) whose area, when the entity is "on", competes
+# with BLE at a configurable "virtual distance" (smaller = higher priority).
+CONF_AREA_ENTITIES = "area_entities"
+CONF_AREA_ENTITY_DISTANCE, DEFAULT_AREA_ENTITY_DISTANCE = "area_entity_distance", 0.1
+CONF_AREA_ENTITY_DISTANCES = "area_entity_distances"  # per-entity virtual-distance overrides
+
 CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL = "update_interval", 10
 
 CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES = "smoothing_samples", 20
+
+# Validation bounds for the global options. These reject zero/negative values that
+# would divide by zero (attenuation feeds 10*attenuation in rssi_to_metres) or break
+# the smoothing/timing loops. Maxima are deliberately generous (sanity only).
+OPT_MIN_MAX_RADIUS: Final = 0.1
+OPT_MIN_MAX_VELOCITY: Final = 0.1
+OPT_MIN_DEVTRACK_TIMEOUT: Final = 1
+OPT_MIN_UPDATE_INTERVAL: Final = 0.1
+OPT_MIN_SMOOTHING_SAMPLES: Final = 1
+OPT_MIN_ATTENUATION: Final = 0.1
+OPT_REF_POWER_MIN: Final = -127.0
+OPT_REF_POWER_MAX: Final = 0.0
 
 # Area-selection / trilateration tuning (centralised from coordinator).
 # These are experience-tuned; keep values identical when refactoring.
@@ -176,11 +203,68 @@ AREA_PCNT_DIFF_HISTORICAL: Final = 0.15  # percentage distance gap required to w
 USB_ADVERT_AGE_OFFSET: Final = 3.0  # seconds to age USB-adaptor adverts (they carry no stamps)
 STAMP_WARP_TOLERANCE: Final = 0.01  # tolerate slight clock warp when advancing a scanner's last_seen
 
+# Mobility-aware area resolution (ported/adapted from philbert/ble-trilateration).
+# Each tracked device has a "mobility" mode that tunes RSSI conditioning and the
+# area-switch hysteresis: a phone that moves wants fast/responsive switching, a
+# fixed sensor wants slow/stable switching.
+MOBILITY_MOVING: Final = "moving"
+MOBILITY_STATIONARY: Final = "stationary"
+MOBILITY_OPTIONS: Final = [MOBILITY_STATIONARY, MOBILITY_MOVING]
+DEFAULT_MOBILITY_TYPE: Final = MOBILITY_MOVING
+# Explicit area outcome when coverage/evidence is weak or ambiguous (vs not_home,
+# which means the device timed out / isn't seen at all).
+AREA_NAME_UNKNOWN: Final = "Unknown"
+
 # Misc
 DIAG_TEXT_MAX_LENGTH: Final = 255  # cap for diagnostic text and string attributes
 
+# Micro-locations (sub-area RF fingerprinting). A micro-location is a named spot
+# (eg "Key hook") calibrated by example; the matching engine and persistence live
+# in location_fingerprints.py, these are just the integration-side knobs.
+ICON_MICROLOCATION: Final = "mdi:map-marker-radius"
+# How many consecutive update cycles a new best-match must persist before we switch
+# the reported micro-location (mirrors the Area-selection hysteresis, so it doesn't flap).
+MICROLOC_HYSTERESIS_CYCLES: Final = 3
+# A fingerprint needs at least this many scanners to be meaningfully distinctive;
+# below this we still save it but warn the user.
+MICROLOC_MIN_USEFUL_SCANNERS: Final = 2
+# How many of the most-recent per-interval distance samples to fold into a calibration
+# snapshot (capped to whatever history is actually available).
+MICROLOC_CALIBRATION_SAMPLES: Final = 10
+
+# Centralised log redaction: a safety net behind the targeted IRK-log truncations.
+# Any record that still emits a standalone 32-hex secret (e.g. a full IRK) is masked
+# before it reaches the handlers. (Ported from philbert/ble-trilateration.)
+SECRET_HEX32_RE: Final = re.compile(r"(?<![0-9a-fA-F])[0-9a-fA-F]{32}(?![0-9a-fA-F])")
+
+
+def redact_secret_hex32(text: str) -> str:
+    """Mask any standalone 32-hex secret (for example an IRK) in log text."""
+    return SECRET_HEX32_RE.sub("[REDACTED_HEX32]", text)
+
+
+class BermudaSecretFilter(logging.Filter):
+    """Logging filter that redacts 32-hex secrets (IRKs) from Bermuda log records."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        redacted = redact_secret_hex32(message)
+        if redacted != message:
+            # Replace with already-formatted/redacted text so args can't re-leak it.
+            record.msg = redacted
+            record.args = ()
+        return True
+
+
+def _ensure_secret_filter(logger: logging.Logger) -> None:
+    """Attach the secret-redaction filter to a logger exactly once."""
+    if not any(isinstance(existing, BermudaSecretFilter) for existing in logger.filters):
+        logger.addFilter(BermudaSecretFilter())
+
+
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 _LOGGER_SPAM_LESS = BermudaLogSpamLess(_LOGGER, LOGSPAM_INTERVAL)
+_ensure_secret_filter(_LOGGER)
 
 
 STARTUP_MESSAGE = f"""

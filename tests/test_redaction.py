@@ -58,6 +58,19 @@ def _device(address_type=ADDR_TYPE_OTHER):
     return SimpleNamespace(address_type=address_type)
 
 
+def _named_device(address_type=ADDR_TYPE_OTHER, **names):
+    """A device namespace carrying human-readable name attributes (all None by default)."""
+    attrs = {
+        "address_type": address_type,
+        "name_by_user": None,
+        "name_devreg": None,
+        "name_bt_local_name": None,
+        "name_bt_serviceinfo": None,
+    }
+    attrs.update(names)
+    return SimpleNamespace(**attrs)
+
+
 # ---------------------------------------------------------------------------
 # redaction_list_update
 # ---------------------------------------------------------------------------
@@ -295,3 +308,102 @@ def test_generic_regex_handles_separator_variants(sep, expected):
     coord = _make_coordinator()
     mac = sep.join(["12", "34", "56", "78", "9a", "bc"])
     assert coord.redact_data(mac) == expected
+
+
+# ---------------------------------------------------------------------------
+# Human-name redaction (personal info that is never MAC-shaped)
+# ---------------------------------------------------------------------------
+
+
+def test_user_name_is_registered_and_redacted():
+    """A user-set device name is replaced with a stable NAME_n label."""
+    coord = _make_coordinator(devices={"aa:bb:cc:dd:ee:ff": _named_device(name_by_user="Jan's iPhone")})
+    coord.redaction_list_update()
+    assert coord.redactions["jan's iphone"].startswith("NAME_")
+    # And applied (case-insensitively) by redact_data so the name never survives.
+    assert "iphone" not in coord.redact_data("Jan's iPhone").lower()
+
+
+def test_bt_local_name_redacted_inside_larger_string():
+    """A BLE local_name embedded in surrounding text is swapped for its label."""
+    coord = _make_coordinator(devices={"aa:bb:cc:dd:ee:ff": _named_device(name_bt_local_name="Tile Tracker")})
+    coord.redaction_list_update()
+    out = coord.redact_data("device named Tile Tracker here")
+    assert "Tile Tracker" not in out
+    assert "NAME_" in out
+
+
+def test_all_name_sources_registered():
+    """Every distinct name source attribute is registered for redaction."""
+    coord = _make_coordinator(
+        devices={
+            "aa:bb:cc:dd:ee:ff": _named_device(
+                name_by_user="User Name",
+                name_devreg="Registry Name",
+                name_bt_local_name="Local Name",
+                name_bt_serviceinfo="Service Name",
+            )
+        }
+    )
+    coord.redaction_list_update()
+    for name in ("user name", "registry name", "local name", "service name"):
+        assert coord.redactions[name].startswith("NAME_")
+
+
+def test_short_names_are_not_redacted():
+    """Names below the minimum length are left alone to avoid over-redaction."""
+    coord = _make_coordinator(devices={"aa:bb:cc:dd:ee:ff": _named_device(name_by_user="TV")})
+    coord.redaction_list_update()
+    assert "tv" not in coord.redactions
+
+
+def test_none_names_skipped():
+    """A device with no names yields no NAME_ entries."""
+    coord = _make_coordinator(devices={"aa:bb:cc:dd:ee:ff": _named_device()})
+    coord.redaction_list_update()
+    assert not any(v.startswith("NAME_") for v in coord.redactions.values())
+
+
+def test_devices_without_name_attrs_do_not_break():
+    """Bare device namespaces (no name attributes) are handled gracefully."""
+    coord = _make_coordinator(devices={"aa:bb:cc:dd:ee:ff": _device()})
+    coord.redaction_list_update()  # must not raise
+    assert coord.redactions["aa:bb:cc:dd:ee:ff"] == "aa::OTHER_MAC_1::ff"
+
+
+# ---------------------------------------------------------------------------
+# Bare 32-hex (IRK key / iBeacon UUID) fallback redaction
+# ---------------------------------------------------------------------------
+
+
+def test_bare_irk_hex32_is_masked():
+    """A standalone 32-hex IRK with no separators is masked, keeping 4 chars."""
+    coord = _make_coordinator()
+    irk = "deadbeefdeadbeefdeadbeefdeadbeef"
+    out = coord.redact_data(irk)
+    assert out == "dead::redacted_hex32::"
+    assert irk not in out
+
+
+def test_irk_hex32_masked_inside_string():
+    """A 32-hex run embedded in text is masked even with no table entry."""
+    coord = _make_coordinator()
+    irk = "0123456789abcdef0123456789abcdef"
+    out = coord.redact_data(f"irk={irk} done")
+    assert irk not in out
+    assert "0123::redacted_hex32::" in out
+
+
+def test_hex32_does_not_touch_longer_hex_runs():
+    """A 33+ hex run is not partially masked (avoids corrupting payload hex)."""
+    coord = _make_coordinator()
+    long_hex = "ab" * 20  # 40 hex chars, a single unbroken run
+    assert coord.redact_data(long_hex) == long_hex
+
+
+def test_known_irk_device_uses_table_label_not_generic_mask():
+    """An IRK that is a known device keeps its stable IRK_DEV label."""
+    addr = "deadbeefdeadbeefdeadbeefdeadbeef"
+    coord = _make_coordinator(devices={addr: _device(address_type=ADDR_TYPE_PRIVATE_BLE_DEVICE)})
+    coord.redaction_list_update()
+    assert coord.redact_data(addr) == f"{addr[:4]}::IRK_DEV_1"

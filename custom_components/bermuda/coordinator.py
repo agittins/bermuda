@@ -417,6 +417,7 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
                     dev.create_sensor_done,
                     dev.create_tracker_done,
                     dev.create_number_done,
+                    dev.create_select_done,
                 ]
             ):
                 dev.create_all_done = True
@@ -426,7 +427,6 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
         dev = self._get_device(address)
         if dev is not None:
             dev.create_sensor_done = True
-            # _LOGGER.debug("Sensor confirmed created for %s", address)
         else:
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
         self._check_all_platforms_created(address)
@@ -436,9 +436,8 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
         dev = self._get_device(address)
         if dev is not None:
             dev.create_tracker_done = True
-            # _LOGGER.debug("Device_tracker confirmed created for %s", address)
         else:
-            _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
+            _LOGGER.warning("Very odd, we got device_tracker_created for non-tracked device")
         self._check_all_platforms_created(address)
 
     def number_created(self, address):
@@ -752,9 +751,9 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
             out = cast("ServiceResponse", self.redact_data(out))
             _stamp_redact_elapsed = monotonic_time_coarse() - _stamp_redact
             if _stamp_redact_elapsed > 3:  # It should be fast now.
-                _LOGGER.warning("Dump devices redaction took %2f seconds", _stamp_redact_elapsed)
+                _LOGGER.warning("Dump devices redaction took %.2f seconds", _stamp_redact_elapsed)
             else:
-                _LOGGER.debug("Dump devices redaction took %2f seconds", _stamp_redact_elapsed)
+                _LOGGER.debug("Dump devices redaction took %.2f seconds", _stamp_redact_elapsed)
         return out
 
     def redaction_list_update(self):

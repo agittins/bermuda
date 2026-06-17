@@ -131,6 +131,23 @@ def test_scanner_list_add_and_del_dispatch_signal() -> None:
     send.assert_called_once_with(coord.hass, SIGNAL_SCANNERS_CHANGED)
 
 
+def test_scanner_list_del_absent_scanner_does_not_raise() -> None:
+    """Demoting a scanner that was never registered is a quiet no-op (discard, not remove).
+
+    Regression: a device whose is_scanner flag desynced from the scanner sets used
+    to hit set.remove() -> KeyError, aborting the whole scanner rebuild mid-loop.
+    """
+    coord = _bare_coordinator()
+    scanner = _HashableScanner(address="11:22:33:44:55:66")
+
+    # Both sets are empty; deleting an absent scanner must not raise.
+    with patch("custom_components.bermuda.coordinator_scanners.async_dispatcher_send") as send:
+        coord.scanner_list_del(scanner)
+
+    assert scanner.address not in coord._scanner_list
+    send.assert_called_once_with(coord.hass, SIGNAL_SCANNERS_CHANGED)
+
+
 # --------------------------------------------------------------------------- #
 # _async_purge_removed_scanners
 # --------------------------------------------------------------------------- #

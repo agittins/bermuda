@@ -19,6 +19,11 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import (
     DeviceSelector,
     DeviceSelectorConfig,
+    EntitySelector,
+    EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     ObjectSelector,
     SelectOptionDict,
     SelectSelector,
@@ -56,6 +61,14 @@ from .const import (
     DOMAIN,
     DOMAIN_PRIVATE_BLE_DEVICE,
     NAME,
+    OPT_MIN_ATTENUATION,
+    OPT_MIN_DEVTRACK_TIMEOUT,
+    OPT_MIN_MAX_RADIUS,
+    OPT_MIN_MAX_VELOCITY,
+    OPT_MIN_SMOOTHING_SAMPLES,
+    OPT_MIN_UPDATE_INTERVAL,
+    OPT_REF_POWER_MAX,
+    OPT_REF_POWER_MIN,
 )
 from .options_text import _DESCRIPTION_TEXTS
 from .util import mac_redact, rssi_to_metres
@@ -63,10 +76,6 @@ from .util import mac_redact, rssi_to_metres
 if TYPE_CHECKING:
     from .bermuda_device import BermudaDevice
     from .coordinator import BermudaDataUpdateCoordinator
-
-# from homeassistant import data_entry_flow
-
-# from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 
 class BermudaOptionsFlowHandler(OptionsFlow):
@@ -184,31 +193,31 @@ class BermudaOptionsFlowHandler(OptionsFlow):
             vol.Required(
                 CONF_MAX_RADIUS,
                 default=self.options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS),
-            ): vol.Coerce(float),
+            ): vol.All(vol.Coerce(float), vol.Range(min=OPT_MIN_MAX_RADIUS)),
             vol.Required(
                 CONF_MAX_VELOCITY,
                 default=self.options.get(CONF_MAX_VELOCITY, DEFAULT_MAX_VELOCITY),
-            ): vol.Coerce(float),
+            ): vol.All(vol.Coerce(float), vol.Range(min=OPT_MIN_MAX_VELOCITY)),
             vol.Required(
                 CONF_DEVTRACK_TIMEOUT,
                 default=self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT),
-            ): vol.Coerce(int),
+            ): vol.All(vol.Coerce(int), vol.Range(min=OPT_MIN_DEVTRACK_TIMEOUT)),
             vol.Required(
                 CONF_UPDATE_INTERVAL,
                 default=self.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
-            ): vol.Coerce(float),
+            ): vol.All(vol.Coerce(float), vol.Range(min=OPT_MIN_UPDATE_INTERVAL)),
             vol.Required(
                 CONF_SMOOTHING_SAMPLES,
                 default=self.options.get(CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES),
-            ): vol.Coerce(int),
+            ): vol.All(vol.Coerce(int), vol.Range(min=OPT_MIN_SMOOTHING_SAMPLES)),
             vol.Required(
                 CONF_ATTENUATION,
                 default=self.options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
-            ): vol.Coerce(float),
+            ): vol.All(vol.Coerce(float), vol.Range(min=OPT_MIN_ATTENUATION)),
             vol.Required(
                 CONF_REF_POWER,
                 default=self.options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
-            ): vol.Coerce(float),
+            ): vol.All(vol.Coerce(float), vol.Range(min=OPT_REF_POWER_MIN, max=OPT_REF_POWER_MAX)),
         }
 
         return self.async_show_form(step_id="globalopts", data_schema=vol.Schema(data_schema))
@@ -361,7 +370,9 @@ class BermudaOptionsFlowHandler(OptionsFlow):
             opt["value"] for group in (options_metadevices, options_otherdevices, options_randoms) for opt in group
         }
         for address in self.options.get(CONF_DEVICES, []):
-            if address.upper() not in _discovered_values:
+            # Guard against a malformed (e.g. hand-edited) config carrying a non-string
+            # entry, which would crash the whole options flow on .upper().
+            if isinstance(address, str) and address.upper() not in _discovered_values:
                 options_otherdevices.append(SelectOptionDict(value=address.upper(), label=f"[{address}] (saved)"))
 
         # Build the form schema with search field
@@ -485,13 +496,13 @@ class BermudaOptionsFlowHandler(OptionsFlow):
                 default=self._last_ref_power
                 if self._last_ref_power is not None
                 else self.options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
-            ): vol.Coerce(float),
+            ): vol.All(vol.Coerce(float), vol.Range(min=OPT_REF_POWER_MIN, max=OPT_REF_POWER_MAX)),
             vol.Required(
                 CONF_ATTENUATION,
                 default=self._last_attenuation
                 if self._last_attenuation is not None
                 else self.options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
-            ): vol.Coerce(float),
+            ): vol.All(vol.Coerce(float), vol.Range(min=OPT_MIN_ATTENUATION)),
             vol.Optional(CONF_SAVE_AND_CLOSE, default=False): vol.Coerce(bool),
         }
         calibration_hint = await self._get_options_translation("description_text.calibration_submit_hint")

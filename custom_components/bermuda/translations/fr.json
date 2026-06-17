@@ -60,6 +60,27 @@
       },
       "visible_device_count": {
         "name": "Nombre d'appareils visibles"
+      },
+      "micro_location": {
+        "name": "Micro-localisation"
+      },
+      "in100_vcc": {
+        "name": "Tension d'alimentation IN100"
+      },
+      "in100_temperature": {
+        "name": "Température IN100"
+      },
+      "in100_adc_voltage": {
+        "name": "Tension ADC IN100"
+      }
+    },
+    "select": {
+      "mobility_type": {
+        "name": "Type de mobilité",
+        "state": {
+          "moving": "En mouvement",
+          "stationary": "Fixe"
+        }
       }
     }
   },

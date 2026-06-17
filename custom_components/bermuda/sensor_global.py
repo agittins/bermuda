@@ -17,11 +17,8 @@ class BermudaGlobalSensor(BermudaGlobalEntity, SensorEntity):
     """bermuda Global Sensor class."""
 
     _attr_has_entity_name = True
-
-    @property
-    def device_class(self):
-        """Return de device class of the sensor."""
-        return "bermuda__custom_device_class"
+    # No device_class: the former custom "bermuda__custom_device_class" had no state
+    # translation behind it (these are plain numeric counts).
 
 
 class BermudaTotalProxyCount(BermudaGlobalSensor):

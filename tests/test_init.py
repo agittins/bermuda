@@ -31,7 +31,7 @@ async def test_setup_unload_and_reload_entry(
     assert setup_bermuda_entry.state == ConfigEntryState.LOADED
 
     assert set(IrkTypes.unresolved()) == {
-        IrkTypes.ADRESS_NOT_EVALUATED.value,
+        IrkTypes.ADDRESS_NOT_EVALUATED.value,
         IrkTypes.NO_KNOWN_IRK_MATCH.value,
         IrkTypes.NOT_RESOLVABLE_ADDRESS.value,
     }
