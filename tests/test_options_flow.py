@@ -227,10 +227,8 @@ async def test_options_selectdevices_shows_form_with_injected_device(
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "selectdevices"
     schema_keys = {str(k.schema) for k in result["data_schema"].schema}
-    # The injected standard device makes the "standard_devices" selector appear,
-    # alongside the always-present search field.
-    assert "device_filter" in schema_keys
-    assert "standard_devices" in schema_keys
+    # A single searchable devices selector replaces the old per-category selectors.
+    assert "devices" in schema_keys
 
 
 async def test_options_selectdevices_submit_writes_devices(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
@@ -245,11 +243,8 @@ async def test_options_selectdevices_submit_writes_devices(hass: HomeAssistant, 
     )
     assert result["step_id"] == "selectdevices"
 
-    # Provide the selection. device_filter must equal _last_device_filter ("")
-    # so the handler treats this as a real submission, not a filter change.
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={"device_filter": "", "standard_devices": [addr.upper()]},
+        result["flow_id"], user_input={"devices": [addr.upper()]}
     )
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
@@ -257,27 +252,11 @@ async def test_options_selectdevices_submit_writes_devices(hass: HomeAssistant, 
     assert setup_bermuda_entry.options.get(CONF_DEVICES) == [addr.upper()]
 
 
-async def test_options_selectdevices_filter_only_refreshes_form(
-    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry
-):
-    """Changing only the filter re-shows the form rather than creating an entry."""
-    coordinator = setup_bermuda_entry.runtime_data.coordinator
-    _inject_device(coordinator, "AA:BB:CC:DD:EE:03")
-
-    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"next_step_id": "selectdevices"}
-    )
-    assert result["step_id"] == "selectdevices"
-
-    # A non-empty filter differs from the initial _last_device_filter (""),
-    # so the handler should store it and re-render the form.
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={"device_filter": "nonexistentfilter", "standard_devices": []},
-    )
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "selectdevices"
+def _devices_selector_values(result) -> set[str]:
+    """Return the option values offered by the selectdevices 'devices' selector."""
+    schema = result["data_schema"].schema
+    key = next(k for k in schema if str(k.schema) == "devices")
+    return {opt["value"] for opt in schema[key].config["options"]}
 
 
 async def test_options_selectdevices_random_mac_recent_appears(
@@ -296,8 +275,7 @@ async def test_options_selectdevices_random_mac_recent_appears(
         result["flow_id"], user_input={"next_step_id": "selectdevices"}
     )
     assert result["step_id"] == "selectdevices"
-    schema_keys = {str(k.schema) for k in result["data_schema"].schema}
-    assert "random_devices" in schema_keys
+    assert "AA:BB:CC:DD:EE:04" in _devices_selector_values(result)
 
 
 async def test_options_area_entities_two_step_flow(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):

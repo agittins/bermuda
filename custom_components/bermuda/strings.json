@@ -188,18 +188,12 @@
       },
       "selectdevices": {
         "data": {
-          "device_filter": "Search devices",
-          "ibeacon_devices": "iBeacon devices",
-          "random_devices": "Random MAC devices",
-          "standard_devices": "Standard BLE devices"
+          "devices": "Devices to track"
         },
         "data_description": {
-          "device_filter": "Type in the search box and click Submit to filter. Search by name (e.g., 'tile'), MAC address (e.g., 'd8f2'), or manufacturer (e.g., 'apple').",
-          "ibeacon_devices": "iBeacon devices (iOS, Android with HA App, etc.)",
-          "random_devices": "Devices with random MAC addresses",
-          "standard_devices": "Standard BLE devices (Tiles, trackers, sensors, etc.)"
+          "devices": "Pick the BLE devices Bermuda should track. Type to search. iBeacons and random MACs are labelled; devices you track but that aren't currently seen show as (saved)."
         },
-        "description": "{filter_help}\n\nChoose which devices you wish to track. If no devices appear below, then Bermuda is not seeing any data coming from Bluetooth scanners. Ensure you have an esphome ble_proxy device, Shelly devices with bluetooth proxy configured or a local bluetooth adaptor.",
+        "description": "Bermuda only creates tracker entities for the devices you select here. If the list is empty, no Bluetooth devices are being seen yet.",
         "title": "Select Devices"
       },
       "area_entities": {

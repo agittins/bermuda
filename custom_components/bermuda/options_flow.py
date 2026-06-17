@@ -30,8 +30,6 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
-    TextSelector,
-    TextSelectorConfig,
 )
 from homeassistant.helpers.translation import async_get_translations
 
@@ -258,209 +256,51 @@ class BermudaOptionsFlowHandler(OptionsFlow):
         return self.async_show_form(step_id="globalopts", data_schema=data_schema)
 
     async def async_step_selectdevices(self, user_input=None):
-        """Handle a flow initialized by the user."""
-        device_selector_keys = ("ibeacon_devices", "standard_devices", "random_devices")
+        """Choose which discovered devices to track, via one searchable selector."""
         if user_input is not None:
-            submitted_filter = user_input.get("device_filter", "").lower()
-            # Check if user submitted device selections (not just filtering)
-            selected_devices = []
-            for selector_key in device_selector_keys:
-                selected_devices.extend(user_input.get(selector_key, []))
+            self.options[CONF_DEVICES] = user_input.get("devices", [])
+            return await self._update_options()
 
-            if submitted_filter != self._last_device_filter:
-                self._last_device_filter = submitted_filter
-            elif any(selector_key in user_input for selector_key in device_selector_keys):
-                self.options[CONF_DEVICES] = selected_devices
-                return await self._update_options()
-
-        # Grab the co-ordinator's device list so we can build a selector from it.
         self.devices = self.config_entry.runtime_data.coordinator.devices
-
-        # Get search text if it exists
-        filter_text = self._last_device_filter
-
-        # Where we store the options before building the selector
-        options_metadevices = []  # These will be first in the list
-        options_otherdevices = []  # These will be last.
-        options_randoms = []  # Random MAC addresses - very last!
-
+        options_list: list[SelectOptionDict] = []
         for device in self.devices.values():
-            # Iterate through all the discovered devices to build the options list
-
-            name = device.name
-
-            # Build additional info for better searchability
-            manufacturer_info = f" - {device.manufacturer}" if device.manufacturer else ""
-            rssi_info = f" RSSI:{device.area_rssi:.0f}dBm" if device.area_rssi is not None else ""
-
-            if device.is_scanner:
-                # We don't "track" scanner devices, per se
+            # Scanners aren't tracked; Private BLE devices configure themselves.
+            if device.is_scanner or device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
                 continue
-            if device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
-                # Private BLE Devices get configured automagically, skip
-                continue
-
-            # Build the full label for text filtering
-            full_label = f"{device.address.upper()} {name} {device.manufacturer or ''}"
-
-            # Apply text search filter if present
-            if filter_text and filter_text not in full_label.lower():
-                continue
-
+            addr = device.address.upper()
+            manuf = f" · {device.manufacturer}" if device.manufacturer else ""
+            rssi = f" · {device.area_rssi:.0f}dBm" if device.area_rssi is not None else ""
             if device.address_type == ADDR_TYPE_IBEACON:
-                # This is an iBeacon meta-device
-                if len(device.metadevice_sources) > 0:
-                    source_mac = f"[{device.metadevice_sources[0].upper()}]"
-                else:
-                    source_mac = ""
+                src = f" [{device.metadevice_sources[0].upper()}]" if device.metadevice_sources else ""
+                label = f"iBeacon {addr}{src}{manuf}{rssi}"
+            elif device.address_type == BDADDR_TYPE_RANDOM_RESOLVABLE:
+                if device.last_seen < monotonic_time_coarse() - (60 * 60 * 2):
+                    continue  # a random MAC unseen for >2h is not useful
+                label = f"{addr} · {device.name} (random){manuf}{rssi}"
+            else:
+                label = f"{addr} · {device.name}{manuf}{rssi}"
+            options_list.append(SelectOptionDict(value=addr, label=label))
 
-                device_name = f" {name}" if device.address.upper() != name.upper() else ""
+        options_list.sort(key=lambda opt: opt["label"])
 
-                options_metadevices.append(
-                    SelectOptionDict(
-                        value=device.address.upper(),
-                        label=(
-                            f"iBeacon: {device.address.upper()} {source_mac}{device_name}{manufacturer_info}{rssi_info}"
-                        ),
-                    )
-                )
-                continue
-
-            if device.address_type == BDADDR_TYPE_RANDOM_RESOLVABLE:
-                # This is a random MAC, we should tag it as such
-
-                if device.last_seen < monotonic_time_coarse() - (60 * 60 * 2):  # two hours
-                    # A random MAC we haven't seen for a while is not much use, skip
-                    continue
-
-                options_randoms.append(
-                    SelectOptionDict(
-                        value=device.address.upper(),
-                        label=f"[{device.address.upper()}] {name} (Random MAC){manufacturer_info}{rssi_info}",
-                    )
-                )
-                continue
-
-            # Default, unremarkable devices, just pop them in the list.
-            options_otherdevices.append(
-                SelectOptionDict(
-                    value=device.address.upper(),
-                    label=f"[{device.address.upper()}] {name}{manufacturer_info}{rssi_info}",
-                )
-            )
-
-        # build the final list with "preferred" devices first.
-        options_metadevices.sort(key=lambda item: item["label"])
-        options_otherdevices.sort(key=lambda item: item["label"])
-        options_randoms.sort(key=lambda item: item["label"])
-
-        # Apply pagination limits (50 devices per category max without filter)
-        max_devices_per_category = 50
-        show_pagination_warning = False
-
-        if not filter_text:
-            if len(options_metadevices) > max_devices_per_category:
-                options_metadevices = options_metadevices[:max_devices_per_category]
-                show_pagination_warning = True
-            if len(options_otherdevices) > max_devices_per_category:
-                options_otherdevices = options_otherdevices[:max_devices_per_category]
-                show_pagination_warning = True
-            if len(options_randoms) > max_devices_per_category:
-                options_randoms = options_randoms[:max_devices_per_category]
-                show_pagination_warning = True
-
-        # Build description with device counts and filter help
-        description_text = (
-            await self._get_options_translation(
-                "description_text.found_devices",
-                ibeacon_count=str(len(options_metadevices)),
-                standard_count=str(len(options_otherdevices)),
-                random_count=str(len(options_randoms)),
-            )
-            + "\n\n"
+        # Keep already-configured-but-no-longer-discovered devices selectable, so
+        # saving the form does not silently drop them from CONF_DEVICES.
+        discovered = {opt["value"] for opt in options_list}
+        options_list.extend(
+            SelectOptionDict(value=address.upper(), label=f"{address.upper()} (saved)")
+            for address in self.options.get(CONF_DEVICES, [])
+            if isinstance(address, str) and address.upper() not in discovered
         )
 
-        if show_pagination_warning:
-            description_text += (
-                await self._get_options_translation(
-                    "description_text.pagination_warning",
-                    max_count=str(max_devices_per_category),
-                )
-                + "\n\n"
-            )
-
-        if filter_text:
-            description_text += (
-                await self._get_options_translation(
-                    "description_text.filter_active",
-                    filter_text=filter_text,
-                )
-                + "\n\n"
-            )
-
-        # Configured devices that are no longer being discovered must still be
-        # offered (labelled "(saved)"), otherwise saving the form would silently
-        # drop them from CONF_DEVICES. Add them to the standard-devices selector.
-        _discovered_values = {
-            opt["value"] for group in (options_metadevices, options_otherdevices, options_randoms) for opt in group
-        }
-        for address in self.options.get(CONF_DEVICES, []):
-            # Guard against a malformed (e.g. hand-edited) config carrying a non-string
-            # entry, which would crash the whole options flow on .upper().
-            if isinstance(address, str) and address.upper() not in _discovered_values:
-                options_otherdevices.append(SelectOptionDict(value=address.upper(), label=f"[{address}] (saved)"))
-
-        # Build the form schema with search field
-        data_schema = {
-            vol.Optional(
-                "device_filter",
-                default=filter_text,
-                description={"suggested_value": filter_text},
-            ): TextSelector(TextSelectorConfig(type="search")),
-        }
-
-        # Add grouped selectors by device type
-        if options_metadevices:
-            data_schema[
+        data_schema = vol.Schema(
+            {
                 vol.Optional(
-                    "ibeacon_devices",
-                    default=[
-                        d
-                        for d in self.options.get(CONF_DEVICES, [])
-                        if any(opt["value"] == d.upper() for opt in options_metadevices)
-                    ],
-                )
-            ] = SelectSelector(SelectSelectorConfig(options=options_metadevices, multiple=True))
-
-        if options_otherdevices:
-            data_schema[
-                vol.Optional(
-                    "standard_devices",
-                    default=[
-                        d
-                        for d in self.options.get(CONF_DEVICES, [])
-                        if any(opt["value"] == d.upper() for opt in options_otherdevices)
-                    ],
-                )
-            ] = SelectSelector(SelectSelectorConfig(options=options_otherdevices, multiple=True))
-
-        if options_randoms:
-            data_schema[
-                vol.Optional(
-                    "random_devices",
-                    default=[
-                        d
-                        for d in self.options.get(CONF_DEVICES, [])
-                        if any(opt["value"] == d.upper() for opt in options_randoms)
-                    ],
-                )
-            ] = SelectSelector(SelectSelectorConfig(options=options_randoms, multiple=True))
-
-        return self.async_show_form(
-            step_id="selectdevices",
-            data_schema=vol.Schema(data_schema),
-            description_placeholders={"filter_help": description_text},
+                    "devices",
+                    default=[a.upper() for a in self.options.get(CONF_DEVICES, []) if isinstance(a, str)],
+                ): SelectSelector(SelectSelectorConfig(options=options_list, multiple=True, sort=False)),
+            }
         )
+        return self.async_show_form(step_id="selectdevices", data_schema=data_schema)
 
     async def async_step_area_entities(self, user_input=None):
         """Select presence entities and the global default virtual distance."""

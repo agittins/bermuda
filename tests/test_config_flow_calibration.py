@@ -227,8 +227,18 @@ def _inject_device(coordinator, address: str, *, address_type=BDADDR_TYPE_OTHER,
     return device
 
 
+def _offered_values(result) -> set[str]:
+    """Collect every option value across the form's selectors."""
+    offered: set[str] = set()
+    for validator in result["data_schema"].schema.values():
+        cfg = getattr(validator, "config", None)
+        if isinstance(cfg, dict) and "options" in cfg:
+            offered |= {opt["value"] for opt in cfg["options"]}
+    return offered
+
+
 async def test_selectdevices_ibeacon_metadevice_listed(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """An iBeacon meta-device produces the grouped 'ibeacon_devices' selector."""
+    """An iBeacon meta-device is offered as a labelled option in the devices selector."""
     coordinator = setup_bermuda_entry.runtime_data.coordinator
     dev = _inject_device(
         coordinator,
@@ -244,8 +254,7 @@ async def test_selectdevices_ibeacon_metadevice_listed(hass: HomeAssistant, setu
         result["flow_id"], user_input={"next_step_id": "selectdevices"}
     )
     assert result["step_id"] == "selectdevices"
-    schema_keys = {str(k.schema) for k in result["data_schema"].schema}
-    assert "ibeacon_devices" in schema_keys
+    assert "AA:BB:CC:DD:EE:10" in _offered_values(result)
 
 
 async def test_selectdevices_skips_scanner_and_private_and_stale_random(
@@ -276,49 +285,6 @@ async def test_selectdevices_skips_scanner_and_private_and_stale_random(
     assert "standard_devices" not in schema_keys
 
 
-async def test_selectdevices_pagination_warning(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """More than 50 standard devices triggers the pagination warning text."""
-    coordinator = setup_bermuda_entry.runtime_data.coordinator
-    for i in range(55):
-        _inject_device(coordinator, f"AA:BB:CC:DD:11:{i:02X}")
-
-    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"next_step_id": "selectdevices"}
-    )
-    assert result["step_id"] == "selectdevices"
-    help_text = (result.get("description_placeholders") or {}).get("filter_help", "")
-    # The pagination warning fragment (language-independent emoji marker).
-    assert "⚠️" in help_text
-
-
-async def test_selectdevices_ibeacon_and_random_pagination(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """Over-50 iBeacon and over-50 recent-random lists both trigger pagination.
-
-    The iBeacons here carry empty ``metadevice_sources`` to exercise the
-    no-source-mac branch of the label builder.
-    """
-    coordinator = setup_bermuda_entry.runtime_data.coordinator
-    now = monotonic_time_coarse()
-    for i in range(55):
-        beacon = _inject_device(coordinator, f"BB:BB:CC:DD:11:{i:02X}", address_type=ADDR_TYPE_IBEACON)
-        beacon.metadevice_sources = []  # empty -> source_mac branch (line 382)
-    for i in range(55):
-        rnd = _inject_device(coordinator, f"CC:BB:CC:DD:11:{i:02X}", address_type=BDADDR_TYPE_RANDOM_RESOLVABLE)
-        rnd.last_seen = now  # recent so it isn't pruned
-
-    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"next_step_id": "selectdevices"}
-    )
-    assert result["step_id"] == "selectdevices"
-    schema_keys = {str(k.schema) for k in result["data_schema"].schema}
-    assert "ibeacon_devices" in schema_keys
-    assert "random_devices" in schema_keys
-    help_text = (result.get("description_placeholders") or {}).get("filter_help", "")
-    assert "⚠️" in help_text
-
-
 async def test_selectdevices_saved_but_not_discovered_added(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
     """A configured device that is no longer discovered is still offered ('saved')."""
     coordinator = setup_bermuda_entry.runtime_data.coordinator
@@ -339,13 +305,8 @@ async def test_selectdevices_saved_but_not_discovered_added(hass: HomeAssistant,
     # The saved-but-undiscovered address must still be offered (labelled "(saved)")
     # in a rendered selector, otherwise saving the form would silently drop it.
     schema_keys = {str(k.schema) for k in result["data_schema"].schema}
-    assert "standard_devices" in schema_keys
-    offered_values = set()
-    for marker, validator in result["data_schema"].schema.items():  # noqa: B007
-        cfg = getattr(validator, "config", None)
-        if isinstance(cfg, dict) and "options" in cfg:
-            offered_values |= {opt["value"] for opt in cfg["options"]}
-    assert "AA:BB:CC:DD:EE:31" in offered_values
+    assert "devices" in schema_keys
+    assert "AA:BB:CC:DD:EE:31" in _offered_values(result)
 
 
 # --------------------------------------------------------------------------- #

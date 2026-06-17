@@ -204,18 +204,12 @@
       },
       "selectdevices": {
         "data": {
-          "device_filter": "Rechercher des appareils",
-          "ibeacon_devices": "Appareils iBeacon",
-          "random_devices": "Appareils avec MAC aléatoire",
-          "standard_devices": "Appareils BLE standard"
+          "devices": "Appareils à suivre"
         },
         "data_description": {
-          "device_filter": "Tapez dans la zone de recherche et cliquez sur Valider pour filtrer. Recherchez par nom (p. ex. « tile »), adresse MAC (p. ex. « d8f2 »), ou fabricant (p. ex. « apple »).",
-          "ibeacon_devices": "Appareils iBeacon (iOS, Android avec l'app HA, etc.)",
-          "random_devices": "Appareils avec adresses MAC aléatoires",
-          "standard_devices": "Appareils BLE standard (Tiles, trackers, capteurs, etc.)"
+          "devices": "Choisissez les appareils BLE que Bermuda doit suivre. Tapez pour rechercher. Les iBeacons et MAC aléatoires sont étiquetés ; les appareils suivis mais non détectés actuellement apparaissent en (saved)."
         },
-        "description": "{filter_help}\n\nChoisissez les appareils que vous souhaitez suivre. Si aucun appareil n'apparaît ci-dessous, c'est que Bermuda ne voit aucune donnée provenant des scanners Bluetooth. Assurez-vous d'avoir un appareil ESPHome ble_proxy, des appareils Shelly avec proxy Bluetooth configuré ou un adaptateur Bluetooth local.",
+        "description": "Bermuda ne crée des entités de suivi que pour les appareils sélectionnés ici. Si la liste est vide, aucun appareil Bluetooth n'est encore détecté.",
         "title": "Sélectionner les appareils"
       }
     }
