@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- Personal device names (user-set names and BLE `local_name`s such as "Jan's iPhone") are now redacted in the `dump_devices` output and diagnostics — the address-only redactor never washed them
+- A bare 32-hex run (an IRK key or iBeacon UUID with no separators) is now masked by a generic fallback, so an IRK can no longer slip through even when it is not a top-level device entry
+- IRK key material is truncated in the remaining DEBUG/ERROR logs (resolver error paths and private-BLE callback registration), so pasting logs into an issue no longer discloses the full key
+- A centralized logging filter now masks any standalone 32-hex secret (e.g. a full IRK) in *every* log record — a safety net behind the targeted truncations above (ported from philbert/ble-trilateration)
+
+### Added
+- **Mobility-aware area resolution** (ported/adapted from philbert/ble-trilateration): each tracked device gets a `Mobility Type` select (moving/stationary) that tunes the RSSI conditioning and area-switch hysteresis. RSSI is now robustly conditioned (MAD outlier clamp + mobility-aware EMA) before distance is computed, area arbitration is score-based with an adaptive fast/slow-lane hysteresis (a clear winner switches at once; a marginal one must persist via dwell or a recent majority), and when the evidence is weak or sustained-ambiguous the area is reported as the explicit **`Unknown`** (distinct from `not_home`). New `select.py` platform; the area-selection internals moved to a stateful, fully-tested rewrite of `trilateration.py` (`distance_filter.median_abs_deviation` extracted as a pure helper). Thanks @philbert.
+- **Micro-locations (sub-area RF fingerprinting) + an MCP-friendly service/intent API** (ported and adapted from belikh/bermuda2): name and calibrate spots by example ("my keys are on the key hook") and Bermuda reports `Key hook` vs `Sidetable drawer` as a `Micro-location` sensor and an attribute on the Area sensor — finer than the nearest-scanner Area, and purely additive (the Area logic is unchanged). Reachable without the options menu via services (`bermuda.calibrate_location`, `where_is`, `list_locations`, `remove_location`, `rename_location`, `track_device`, `untrack_device`, `set_global_calibration`, `set_scanner_offset`, `get_config`) and voice/Assist intents (`BermudaCalibrateLocation`, `BermudaWhereIs`, `BermudaListLocations`), so MCP clients, automations and the conversation agent can configure and query it. New `location_fingerprints.py` (pure engine + `Store`-backed persistence), `coordinator_microlocation.py` (coordinator mixin), `intents.py`; full FR translations. Thanks @belikh and @agittins.
+- **Area presence-entity overrides** (ported/adapted from knoop7/bermuda-intent): configure Home Assistant entities (motion, occupancy, contact, ...) whose area, while the entity is *on*, competes with BLE at a per-entity "virtual distance" — a triggered presence sensor can reinforce or override the BLE-derived area (smaller distance = stronger override), and can also resolve an otherwise `Unknown`/`not_home` device. Configured via a new two-step **Area Presence Entities** options wizard (entities + global default, then per-entity distances grouped by area); applied as a post-pass over the score-based area result, so it composes with the mobility-aware arbitration. New `area_entity.py` manager + `device.apply_area_override()`. Thanks @knoop7. (knoop7's AI intents — including an arbitrary-code-execution `BermudaExecute` — were deliberately **not** ported, on security grounds.)
+- **InPlay IN100 / DFRobot Fermion telemetry** (ported/adapted from kamilzierke/bermuda): when a tracked device broadcasts the InPlay manufacturer payload (company id `0x0505`), Bermuda decodes its 5-byte telemetry block and exposes **supply voltage (VCC)**, **temperature** and an **ADC voltage** as sensors. Unlike the source fork, the three sensors are **created only for devices actually detected as IN100** (gated by a dedicated `SIGNAL_DEVICE_IN100_NEW` dispatch + a `create_in100_done` flag), so ordinary BLE devices are never cluttered with empty telemetry entities. New `BermudaDevice._parse_in100_telemetry` + `BermudaSensorIn100{Vcc,Temperature,AdcVoltage}` with EN/FR names. Thanks @kamilzierke.
+- `system_health.py`: surfaces proxy/device counts on the System Health page
+- Per-scanner distance sensors now expose `available` and go unavailable when their proxy leaves the roster
+- The nearest-scanner sensor exposes the scanner's Home Assistant `entity_id` as a `scanner_entity_id` attribute, so automations can reach the scanner device's labels/attributes (ported from upstream #374, thanks @ashabala)
+- `quality_scale.yaml`: a self-assessment / roadmap toward the Home Assistant Quality Scale (manifest tier declaration deferred pending `hassfest` validation)
+
+### Fixed
+- Area selection no longer raises `ValueError` (`min([])`) and aborts the whole cycle when the incumbent scanner has a populated distance but an empty interval history (reachable via metadevice `set_ref_power` propagation)
+- Demoting a scanner that is not in the roster can no longer raise `KeyError` and abort the scanner rebuild (`set.discard` instead of `set.remove`)
+- Stale-device pruning subtracts metadevice "keepers" *before* computing the quota shortfall, so the over-quota backstop prunes enough instead of silently under-pruning exactly when it matters (busy area / BLE-MAC churn)
+- BLE address-type classification uses the correct top-two-bits test (`>> 2 == 0b01`), shared between the IRK manager and the device model; static-random addresses (first nibble C–F) are no longer misclassified as resolvable-format
+- Global options are bounds-checked (`vol.Range`): attenuation can no longer be 0 (division by zero in the distance model), and update interval / smoothing samples / velocity / radius can no longer be zero or negative and destabilise the loops
+- The options device selector tolerates a malformed (hand-edited) config carrying a non-string entry instead of crashing the flow
+- A single not-yet-ready Bluetooth proxy no longer blocks per-scanner distance entities for every other proxy — only that proxy is skipped until it reports its wifi MAC (unique_ids unchanged)
+- Corrected a copy-pasted log message in `device_tracker_created` and several `%2f` → `%.2f` format strings
+- The area/floor/scanner text sensors no longer carry an inert custom `device_class`, so their state changes now appear in the Home Assistant logbook/history (ported from upstream #753, thanks @mdrobnak)
+
+### Changed
+- Area arbitration is now RSSI-score-based with adaptive, mobility-aware hysteresis (replacing the "closest scanner wins + percentage-difference" race), and can report the explicit `Unknown` area — see the mobility-aware entry under Added. This changes which area a device reports in marginal/ambiguous cases; the `unique_id`s of existing entities are unchanged
+- Point integration metadata (manifest `codeowners`/`documentation`/`issue_tracker`, the startup banner and the config-flow help URLs) at the `foXaCe/bermuda` fork
+- The Area Switch Reason sensor now shows the concise switch reason as its state, with the full `AreaTests` dump moved to a `diagnostic` attribute (ported from upstream #753, thanks @mdrobnak)
+
+### Removed
+- Dead commented-out code (a `button_created` plumbing stub and its unused `create_button_done` flag, an obsolete `async_call_update_entry`, and stale entity-property blocks in `number.py`/`entity.py`/`sensor.py`) and a stale `pylint: disable`
+- Fixed the `ADRESS_NOT_EVALUATED` typo (now `ADDRESS_NOT_EVALUATED`)
+
+### Tests
+- 116 new tests (325 → 441) covering: human-name and 32-hex IRK redaction, the `min([])` guard, the pruning quota/keeper ordering, the address-type bit logic, `scanner_list_del` idempotency, global-option bounds validation, `system_health`, per-scanner `available`, the `scanner_entity_id` attribute, the area-sensor logbook fix, the concise area-switch reason, the full micro-location engine/services/intents/sensors, the area presence-entity manager + override logic + two-step options wizard, and the IN100 telemetry decode (incl. signed temperature, short/stale payloads) + gated sensor creation (unit + end-to-end). Coverage rises to 94% (`location_fingerprints.py` 100%; `area_entity.py` 98%; `options_flow.py` 99%; `sensor.py`/`sensor_entities.py` 98%; `pruning.py` 72% → 82%). Also pinned the trilateration characterization tests' clock so a slow suite can't age their adverts out (a pre-existing flake).
+
 ## [0.9.4] - 2026-06-03
 
 ### Fixed

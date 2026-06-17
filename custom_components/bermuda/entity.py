@@ -22,7 +22,6 @@ from .const import (
 if TYPE_CHECKING:
     from . import BermudaConfigEntry
     from .coordinator import BermudaDataUpdateCoordinator
-    # from . import BermudaDevice
 
 
 class BermudaEntity(CoordinatorEntity):
@@ -117,7 +116,6 @@ class BermudaEntity(CoordinatorEntity):
         # For scanners we use ethernet MAC, which looks like they are
         # normally stored lowercased, otherwise we use our btmac, which
         # seem to be stored uppercased.
-        # existing_device_id = None
         domain_name = DOMAIN
         model = None
 
@@ -141,19 +139,10 @@ class BermudaEntity(CoordinatorEntity):
             connections = {("private_ble_device", self._device.address.lower())}
             # We don't set the model since the Private BLE integration should have
             # already named it nicely.
-            # model = f"IRK: {self._device.address.lower()[:4]}"
-            # We look up and use the device from the registry so we get
-            # the private_ble_device device congealment!
-            # The "connection" is actually being used as the "identifiers" tuple
-            # here.
-            # dr_device = self.devreg.async_get_device(connection)
-            # if dr_device is not None:
-            #    existing_device_id = dr_device.id
             domain_name = DOMAIN_PRIVATE_BLE_DEVICE
         else:
             connections = {(dr.CONNECTION_BLUETOOTH, self._device.address.upper())}
             # No need to set model, since MAC address will be shown via connection.
-            # model = f"Bermuda: {self._device.address.lower()}"
 
         device_info = {
             "identifiers": {(domain_name, self._device.unique_id)},
@@ -162,8 +151,6 @@ class BermudaEntity(CoordinatorEntity):
         }
         if model is not None:
             device_info["model"] = model
-        # if existing_device_id is not None:
-        #    device_info['id'] = existing_device_id
 
         return device_info
 

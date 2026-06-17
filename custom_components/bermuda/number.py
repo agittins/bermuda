@@ -53,19 +53,11 @@ async def async_setup_entry(
             # call(back(ed)) from the update, so causing it to call another would be... bad.
             async_add_devices(entities, False)
             created_devices.append(address)
-        else:
-            # _LOGGER.debug(
-            #     "Ignoring create request for existing dev_tracker %s", address
-            # )
-            pass
         # tell the co-ord we've done it.
         coordinator.number_created(address)
 
     # Connect device_new to a signal so the coordinator can call it
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, device_new))
-
-    # Now we must tell the co-ord to do initial refresh, so that it will call our callback.
-    # await coordinator.async_config_entry_first_refresh()
 
 
 class BermudaNumber(BermudaEntity, RestoreNumber):
@@ -122,23 +114,3 @@ class BermudaNumber(BermudaEntity, RestoreNumber):
         and can be maintained / renamed etc by the user.
         """
         return f"{self._device.unique_id}_ref_power"
-
-    # @property
-    # def extra_state_attributes(self) -> Mapping[str, Any]:
-    #     """Return extra state attributes for this device."""
-    #     return {"scanner": self._device.area_scanner, "area": self._device.area_name}
-
-    # @property
-    # def state(self) -> str:
-    #     """Return the state of the device."""
-    #     return self._device.zone
-
-    # @property
-    # def source_type(self) -> SourceType:
-    #     """Return the source type, eg gps or router, of the device."""
-    #     return SourceType.BLUETOOTH_LE
-
-    # @property
-    # def icon(self) -> str:
-    #     """Return device icon."""
-    #     return "mdi:bluetooth-connect" if self._device.zone == STATE_HOME else "mdi:bluetooth-off"

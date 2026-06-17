@@ -5,12 +5,40 @@ from __future__ import annotations
 import pytest
 
 from custom_components.bermuda.util import (
+    address_is_resolvable,
     clean_charbuf,
     mac_math_offset,
     mac_norm,
     mac_redact,
     rssi_to_metres,
 )
+
+
+@pytest.mark.parametrize(
+    ("address", "expected"),
+    [
+        # 0b01 (first nibble 4-7) -> resolvable private address (IRK device).
+        ("40:11:22:33:44:55", True),
+        ("4a:00:00:00:00:01", True),
+        ("5f:00:00:00:00:01", True),
+        ("6c:00:00:00:00:01", True),
+        ("7d:00:00:00:00:01", True),
+        # 0b00 (0-3) -> non-resolvable private.
+        ("00:11:22:33:44:55", False),
+        ("3f:11:22:33:44:55", False),
+        # 0b10 (8-B) -> reserved.
+        ("80:11:22:33:44:55", False),
+        ("bf:11:22:33:44:55", False),
+        # 0b11 (C-F) -> static random. The old `& 0x04` test wrongly flagged these
+        # resolvable; the corrected `>> 2` check classifies them non-resolvable.
+        ("c0:11:22:33:44:55", False),
+        ("d0:11:22:33:44:55", False),
+        ("ef:11:22:33:44:55", False),
+        ("ff:11:22:33:44:55", False),
+    ],
+)
+def test_address_is_resolvable(address, expected):
+    assert address_is_resolvable(address) is expected
 
 
 @pytest.mark.parametrize(

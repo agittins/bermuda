@@ -84,6 +84,19 @@ def mac_redact(mac: str, tag: str | None = None) -> str:
     return f"{mac[:2]}::{tag}::{mac[-2:]}"
 
 
+def address_is_resolvable(address: str) -> bool:
+    """
+    Return True if a BLE address is a Resolvable Private Address (an IRK device).
+
+    The random address sub-type lives in the *top two bits* of the first octet (the
+    first hex character of an ``aa:bb:..`` address); ``0b01`` marks a resolvable
+    private address. Note this is ``>> 2``, not a single-bit ``& 0x04`` test, which
+    would misclassify static-random addresses (first char C-F) as resolvable. See
+    ``bermuda_device._async_process_address_type`` for the full 4-way split.
+    """
+    return (int(address[0], 16) >> 2) == 0b01
+
+
 @lru_cache(1024)
 def rssi_to_metres(rssi, ref_power=None, attenuation=None):
     """

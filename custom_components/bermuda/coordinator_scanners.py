@@ -43,18 +43,20 @@ class BermudaScannerMixin:
         async_dispatcher_send(self.hass, SIGNAL_SCANNERS_CHANGED)
 
     def scanner_list_del(self, scanner_device: BermudaDevice):
-        self._scanner_list.remove(scanner_device.address)
-        self._scanners.remove(scanner_device)
+        # discard() (not remove()) so demoting a device that was never in the set
+        # — e.g. one whose is_scanner flag desynced — can't raise KeyError and abort
+        # the whole scanner rebuild mid-loop.
+        self._scanner_list.discard(scanner_device.address)
+        self._scanners.discard(scanner_device)
         async_dispatcher_send(self.hass, SIGNAL_SCANNERS_CHANGED)
 
     def _refresh_scanners(self, force=False):
         """
-        Refresh data on existing scanner objects, and rebuild if scannerlist has changed.
+        Reconcile Bermuda's scanner roster with HA's, rebuilding when it has changed.
 
-        Called on every update cycle, this handles the *fast* updates (such as updating
-        timestamps). If it detects that the list of scanners has changed (or is called
-        with force=True) then the full list of scanners will be rebuild by calling
-        _rebuild_scanners.
+        Called on every update cycle; delegates to _rebuild_scanner_list, which exits
+        quickly unless the HA scanner set has changed (or force=True). Per-cycle advert
+        timestamping happens elsewhere, in _async_gather_advert_data.
         """
         self._rebuild_scanner_list(force=force)
 
@@ -135,23 +137,3 @@ class BermudaScannerMixin:
                     severity=ir.IssueSeverity.ERROR,
                     is_fixable=False,
                 )
-
-    # *** Not required now that we don't reload for scanners.
-    # @callback
-    # def async_call_update_entry(self, confdata_scanners) -> None:
-    #     """
-    #     Call in the event loop to update the scanner entries in our config.
-
-    #     We do this via add_job to ensure it runs in the event loop.
-    #     """
-    #     # Clear the flag for init and update the stamp
-    #     self._do_full_scanner_init = False
-    #     self.last_config_entry_update = monotonic_time_coarse()
-    #     # Apply new config (will cause reload if there are changes)
-    #     self.hass.config_entries.async_update_entry(
-    #         self.config_entry,
-    #         data={
-    #             **self.config_entry.data,
-    #             CONFDATA_SCANNERS: confdata_scanners,
-    #         },
-    #     )

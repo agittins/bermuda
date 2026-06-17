@@ -41,11 +41,15 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util.dt import get_age, now
 
+from .area_entity import BermudaAreaEntityManager
 from .bermuda_device import BermudaDevice
 from .bermuda_irk import BermudaIrkManager
 from .const import (
     _LOGGER,
     _LOGGER_SPAM_LESS,
+    CONF_AREA_ENTITIES,
+    CONF_AREA_ENTITY_DISTANCE,
+    CONF_AREA_ENTITY_DISTANCES,
     CONF_ATTENUATION,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
@@ -55,6 +59,7 @@ from .const import (
     CONF_RSSI_OFFSETS,
     CONF_SMOOTHING_SAMPLES,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_AREA_ENTITY_DISTANCE,
     DEFAULT_ATTENUATION,
     DEFAULT_DEVTRACK_TIMEOUT,
     DEFAULT_MAX_RADIUS,
@@ -65,10 +70,12 @@ from .const import (
     DOMAIN,
     PRUNE_TIME_REDACTIONS,
     SAVEOUT_COOLDOWN,
+    SIGNAL_DEVICE_IN100_NEW,
     SIGNAL_DEVICE_NEW,
     UPDATE_INTERVAL,
 )
 from .coordinator_metadevices import BermudaMetadeviceMixin
+from .coordinator_microlocation import BermudaMicrolocationMixin
 from .coordinator_scanners import BermudaScannerMixin
 from .manufacturers import load_manufacturer_ids, lookup_manufacturer
 from .pruning import prune_devices as _prune_devices
@@ -92,7 +99,9 @@ Cancellable = Callable[[], None]
 # https://github.com/astral-sh/ruff/issues/4244
 
 
-class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, DataUpdateCoordinator[None]):
+class BermudaDataUpdateCoordinator(
+    BermudaScannerMixin, BermudaMetadeviceMixin, BermudaMicrolocationMixin, DataUpdateCoordinator[None]
+):
     """
     Class to manage fetching data from the Bluetooth component.
 
@@ -171,6 +180,7 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
         self.er = er.async_get(self.hass)
         self.dr = dr.async_get(self.hass)
         self.fr = fr.async_get(self.hass)
+        self.area_entity_manager = BermudaAreaEntityManager(self.hass)
         self.have_floors: bool = self.init_floors()
 
         self._scanners_without_areas: list[str] | None = None  # Tracks any proxies that don't have an area assigned.
@@ -244,6 +254,9 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
 
         self.devices: dict[str, BermudaDevice] = {}
         # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
+
+        # Micro-location (sub-area RF fingerprinting) + the MCP-friendly services.
+        self._microloc_init(hass, entry)
 
         # Register for newly discovered / changed BLE devices
         if self.config_entry is not None:
@@ -417,6 +430,7 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
                     dev.create_sensor_done,
                     dev.create_tracker_done,
                     dev.create_number_done,
+                    dev.create_select_done,
                 ]
             ):
                 dev.create_all_done = True
@@ -426,7 +440,6 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
         dev = self._get_device(address)
         if dev is not None:
             dev.create_sensor_done = True
-            # _LOGGER.debug("Sensor confirmed created for %s", address)
         else:
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
         self._check_all_platforms_created(address)
@@ -436,9 +449,8 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
         dev = self._get_device(address)
         if dev is not None:
             dev.create_tracker_done = True
-            # _LOGGER.debug("Device_tracker confirmed created for %s", address)
         else:
-            _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
+            _LOGGER.warning("Very odd, we got device_tracker_created for non-tracked device")
         self._check_all_platforms_created(address)
 
     def number_created(self, address):
@@ -448,12 +460,23 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
             dev.create_number_done = True
         self._check_all_platforms_created(address)
 
-    # def button_created(self, address):
-    #     """Receives report from number platform that sensors have been set up."""
-    #     dev = self._get_device(address)
-    #     if dev is not None:
-    #         dev.create_button_done = True
-    #     self._check_all_platforms_created(address)
+    def select_created(self, address):
+        """Receives report from the select platform that entities have been set up."""
+        dev = self._get_device(address)
+        if dev is not None:
+            dev.create_select_done = True
+        self._check_all_platforms_created(address)
+
+    def in100_sensors_created(self, address):
+        """
+        Receives report from the sensor platform that IN100 telemetry sensors are set up.
+
+        Independent of the create_all_done quorum: these sensors are created only for
+        devices that broadcast IN100 telemetry, so this flag must not gate completion.
+        """
+        dev = self._get_device(address)
+        if dev is not None:
+            dev.create_in100_done = True
 
     def count_active_devices(self) -> int:
         """
@@ -571,6 +594,14 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
 
             # Phase 4: Area refresh
             self._refresh_areas_by_min_distance()
+
+            # Phase 4a: presence-entity overrides — a triggered HA entity (motion,
+            # contact, ...) can win the device's area over BLE at a virtual distance.
+            self._apply_area_entity_overrides()
+
+            # Phase 4b: refine to a named "micro-location" (eg Key hook) where a
+            # saved fingerprint matches. Purely additive — never alters the Area.
+            self._refresh_microlocations()
             await asyncio.sleep(0)
 
             # If any *configured* devices have not yet been seen, create device
@@ -599,6 +630,11 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
                         # Note that the below should be OK thread-wise, debugger indicates this is being
                         # called by _run in events.py, so pretty sure we are "in the event loop".
                         async_dispatcher_send(self.hass, SIGNAL_DEVICE_NEW, address)
+                    # Spin up IN100 telemetry sensors only once a device actually broadcasts
+                    # 0x0505 (may be long after its base sensors — fires until the platform
+                    # reports back via in100_sensors_created).
+                    if device.in100_detected and not device.create_in100_done:
+                        async_dispatcher_send(self.hass, SIGNAL_DEVICE_IN100_NEW, address)
 
             # Phase 5: Device Pruning (only runs periodically)
             self.prune_devices()
@@ -720,7 +756,61 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
         """Set a device's closest scanner/area (see the trilateration module)."""
         refresh_area_by_min_distance(device, self.options)
 
-    async def service_dump_devices(self, call: ServiceCall) -> ServiceResponse:  # pylint: disable=unused-argument;
+    def _apply_area_entity_overrides(self):
+        """
+        Override a device's area when a triggered presence entity wins on virtual distance.
+
+        Runs after BLE area selection: each configured HA entity that is "on" makes its
+        area a candidate at a (small) virtual distance; if that beats the device's
+        BLE-derived area_distance (or the device has no / Unknown area), the device is
+        moved into the entity's area. Lets motion/contact sensors reinforce or override
+        BLE presence. Ported from knoop7/bermuda-intent.
+        """
+        configured = self.options.get(CONF_AREA_ENTITIES, [])
+        if not configured:
+            return
+        default_dist = self.options.get(CONF_AREA_ENTITY_DISTANCE, DEFAULT_AREA_ENTITY_DISTANCE)
+        per_entity_dists = self.options.get(CONF_AREA_ENTITY_DISTANCES, {})
+        triggered_areas = self.area_entity_manager.get_triggered_areas_with_distances(
+            configured, per_entity_dists, default_dist
+        )
+        if not triggered_areas:
+            return
+
+        for device in self.devices.values():
+            if not device.create_sensor:
+                continue
+            current_distance = device.area_distance
+            current_area_id = device.area_id
+
+            best_area_id: str | None = None
+            best_distance: float | None = None
+            for area_id, (_area_name, virtual_dist) in triggered_areas.items():
+                if current_area_id == area_id:
+                    # Already here via BLE: the entity only "wins" if it is virtually closer.
+                    if current_distance is not None and current_distance <= virtual_dist:
+                        continue
+                    best_area_id, best_distance = area_id, virtual_dist
+                    break
+                if (current_distance is None or virtual_dist < current_distance) and (
+                    best_area_id is None or virtual_dist < best_distance
+                ):
+                    best_area_id, best_distance = area_id, virtual_dist
+
+            if best_area_id is not None:
+                old_area = device.area_name
+                device.apply_area_override(best_area_id, best_distance)
+                if old_area != device.area_name:
+                    _LOGGER.debug(
+                        "Area entity override: %s moved %s -> %s (virtual %.2fm beat BLE %s)",
+                        device.name,
+                        old_area or "none",
+                        device.area_name,
+                        best_distance,
+                        f"{current_distance:.1f}m" if current_distance is not None else "none",
+                    )
+
+    async def service_dump_devices(self, call: ServiceCall) -> ServiceResponse:
         """Return a dump of beacon advertisements by receiver."""
         out = {}
         addresses_input = call.data.get("addresses", "")
@@ -752,9 +842,9 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
             out = cast("ServiceResponse", self.redact_data(out))
             _stamp_redact_elapsed = monotonic_time_coarse() - _stamp_redact
             if _stamp_redact_elapsed > 3:  # It should be fast now.
-                _LOGGER.warning("Dump devices redaction took %2f seconds", _stamp_redact_elapsed)
+                _LOGGER.warning("Dump devices redaction took %.2f seconds", _stamp_redact_elapsed)
             else:
-                _LOGGER.debug("Dump devices redaction took %2f seconds", _stamp_redact_elapsed)
+                _LOGGER.debug("Dump devices redaction took %.2f seconds", _stamp_redact_elapsed)
         return out
 
     def redaction_list_update(self):

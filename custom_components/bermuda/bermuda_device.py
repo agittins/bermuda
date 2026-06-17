@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import binascii
 import re
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.components.private_ble_device import coordinator as pble_coordinator
@@ -41,12 +41,17 @@ from .const import (
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
     DEFAULT_DEVTRACK_TIMEOUT,
+    DEFAULT_MOBILITY_TYPE,
     DOMAIN,
     ICON_DEFAULT_AREA,
     ICON_DEFAULT_FLOOR,
+    IN100_PAYLOAD_LEN,
+    MANUFACTURER_ID_INPLAY,
     METADEVICE_IBEACON_DEVICE,
     METADEVICE_PRIVATE_BLE_DEVICE,
     METADEVICE_TYPE_IBEACON_SOURCE,
+    MOBILITY_MOVING,
+    MOBILITY_OPTIONS,
 )
 from .util import mac_norm
 
@@ -112,6 +117,24 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         self.area_rssi: float | None = None  # rssi from closest scanner
         self.area_advert: BermudaAdvert | None = None  # currently closest BermudaScanner
 
+        # Mobility-aware area resolution: the device's mobility mode (set by the
+        # mobility select), whether the area is the explicit "Unknown" outcome, and
+        # the rolling decision state used to smooth area switches (lazily created by
+        # the trilateration module so this stays decoupled from it).
+        self.mobility_type: str = DEFAULT_MOBILITY_TYPE
+        self.area_is_unknown: bool = False
+        self.area_decision_state: Any = None
+
+        # Micro-location (sub-area RF fingerprint match): a named spot like "Key hook",
+        # finer than an Area, set by the coordinator each cycle when a saved fingerprint
+        # for this device matches confidently.
+        self.micro_location_id: str | None = None
+        self.micro_location_name: str | None = None
+        self.micro_location_confidence: float | None = None
+        self.micro_location_last_seen: str | None = None
+        # (candidate_id, consecutive_cycles) used for switch hysteresis.
+        self.micro_location_streak: tuple[str | None, int] = (None, 0)
+
         self.floor: fr.FloorEntry | None = None
         self.floor_id: str | None = None
         self.floor_name: str | None = None
@@ -120,6 +143,14 @@ class BermudaDevice(BermudaScannerDeviceMixin):
 
         self.zone: str = STATE_NOT_HOME  # STATE_HOME or STATE_NOT_HOME
         self.manufacturer: str | None = None
+        # InPlay IN100 / DFRobot Fermion telemetry (manufacturer data 0x0505).
+        self.in100_detected: bool = False
+        self.in100_vcc: float | None = None
+        self.in100_temp_c: float | None = None
+        self.in100_adc_voltage: float | None = None
+        self.in100_raw_payload_hex: str | None = None
+        self.in100_last_payload_len: int | None = None
+        self.create_in100_done: bool = False  # IN100 telemetry sensors have been spun up
         self._hascanner: BaseHaRemoteScanner | BaseHaScanner | None = None  # HA's scanner
         self._is_scanner: bool = False
         self._is_remote_scanner: bool | None = None
@@ -133,14 +164,16 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         self.beacon_power: float | None = None
 
         self.entry_id: str | None = None  # used for scanner devices
+        self.scanner_entity_id: str | None = None  # if this device is a scanner: its HA switch/light entity_id
         self.create_sensor: bool = False  # Create/update a sensor for this device
         self.create_sensor_done: bool = False  # Sensor should now exist
         self.create_tracker_done: bool = False  # device_tracker should now exist
         self.create_number_done: bool = False
-        self.create_button_done: bool = False
+        self.create_select_done: bool = False
         self.create_all_done: bool = False  # All platform entities are done and ready.
         self.last_seen: float = 0  # stamp from most recent scanner spotting. monotonic_time_coarse
-        self.diag_area_switch: str | None = None  # saves output of AreaTests
+        self.diag_area_switch: str | None = None  # saves the full AreaTests diagnostic dump
+        self.diag_area_switch_reason: str | None = None  # saves the concise AreaTests reason string
         self.adverts: dict[
             tuple[str, str], BermudaAdvert
         ] = {}  # str will be a scanner address OR a deviceaddress__scanneraddress
@@ -194,7 +227,8 @@ class BermudaDevice(BermudaScannerDeviceMixin):
                     self._coordinator.config_entry.async_on_unload(
                         _pble_coord.async_track_service_info(self.async_handle_pble_callback, _irk_bytes)
                     )
-                    _LOGGER.debug("Private BLE Callback registered for %s, %s", self.name, self.address)
+                    # self.address is the raw IRK here; log only a short prefix (key material).
+                    _LOGGER.debug("Private BLE Callback registered for %s (irk %s…)", self.name, self.address[:4])
                     #
                     # Also register a callback with our own, which can fake the PBLE callbacks.
                     self._coordinator.config_entry.async_on_unload(
@@ -302,12 +336,24 @@ class BermudaDevice(BermudaScannerDeviceMixin):
             # new measurement(s) immediately.
             self.ref_power_changed = monotonic_time_coarse()
 
-    def apply_scanner_selection(self, bermuda_advert: BermudaAdvert | None):
+    def get_mobility_type(self) -> str:
+        """Return the validated mobility mode (moving/stationary)."""
+        if self.mobility_type in MOBILITY_OPTIONS:
+            return self.mobility_type
+        return MOBILITY_MOVING
+
+    def set_mobility_type(self, mobility_type: str | None) -> None:
+        """Set the mobility mode, falling back to the default if invalid."""
+        self.mobility_type = mobility_type if mobility_type in MOBILITY_OPTIONS else DEFAULT_MOBILITY_TYPE
+
+    def apply_scanner_selection(self, bermuda_advert: BermudaAdvert | None, *, force_unknown: bool = False):
         """
         Given a BermudaAdvert entry, apply the distance and area attributes
         from it to this device.
 
         Used to apply a "winning" scanner's data to the device for setting closest Area.
+        ``force_unknown`` reports the explicit "Unknown" area (evidence too weak to
+        place the device) rather than not_home (device not seen at all).
         """
         old_area = self.area_name
         if bermuda_advert is not None and bermuda_advert.rssi_distance is not None:
@@ -322,7 +368,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         else:
             # Not close to any scanners, or closest scanner has timed out!
             self.area_advert = None
-            self._update_area_and_floor(None)
+            self._update_area_and_floor(None, force_unknown=force_unknown)
             self.area_distance = None
             self.area_rssi = None
 
@@ -333,6 +379,18 @@ class BermudaDevice(BermudaScannerDeviceMixin):
                 old_area,
                 self.area_name,
             )
+
+    def apply_area_override(self, area_id: str, distance: float) -> None:
+        """
+        Force this device's area from an external presence entity (not a BLE scanner).
+
+        Used by the area-entity override: the area comes from a triggered HA entity at
+        a virtual distance, so there is no winning advert (area_advert is cleared).
+        """
+        self._update_area_and_floor(area_id)
+        self.area_distance = distance
+        self.area_rssi = 0
+        self.area_advert = None
 
     def get_scanner(self, scanner_address) -> BermudaAdvert | None:
         """
@@ -500,6 +558,46 @@ class BermudaDevice(BermudaScannerDeviceMixin):
                         # for the sources.
                         self.make_name()
                         self._coordinator.register_ibeacon_source(self)
+
+        # Decode InPlay IN100 / DFRobot Fermion telemetry (manufacturer data 0x0505).
+        self._parse_in100_telemetry(advert)
+
+    def _parse_in100_telemetry(self, advert: BermudaAdvert) -> None:
+        """
+        Decode InPlay IN100 / DFRobot Fermion telemetry from manufacturer data 0x0505.
+
+        Only the latest manufacturer-data entry is considered (telemetry is
+        time-sensitive); the first five bytes encode supply voltage, temperature and an
+        ADC voltage. A short/malformed payload clears the decoded values but still flags
+        the device as detected. Ported/adapted from kamilzierke/bermuda.
+        """
+        latest = advert.manufacturer_data[0] if advert.manufacturer_data else None
+        man_data = latest.get(MANUFACTURER_ID_INPLAY) if latest else None
+        if man_data is None:
+            return
+
+        self.in100_raw_payload_hex = man_data.hex()
+        self.in100_last_payload_len = len(man_data)
+        self.in100_detected = True
+
+        applied_fallback_name = False
+        if self.manufacturer is None:
+            self.manufacturer = "InPlay / DFRobot"
+            applied_fallback_name = True
+
+        # Reset the decoded values; a short payload leaves them cleared.
+        self.in100_vcc = None
+        self.in100_temp_c = None
+        self.in100_adc_voltage = None
+
+        if len(man_data) >= IN100_PAYLOAD_LEN:
+            payload = man_data[:IN100_PAYLOAD_LEN]
+            self.in100_vcc = payload[0] / 32.0
+            self.in100_temp_c = int.from_bytes(payload[1:3], byteorder="big", signed=True) / 100.0
+            self.in100_adc_voltage = int.from_bytes(payload[3:5], byteorder="big", signed=False) / 1000.0
+
+        if applied_fallback_name:
+            self.make_name()
 
     def to_dict(self):
         """Convert class to serialisable dict for dump_devices."""

@@ -132,3 +132,57 @@ def test_pruning_keeps_source_that_is_keeper_for_another_metadevice():
 
     # shared is a keeper of meta_x, so it survives despite being stale in meta_y.
     assert shared.address in coord.devices
+
+
+def test_pruning_quota_shortfall_computed_after_keeper_removal(monkeypatch):
+    """The quota shortfall must be computed AFTER keepers leave prune_list.
+
+    Regression: keepers still in prune_list inflated len(prune_list), under-counted
+    the shortfall and under-pruned under quota pressure. With PRUNE_MAX_COUNT forced
+    low, all three quota candidates must be pruned (only the two keepers survive) —
+    which only holds once the keeper subtraction precedes the shortfall calculation.
+    """
+    monkeypatch.setattr("custom_components.bermuda.pruning.PRUNE_MAX_COUNT", 2)
+    now = monotonic_time_coarse()
+
+    def _dev(addr, last_seen):
+        return SimpleNamespace(
+            address=addr,
+            last_seen=last_seen,
+            create_sensor=False,
+            is_scanner=False,
+            address_type=BDADDR_TYPE_OTHER,
+            metadevice_sources=[],
+        )
+
+    # ee:01 is the index-0 keeper of meta_x AND a stale (index-1) source of meta_y.
+    shared = _dev("aa:bb:cc:dd:ee:01", now - 99999)
+    # ee:02 is the index-0 (kept) source of meta_y.
+    other = _dev("aa:bb:cc:dd:ee:02", now)
+    # Three recent static devices: quota candidates (prunable_stamps), not auto-pruned.
+    p1 = _dev("aa:bb:cc:dd:ee:03", now - 10)
+    p2 = _dev("aa:bb:cc:dd:ee:04", now - 20)
+    p3 = _dev("aa:bb:cc:dd:ee:05", now - 30)
+
+    meta_x = SimpleNamespace(metadevice_sources=["aa:bb:cc:dd:ee:01"])
+    meta_y = SimpleNamespace(metadevice_sources=["aa:bb:cc:dd:ee:02", "aa:bb:cc:dd:ee:01"])
+
+    coord = SimpleNamespace(
+        stamp_last_prune=0,
+        stamp_redactions_expiry=None,
+        redactions={},
+        irk_manager=MagicMock(),
+        metadevices={"x": meta_x, "y": meta_y},
+        devices={d.address: d for d in (shared, other, p1, p2, p3)},
+        scanner_list=set(),
+    )
+    coord._get_device = lambda address: coord.devices.get(address)
+
+    prune_devices(coord, force_pruning=True)
+
+    # Keepers survive; all three quota candidates are pruned (pre-fix left one behind).
+    assert shared.address in coord.devices
+    assert other.address in coord.devices
+    for cand in (p1, p2, p3):
+        assert cand.address not in coord.devices
+    assert len(coord.devices) == 2

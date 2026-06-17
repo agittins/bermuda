@@ -44,12 +44,16 @@ def _make_rpa(irk: bytes, prand3: bytes) -> str:
 # A real resolvable MAC for IRK_A (prand high byte 0x40 -> valid RPA, first nibble '4').
 RESOLVABLE_MAC = _make_rpa(IRK_A, bytes([0x40, 0x11, 0x22]))
 
-# A "resolvable-format" MAC (first char gives & 0x04 truthy) that does NOT match any IRK.
-# First nibble '4' => int('4',16) & 0x04 == 4, so the unresolved branch is NO_KNOWN_IRK_MATCH.
+# A "resolvable-format" MAC (top two bits 0b01) that does NOT match any IRK.
+# First nibble '4' => (int('4',16) >> 2) == 0b01, so the unresolved branch is NO_KNOWN_IRK_MATCH.
 UNMATCHED_RPA_MAC = "40:00:00:00:00:01"
 
-# A non-resolvable address: first char '0' (& 0x04 == 0) and top bits not 0b01.
+# A non-resolvable address: first char '0' (top bits 0b00, not 0b01).
 NON_RESOLVABLE_MAC = "08:11:22:33:44:55"
+
+# A static-random address: first nibble 'c' (top bits 0b11). The old `& 0x04` test
+# wrongly flagged this resolvable-format; the corrected `>> 2` check makes it NOT_RESOLVABLE.
+STATIC_RANDOM_MAC = "c0:11:22:33:44:55"
 
 
 def test_setup_sanity_resolvable_mac_matches_only_its_irk():
@@ -107,6 +111,21 @@ def test_check_mac_no_known_irk_match_for_rpa_format():
     mgr.add_irk(IRK_A)
     result = mgr.check_mac(UNMATCHED_RPA_MAC)
     assert result == IrkTypes.NO_KNOWN_IRK_MATCH.value
+    assert result in IrkTypes.unresolved()
+
+
+def test_check_mac_static_random_is_not_resolvable():
+    """A static-random address (first nibble C-F) is classified NOT_RESOLVABLE_ADDRESS.
+
+    Regression for the address-type bit logic: the previous `& 0x04` test marked
+    static-random addresses as resolvable-format (NO_KNOWN_IRK_MATCH); the corrected
+    `>> 2 == 0b01` check classifies them NOT_RESOLVABLE_ADDRESS so they are not
+    pointlessly re-tested against every known IRK.
+    """
+    mgr = BermudaIrkManager()
+    mgr.add_irk(IRK_A)
+    result = mgr.check_mac(STATIC_RANDOM_MAC)
+    assert result == IrkTypes.NOT_RESOLVABLE_ADDRESS.value
     assert result in IrkTypes.unresolved()
 
 
@@ -262,7 +281,7 @@ def test_cancel_callback_stops_future_firing():
 def test_diagnostics_shape_and_contents():
     """Diagnostics exposes registered IRKs and resolved/no-match MACs only.
 
-    Entries marked NOT_RESOLVABLE_ADDRESS or ADRESS_NOT_EVALUATED are filtered out;
+    Entries marked NOT_RESOLVABLE_ADDRESS or ADDRESS_NOT_EVALUATED are filtered out;
     we insert those directly since check_mac never produces them as a final state.
     """
     mgr = BermudaIrkManager()
@@ -275,7 +294,7 @@ def test_diagnostics_shape_and_contents():
         NON_RESOLVABLE_MAC, int(now + 600), IrkTypes.NOT_RESOLVABLE_ADDRESS.value
     )
     pending = "0a:0b:0c:0d:0e:0f"
-    mgr._macs[pending] = ResolvableMAC(pending, int(now + 600), IrkTypes.ADRESS_NOT_EVALUATED.value)
+    mgr._macs[pending] = ResolvableMAC(pending, int(now + 600), IrkTypes.ADDRESS_NOT_EVALUATED.value)
 
     diag = mgr.async_diagnostics_no_redactions()
 
@@ -289,7 +308,7 @@ def test_diagnostics_shape_and_contents():
     assert isinstance(macs[RESOLVABLE_MAC]["expires_in"], int)
     # NO_KNOWN_IRK_MATCH is rendered by name.
     assert macs[UNMATCHED_RPA_MAC]["irk"] == IrkTypes.NO_KNOWN_IRK_MATCH.name
-    # NOT_RESOLVABLE_ADDRESS and ADRESS_NOT_EVALUATED entries are filtered out.
+    # NOT_RESOLVABLE_ADDRESS and ADDRESS_NOT_EVALUATED entries are filtered out.
     assert NON_RESOLVABLE_MAC not in macs
     assert pending not in macs
 
@@ -297,7 +316,7 @@ def test_diagnostics_shape_and_contents():
 def test_irktypes_unresolved_contains_all_markers():
     """The unresolved() helper lists every IrkTypes marker value."""
     unresolved = IrkTypes.unresolved()
-    assert IrkTypes.ADRESS_NOT_EVALUATED.value in unresolved
+    assert IrkTypes.ADDRESS_NOT_EVALUATED.value in unresolved
     assert IrkTypes.NOT_RESOLVABLE_ADDRESS.value in unresolved
     assert IrkTypes.NO_KNOWN_IRK_MATCH.value in unresolved
     # A genuine 16-byte IRK must never collide with a marker.

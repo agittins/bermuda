@@ -9,6 +9,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import (
     _LOGGER,
+    SIGNAL_DEVICE_IN100_NEW,
     SIGNAL_DEVICE_NEW,
     SIGNAL_SCANNERS_CHANGED,
 )
@@ -17,6 +18,10 @@ from .sensor_entities import (
     BermudaSensorAreaLastSeen,
     BermudaSensorAreaSwitchReason,
     BermudaSensorFloor,
+    BermudaSensorIn100AdcVoltage,
+    BermudaSensorIn100Temperature,
+    BermudaSensorIn100Vcc,
+    BermudaSensorMicroLocation,
     BermudaSensorRange,
     BermudaSensorRssi,
     BermudaSensorScanner,
@@ -47,6 +52,10 @@ __all__ = [
     "BermudaSensorAreaLastSeen",
     "BermudaSensorAreaSwitchReason",
     "BermudaSensorFloor",
+    "BermudaSensorIn100AdcVoltage",
+    "BermudaSensorIn100Temperature",
+    "BermudaSensorIn100Vcc",
+    "BermudaSensorMicroLocation",
     "BermudaSensorRange",
     "BermudaSensorRssi",
     "BermudaSensorScanner",
@@ -68,6 +77,7 @@ async def async_setup_entry(
 
     created_devices: list[str] = []  # list of already-created devices
     created_scanners: dict[str, list[str]] = {}  # list of scanner:address for created entities
+    created_in100: list[str] = []  # devices that have had IN100 telemetry sensors created
 
     @callback
     def device_new(address: str) -> None:
@@ -78,21 +88,6 @@ async def async_setup_entry(
         to have sensors created. Not called directly, but via the dispatch
         facility from HA.
         """
-        # if len(scanners) == 0:
-        #     # Bail out until we get called with some scanners to work with!
-        #     return
-        # for scanner in scanners:
-        #     if (
-        #         coordinator.devices[scanner]._is_remote_scanner is None  # usb/HCI scanner's are fine.
-        #         or (
-        #             coordinator.devices[scanner]._is_remote_scanner  # usb/HCI scanner's are fine.
-        #             and coordinator.devices[scanner].address_wifi_mac is None
-        #         )
-        #     ):
-        #         # This scanner doesn't have a wifi mac yet, bail out
-        #         # until they are all filled out.
-        #         return
-
         if address not in created_devices:
             entities = []
             entities.append(BermudaSensor(coordinator, entry, address))
@@ -103,6 +98,7 @@ async def async_setup_entry(
             entities.append(BermudaSensorRssi(coordinator, entry, address))
             entities.append(BermudaSensorAreaLastSeen(coordinator, entry, address))
             entities.append(BermudaSensorAreaSwitchReason(coordinator, entry, address))
+            entities.append(BermudaSensorMicroLocation(coordinator, entry, address))
 
             # _LOGGER.debug("Sensor received new_device signal for %s", address)
             # We set update before add to False because we are being
@@ -120,34 +116,25 @@ async def async_setup_entry(
 
     def create_scanner_entities():
         # These are per-proxy entities on each device, and scanners may come and
-        # go over time. So we need to maintain our matrix of which ones we have already
+        # go over time. So we maintain a matrix of which ones we have already
         # spun-up so we don't duplicate any.
-
-        for scanner in coordinator.get_scanners:
-            if (
-                scanner.is_remote_scanner is None  # usb/HCI scanner's are fine.
-                or (scanner.is_remote_scanner and scanner.address_wifi_mac is None)
-            ):
-                # This scanner doesn't have a wifi mac yet, bail out
-                # until they are all filled out.
-                return
-
         entities = []
-        for scanner in coordinator.scanner_list:
+        for scanner in coordinator.get_scanners:
+            # Wait until a remote scanner reports its wifi mac before creating its
+            # per-scanner entities, so the unique_id (which prefers the wifi mac)
+            # stays stable and won't flip later. USB/HCI scanners are ready at once.
+            # Skip just this scanner, not the whole batch, so one not-yet-ready proxy
+            # can't block the distance entities for all the others.
+            if scanner.is_remote_scanner is None or (scanner.is_remote_scanner and scanner.address_wifi_mac is None):
+                continue
             for address in created_devices:
-                if address not in created_scanners.get(scanner, []):
-                    _LOGGER.debug(
-                        "Creating Scanner %s entities for %s",
-                        scanner,
-                        address,
-                    )
-                    entities.append(BermudaSensorScannerRange(coordinator, entry, address, scanner))
-                    entities.append(BermudaSensorScannerRangeRaw(coordinator, entry, address, scanner))
-                    created_entry = created_scanners.setdefault(scanner, [])
-                    created_entry.append(address)
-        # _LOGGER.debug("Sensor received new_device signal for %s", address)
-        # We set update before add to False because we are being
-        # call(back(ed)) from the update, so causing it to call another would be... bad.
+                if address not in created_scanners.get(scanner.address, []):
+                    _LOGGER.debug("Creating Scanner %s entities for %s", scanner.address, address)
+                    entities.append(BermudaSensorScannerRange(coordinator, entry, address, scanner.address))
+                    entities.append(BermudaSensorScannerRangeRaw(coordinator, entry, address, scanner.address))
+                    created_scanners.setdefault(scanner.address, []).append(address)
+        # We set update-before-add to False because we are being called back from
+        # the update loop; triggering another update here would be bad.
         async_add_entities(entities, False)
 
     @callback
@@ -155,9 +142,30 @@ async def async_setup_entry(
         """Callback for event from coordinator advising that the roster of scanners has changed."""
         create_scanner_entities()
 
+    @callback
+    def device_in100_new(address: str) -> None:
+        """
+        Create IN100 telemetry sensors once a tracked device broadcasts 0x0505.
+
+        Fired by the coordinator only for devices flagged ``in100_detected``, so the
+        three diagnostic/telemetry sensors are never spun up for ordinary BLE devices.
+        """
+        if address not in created_in100:
+            async_add_entities(
+                [
+                    BermudaSensorIn100Vcc(coordinator, entry, address),
+                    BermudaSensorIn100Temperature(coordinator, entry, address),
+                    BermudaSensorIn100AdcVoltage(coordinator, entry, address),
+                ],
+                False,
+            )
+            created_in100.append(address)
+        coordinator.in100_sensors_created(address)
+
     # Connect device_new to a signal so the coordinator can call it
     _LOGGER.debug("Registering device_new and scanners_changed callbacks")
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, device_new))
+    entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_IN100_NEW, device_in100_new))
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_SCANNERS_CHANGED, scanners_changed))
 
     # Create Global Bermuda entities

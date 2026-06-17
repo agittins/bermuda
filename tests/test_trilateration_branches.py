@@ -1,21 +1,10 @@
-"""Branch-coverage tests for the trilateration / area-selection module.
+"""
+Branch tests for the trilateration module: the explicit "Unknown" outcomes, the
+RSSI scoring, and the AreaTests diagnostic formatting.
 
-These complement ``tests/test_area_selection_characterization.py`` (which pins
-the instant-win / farther / marginal / significant / too-far / stale paths) by
-exercising the remaining branches of
-``custom_components.bermuda.trilateration``:
-
-* ``AreaTests.__str__`` formatting (tuple/float, ``pcnt_diff`` special-case,
-  and the plain scalar branch);
-* the *same-area, newer + closer* hysteresis win;
-* the *historical min/max* hysteresis win; and
-* ``device.diag_area_switch`` being populated when the selected advert changes
-  and a decision (``reason``) was recorded.
-
-The module entry point is called directly (``refresh_area_by_min_distance``)
-with an options dict, mirroring how the coordinator delegates to it. Adverts and
-the device are lightweight ``SimpleNamespace`` stand-ins, exactly as in the
-existing characterization suite.
+Complements ``tests/test_area_selection_characterization.py`` (the fast/slow-lane
+hysteresis paths). The module clock is frozen so module-level advert stamps never
+age out; time-gated branches are exercised by pre-aging the decision state.
 """
 
 from __future__ import annotations
@@ -25,214 +14,153 @@ from types import SimpleNamespace
 import pytest
 from bluetooth_data_tools import monotonic_time_coarse
 
-from custom_components.bermuda.const import (
-    AREA_PCNT_DIFF_HISTORICAL,
-    AREA_PCNT_DIFF_OUTRIGHT,
-    CONF_MAX_RADIUS,
+from custom_components.bermuda.const import CONF_MAX_RADIUS, MOBILITY_MOVING
+from custom_components.bermuda.trilateration import (
+    AreaDecisionState,
+    AreaTests,
+    _score_rssi,
+    refresh_area_by_min_distance,
 )
-from custom_components.bermuda.trilateration import AreaTests, refresh_area_by_min_distance
 
 NOW = monotonic_time_coarse()
 
 
-def _advert(name, area_id, distance, *, stamp=None, history=None, last_seen=None):
-    """Build a minimal BermudaAdvert stand-in for the area race."""
+@pytest.fixture(autouse=True)
+def _freeze_clock(monkeypatch):
+    """Pin trilateration's clock so the NOW-stamped adverts never age out."""
+    monkeypatch.setattr("custom_components.bermuda.trilateration.monotonic_time_coarse", lambda: NOW)
+
+
+def _advert(scanner: str, area: str | None, rssi_filtered: float, distance: float, *, dispersion=1.0):
     return SimpleNamespace(
-        name=name,
-        area_id=area_id,
-        area_name=area_id.title() if area_id else None,
+        scanner_address=scanner,
+        name=scanner,
+        area_id=f"{area}_id" if area else None,
+        area_name=area,
         rssi_distance=distance,
-        stamp=NOW if stamp is None else stamp,
-        scanner_device=SimpleNamespace(last_seen=NOW if last_seen is None else last_seen),
-        hist_distance_by_interval=history if history is not None else [],
+        rssi_filtered=rssi_filtered,
+        rssi=rssi_filtered,
+        conf_rssi_offset=0.0,
+        rssi_dispersion=dispersion,
+        stamp=NOW,
+        scanner_device=SimpleNamespace(last_seen=NOW),
     )
 
 
-def _run(area_advert, adverts, *, max_radius=20.0):
-    """Drive the race and return (selected_advert, device)."""
-    selected = []
+def _run(area_advert, adverts, *, mobility=MOBILITY_MOVING, state=None, max_radius=20.0):
+    applied: list[tuple[object | None, bool]] = []
     device = SimpleNamespace(
-        name="tracked",
+        name="dev",
         area_advert=area_advert,
         adverts={i: ad for i, ad in enumerate(adverts)},
         diag_area_switch=None,
-        apply_scanner_selection=lambda adv: selected.append(adv),
+        diag_area_switch_reason=None,
+        area_decision_state=state if state is not None else AreaDecisionState(),
+        get_mobility_type=lambda: mobility,
     )
+
+    def _apply(advert, *, force_unknown=False):
+        applied.append((advert, force_unknown))
+        device.area_advert = advert
+
+    device.apply_scanner_selection = _apply
     refresh_area_by_min_distance(device, {CONF_MAX_RADIUS: max_radius})
-    assert len(selected) == 1
-    return selected[0], device
+    return device, applied
 
 
 # ---------------------------------------------------------------------------
-# AreaTests.__str__ formatting
+# RSSI scoring
 # ---------------------------------------------------------------------------
 
 
-def test_areatests_str_renders_all_field_kinds():
-    """``__str__`` formats tuples (floats), the pcnt_diff special-case and scalars."""
+def test_score_rssi_is_monotonic_and_bounded():
+    assert _score_rssi(None) == 0.0
+    assert _score_rssi(-50.0) > _score_rssi(-70.0) > _score_rssi(-95.0)
+    # Bounded: extreme inputs don't overflow.
+    assert _score_rssi(-200.0) >= 0.0
+    assert _score_rssi(10.0) < float("inf")
+
+
+# ---------------------------------------------------------------------------
+# Unknown outcomes
+# ---------------------------------------------------------------------------
+
+
+def test_unknown_when_best_rssi_too_weak():
+    """A best contender below the confidence floor reports Unknown."""
+    weak = _advert("s1", "Garage", -96.0, 15.0)  # < moving floor (-94)
+    device, applied = _run(weak, [weak])
+    assert applied[-1] == (None, True)  # force_unknown
+    assert "UNKNOWN" in device.diag_area_switch
+    assert device.diag_area_switch_reason.startswith("UNKNOWN")
+
+
+def test_unknown_when_sustained_ambiguous():
+    """Two near-equal contenders, ambiguity sustained past the hold, report Unknown."""
+    a = _advert("s1", "Garage", -70.0, 3.0)
+    b = _advert("s2", "Roadside", -71.0, 3.1)  # score ratio ~1.13 < ambiguity_ratio (1.2)
+    state = AreaDecisionState()
+    state.ambiguous_since = NOW - 100  # already held long enough
+    _device, applied = _run(a, [a, b], state=state)
+    assert applied[-1][1] is True
+
+
+def test_not_unknown_when_clearly_separated():
+    """Well-separated contenders are not ambiguous; the best is selected normally."""
+    a = _advert("s1", "Kitchen", -55.0, 1.5)
+    b = _advert("s2", "Garage", -80.0, 5.0)
+    _device, applied = _run(a, [a, b])
+    assert applied[-1] == (a, False)
+
+
+def test_unknown_holds_until_evidence_clears():
+    """While already Unknown, a still-too-close ratio keeps reporting Unknown."""
+    a = _advert("s1", "Garage", -70.0, 3.0)
+    b = _advert("s2", "Roadside", -71.5, 3.1)  # ratio ~1.2 < unknown_exit_ratio (1.35)
+    state = AreaDecisionState()
+    state.unknown_since = NOW - 50  # we were already Unknown
+    _device, applied = _run(a, [a, b], state=state)
+    assert applied[-1][1] is True
+
+
+# ---------------------------------------------------------------------------
+# Diagnostics + AreaTests formatting (unchanged behaviour)
+# ---------------------------------------------------------------------------
+
+
+def test_diag_populated_on_area_switch():
+    """A genuine switch records the reason + diagnostic text."""
+    incumbent = _advert("s1", "Garage", -85.0, 6.0)
+    challenger = _advert("s2", "Kitchen", -55.0, 1.5)
+    device, applied = _run(incumbent, [incumbent, challenger])
+    assert applied[-1][0] is challenger
+    assert device.diag_area_switch is not None
+    assert device.diag_area_switch_reason is not None
+    assert "WIN" in device.diag_area_switch_reason
+
+
+def test_areatests_sensortext_and_str():
+    """AreaTests still renders tuples/floats/scalars for the diagnostic sensor."""
     tests = AreaTests(
         device="Phone",
-        scannername=("Kitchen Proxy", "Lounge Proxy"),
-        areas=("Kitchen", "Lounge"),
+        scannername=("Kitchen", "Lounge"),
         pcnt_diff=0.1818,
-        same_area=False,
-        last_ad_age=(1.5, 0.25),
-        this_ad_age=(2.0, 0.5),
         distance=(3.0, 2.5),
-        hist_min_max=(3.0, 2.6),
-        reason="WIN on historical min/max",
+        reason="WIN fast_lane ratio=3.20",
     )
+    text = tests.sensortext()
+    assert "device|Phone" in text
+    assert "3.00" in text  # distance tuple float
+    assert len(text) <= 255
+
     out = str(tests)
-
-    # Field labels are left-justified to width 20 and prefixed with "** ".
     assert "** device" in out
-    assert "** scannername" in out
-    assert "** pcnt_diff" in out
-    assert "** reason" in out
-
-    # Tuple-of-float branch: each float rendered with two decimals.
-    assert "3.00 2.50" in out  # distance
-    assert "1.50 0.25" in out  # last_ad_age
-
-    # Tuple-of-str branch: scanner names and area names appear verbatim.
-    assert "Kitchen Proxy Lounge Proxy" in out
-    assert "Kitchen Lounge" in out
-
-    # pcnt_diff special-case: three decimals.
-    assert "0.182" in out
-
-    # Plain scalar branch: bool and string scalars.
-    assert "False" in out
-    assert "WIN on historical min/max" in out
-
-    # Multi-line: one line per dataclass field.
-    assert out.count("\n") == len(vars(tests))
+    assert "0.182" in out  # pcnt_diff special-case (3 decimals)
+    assert "WIN fast_lane ratio=3.20" in out
 
 
-def test_areatests_str_handles_defaults():
-    """A freshly-constructed AreaTests stringifies without error (reason None)."""
+def test_areatests_defaults_stringify():
+    """A default AreaTests stringifies without error (reason None)."""
     out = str(AreaTests())
     assert "** reason" in out
     assert "None" in out
-
-
-# ---------------------------------------------------------------------------
-# Same-area, newer + closer hysteresis win  (lines 171-173)
-# ---------------------------------------------------------------------------
-
-
-def test_same_area_newer_closer_advert_wins():
-    """A same-area challenger whose advert is newer and at least as close wins.
-
-    Conditions, from the source:
-      * same area_id (same_area == True),
-      * this_ad_age[0] > this_ad_age[1] + 1  -> incumbent advert is >1s older,
-      * distance[0] >= distance[1]           -> incumbent not closer.
-
-    The incumbent advert is stamped 5s in the past while the challenger is
-    fresh, and both are at the same distance so the earlier "not actually
-    closer" guard (incumbent < challenger) does not short-circuit.
-    """
-    incumbent = _advert("Kitchen Proxy", "kitchen", 3.0, stamp=NOW - 5)
-    challenger = _advert("Kitchen Proxy 2", "kitchen", 3.0, stamp=NOW)
-    chosen, device = _run(incumbent, [incumbent, challenger])
-
-    assert chosen is challenger
-    # Winner changed and a reason was recorded -> diagnostic populated.
-    assert device.diag_area_switch is not None
-    assert "WIN awarded for same area, newer, closer advert" in device.diag_area_switch
-
-
-def test_same_area_not_newer_enough_does_not_win_on_same_area_path():
-    """Same area but advert age gap <= 1s must not trigger the same-area win.
-
-    With equal distances and pcnt_diff == 0 this falls all the way through to
-    the percentage-difference loss, so the incumbent is retained.
-    """
-    incumbent = _advert("Kitchen Proxy", "kitchen", 3.0, stamp=NOW - 0.5)
-    challenger = _advert("Kitchen Proxy 2", "kitchen", 3.0, stamp=NOW)
-    chosen, device = _run(incumbent, [incumbent, challenger])
-
-    assert chosen is incumbent
-    # No switch -> diagnostic left untouched.
-    assert device.diag_area_switch is None
-
-
-# ---------------------------------------------------------------------------
-# Historical min/max hysteresis win  (lines 178-185)
-# ---------------------------------------------------------------------------
-
-
-def test_historical_min_max_win():
-    """Challenger wins when its worst recent reading beats the incumbent's best.
-
-    Requirements:
-      * different areas so the same-area block is skipped,
-      * challenger has > AREA_MIN_HISTORY (3) history samples,
-      * max(challenger history) < min(incumbent history),
-      * pcnt_diff > AREA_PCNT_DIFF_HISTORICAL (0.15) but kept below
-        AREA_PCNT_DIFF_OUTRIGHT (0.30) so the win is attributable to the
-        historical test rather than the outright threshold.
-    """
-    incumbent = _advert(
-        "Kitchen Proxy",
-        "kitchen",
-        3.0,
-        history=[3.0, 3.1, 3.2, 3.0, 3.3],  # min over window == 3.0
-    )
-    challenger = _advert(
-        "Lounge Proxy",
-        "lounge",
-        2.5,
-        history=[2.5, 2.4, 2.6, 2.5],  # 4 samples (> 3); max over window == 2.6
-    )
-    # pcnt_diff = |2.5-3.0| / ((2.5+3.0)/2) = 0.1818...
-    pcnt_diff = abs(2.5 - 3.0) / ((2.5 + 3.0) / 2)
-    assert AREA_PCNT_DIFF_HISTORICAL < pcnt_diff < AREA_PCNT_DIFF_OUTRIGHT
-
-    chosen, device = _run(incumbent, [incumbent, challenger])
-
-    assert chosen is challenger
-    assert device.diag_area_switch is not None
-    assert "WIN on historical min/max" in device.diag_area_switch
-
-
-def test_historical_test_skipped_without_enough_samples():
-    """With history but <= AREA_MIN_HISTORY samples the historical test is skipped.
-
-    pcnt_diff (~0.18) is below the outright threshold, so with the historical
-    branch unavailable the challenger loses and the incumbent is kept.
-    """
-    incumbent = _advert("Kitchen Proxy", "kitchen", 3.0, history=[3.0, 3.1, 3.2])
-    challenger = _advert("Lounge Proxy", "lounge", 2.5, history=[2.5, 2.4, 2.6])  # exactly 3 -> not > 3
-    chosen, device = _run(incumbent, [incumbent, challenger])
-
-    assert chosen is incumbent
-    assert device.diag_area_switch is None
-
-
-def test_historical_min_max_not_separated_enough_falls_through_to_loss():
-    """Enough samples but overlapping ranges: historical test fails, outright loses."""
-    incumbent = _advert("Kitchen Proxy", "kitchen", 3.0, history=[2.4, 3.1, 3.2, 3.0])
-    # challenger max (2.6) is NOT < incumbent min (2.4) -> historical test fails.
-    challenger = _advert("Lounge Proxy", "lounge", 2.5, history=[2.5, 2.4, 2.6, 2.5])
-    chosen, device = _run(incumbent, [incumbent, challenger])
-
-    assert chosen is incumbent
-    assert device.diag_area_switch is None
-
-
-# ---------------------------------------------------------------------------
-# diag_area_switch on an outright win
-# ---------------------------------------------------------------------------
-
-
-def test_diag_area_switch_set_on_outright_win():
-    """A clear outright win also populates diag_area_switch with its reason."""
-    incumbent = _advert("Kitchen Proxy", "kitchen", 5.0)
-    challenger = _advert("Lounge Proxy", "lounge", 2.0)  # pcnt_diff ~= 0.857
-    chosen, device = _run(incumbent, [incumbent, challenger])
-
-    assert chosen is challenger
-    assert device.diag_area_switch is not None
-    assert "WIN by not losing!" in device.diag_area_switch

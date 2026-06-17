@@ -12,7 +12,24 @@ always more accurate than a farther one. Both helpers below exploit that.
 
 from __future__ import annotations
 
+import statistics
+
 from .const import DISTANCE_INFINITE
+
+
+def median_abs_deviation(values: list[float], center: float | None = None) -> float:
+    """
+    Return the median absolute deviation (MAD) of ``values``.
+
+    A robust dispersion measure: the median of ``|value - center|``, where
+    ``center`` defaults to the median. Used to clamp RSSI outliers without being
+    dragged by the very spikes it is meant to reject. Returns 0.0 when empty.
+    """
+    if not values:
+        return 0.0
+    _center = statistics.median(values) if center is None else center
+    deviations = [abs(value - _center) for value in values]
+    return statistics.median(deviations) if deviations else 0.0
 
 
 def peak_retreat_velocity(hist_distance: list[float], hist_stamp: list[float]) -> float:

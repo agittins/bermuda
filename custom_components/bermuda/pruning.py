@@ -113,6 +113,14 @@ def prune_devices(coordinator: BermudaDataUpdateCoordinator, *, force_pruning: b
                 # Static, not tracked, not so old, but a quota candidate.
                 prunable_stamps[device_address] = device.last_seen
 
+    # A source can be the most-recent (kept) source of one metadevice while being
+    # a stale, prunable source of another. Drop keepers *before* computing the quota
+    # shortfall: otherwise the soon-to-be-removed keepers inflate len(prune_list), the
+    # shortfall is undercounted, and the quota backstop under-prunes exactly when a
+    # busy area / BLE-MAC DOS makes it matter. (prunable_stamps already excludes
+    # keepers via the per-device pass, so the quota expansion can't re-add them.)
+    prune_list -= metadevice_source_keepers
+
     prune_quota_shortfall = len(co.devices) - len(prune_list) - PRUNE_MAX_COUNT
     if prune_quota_shortfall > 0:
         # We need more to prune (busy train station, or a BLE-MAC DOS).
@@ -126,11 +134,6 @@ def prune_devices(coordinator: BermudaDataUpdateCoordinator, *, force_pruning: b
                 "Need to prune another %s devices to make quota, but no extra prunables available",
                 prune_quota_shortfall,
             )
-
-    # A source can be the most-recent (kept) source of one metadevice while being
-    # a stale, prunable source of another. Never delete an address that any
-    # metadevice still wants to keep.
-    prune_list -= metadevice_source_keepers
 
     # prune_list is ready: no keepers, expanded to quota where possible.
     if prune_list:

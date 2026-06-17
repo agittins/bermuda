@@ -13,6 +13,7 @@ from homeassistant.components.bluetooth import BluetoothChange
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
 
 from .const import _LOGGER, DOMAIN, PRUNE_TIME_KNOWN_IRK, IrkTypes
+from .util import address_is_resolvable
 
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives.ciphers import Cipher
@@ -108,7 +109,7 @@ class BermudaIrkManager:
             _LOGGER.warning(
                 "New Mac and IRK (%s, %s....) from add_macirk do not resolve, result %s",
                 address,
-                irk[:4].hex(),
+                irk.hex()[:4],
                 result.hex()[:4],
             )
         return result
@@ -128,7 +129,7 @@ class BermudaIrkManager:
         # resolvable-format address that simply matched no known IRK. Both are in
         # IrkTypes.unresolved(), so callers treat them the same, but the marker
         # avoids re-testing addresses that can never be resolvable.
-        if int(address[0], 16) & 0x04:
+        if address_is_resolvable(address):
             return self._update_saved_mac(address, IrkTypes.NO_KNOWN_IRK_MATCH.value)
         return self._update_saved_mac(address, IrkTypes.NOT_RESOLVABLE_ADDRESS.value)
 
@@ -142,17 +143,24 @@ class BermudaIrkManager:
             cipher = self._irks.get(irk, get_cipher_for_irk(irk))
             if cipher is None:
                 _LOGGER.error(
-                    "_validate_mac_irk called without prepared cipher for %s %s - this is a bug", address, irk.hex()
+                    "_validate_mac_irk called without prepared cipher for %s %s - this is a bug",
+                    address,
+                    irk.hex()[:4],
                 )
                 return None
         if resolve_private_address(cipher, address):
             _LOGGER.debug("Resolved MAC %s to IRK %s...", address, irk.hex()[:4])
             result = self._update_saved_mac(address, irk)
             if result != irk:
-                _LOGGER.error("Something went wrong saving macirk: %s %s is not irk %s", address, result, irk)
+                _LOGGER.error(
+                    "Something went wrong saving macirk: %s %s is not irk %s",
+                    address,
+                    result.hex()[:4],
+                    irk.hex()[:4],
+                )
             self.fire_callbacks(irk, address)
             return result
-        if int(address[0], 16) & 0x04:
+        if address_is_resolvable(address):
             return self._update_saved_mac(address, IrkTypes.NO_KNOWN_IRK_MATCH.value)
         else:
             return self._update_saved_mac(address, IrkTypes.NOT_RESOLVABLE_ADDRESS.value)
@@ -235,7 +243,7 @@ class BermudaIrkManager:
         irk_labels = {irk: f"IRK_{index}" for index, irk in enumerate(self._irks)}
         macs = {}
         for macirk in self._macs.values():
-            if macirk.irk not in [IrkTypes.ADRESS_NOT_EVALUATED.value, IrkTypes.NOT_RESOLVABLE_ADDRESS.value]:
+            if macirk.irk not in [IrkTypes.ADDRESS_NOT_EVALUATED.value, IrkTypes.NOT_RESOLVABLE_ADDRESS.value]:
                 if macirk.irk == IrkTypes.NO_KNOWN_IRK_MATCH.value:
                     irkout = IrkTypes.NO_KNOWN_IRK_MATCH.name
                 else:

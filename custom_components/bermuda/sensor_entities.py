@@ -12,11 +12,13 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     EntityCategory,
     UnitOfLength,
+    UnitOfTemperature,
 )
 
 from .const import (
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
+    ICON_MICROLOCATION,
 )
 from .entity import BermudaEntity
 
@@ -58,11 +60,10 @@ class BermudaSensor(BermudaEntity, SensorEntity):
         """Declare if entity should be automatically enabled on adding."""
         return self._attr_translation_key in ("area", "distance", "floor")
 
-    @property
-    def device_class(self):
-        """Return de device class of the sensor."""
-        # There isn't one for "Area Names" so we'll arbitrarily define our own.
-        return "bermuda__custom_device_class"
+    # No device_class on the text sensors (area/floor/scanner/...): the former
+    # custom "bermuda__custom_device_class" had no state translation behind it and
+    # kept these state changes out of Home Assistant's logbook/history. Numeric
+    # subclasses (range/rssi) still set their own real device_class.
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
@@ -92,6 +93,10 @@ class BermudaSensor(BermudaEntity, SensorEntity):
             attribs["floor_id"] = self._device.floor_id
             attribs["floor_name"] = self._device.floor_name
             attribs["floor_level"] = self._device.floor_level
+            # Surface the finer-grained spot here too, so dashboards/automations
+            # can read it without enabling the dedicated micro-location sensor.
+            attribs["micro_location"] = self._device.micro_location_name
+            attribs["micro_location_confidence"] = self._device.micro_location_confidence
         attribs["current_mac"] = current_mac
 
         return attribs
@@ -142,6 +147,16 @@ class BermudaSensorScanner(BermudaSensor):
             if scanner_device is not None:
                 return scanner_device.name
         return STATE_NOT_HOME
+
+    @property
+    def extra_state_attributes(self) -> Mapping[str, Any] | None:
+        """Add the nearest scanner's HA entity_id (when known) to the base attributes."""
+        attribs = dict(super().extra_state_attributes or {})
+        if self._device.area_advert is not None:
+            scanner_device = self.coordinator.devices.get(self._device.area_advert.scanner_address)
+            if scanner_device is not None and scanner_device.scanner_entity_id is not None:
+                attribs["scanner_entity_id"] = scanner_device.scanner_entity_id
+        return attribs
 
 
 class BermudaSensorRssi(BermudaSensor):
@@ -230,6 +245,11 @@ class BermudaSensorScannerRange(BermudaSensorRange):
             raise KeyError(msg)
 
     @property
+    def available(self) -> bool:
+        """Unavailable once the parent scanner (proxy) drops out of the roster."""
+        return super().available and self._scanner.address in self.coordinator.scanner_list
+
+    @property
     def unique_id(self):
         # Retaining legacy wifi mac for unique_id
         return f"{self._device.unique_id}_{self._scanner.address_wifi_mac or self._scanner.address}_range"
@@ -307,9 +327,18 @@ class BermudaSensorAreaSwitchReason(BermudaSensor):
 
     @property
     def native_value(self):
-        if self._device.diag_area_switch is not None:
-            return self._device.diag_area_switch[:255]
+        """Return the concise reason for the last area switch (full dump is an attribute)."""
+        if self._device.diag_area_switch_reason is not None:
+            return self._device.diag_area_switch_reason[:255]
         return None
+
+    @property
+    def extra_state_attributes(self) -> Mapping[str, Any] | None:
+        """Expose the full area-switch diagnostic dump alongside the concise state."""
+        attribs = dict(super().extra_state_attributes or {})
+        if self._device.diag_area_switch is not None:
+            attribs["diagnostic"] = self._device.diag_area_switch
+        return attribs
 
 
 class BermudaSensorAreaLastSeen(BermudaSensor, RestoreSensor):
@@ -339,3 +368,132 @@ class BermudaSensorAreaLastSeen(BermudaSensor, RestoreSensor):
             # Guard against a restored None becoming the literal string "None".
             self._attr_native_value = str(sensor_data.native_value)
             self._device.area_last_seen = str(sensor_data.native_value)
+
+
+class BermudaSensorMicroLocation(BermudaSensor):
+    """Sensor for the device's current micro-location (a named spot, eg 'Key hook')."""
+
+    _attr_translation_key = "micro_location"
+
+    @property
+    def unique_id(self):
+        return f"{self._device.unique_id}_micro_location"
+
+    @property
+    def native_value(self):
+        """The name of the matched spot, or None when not at a known spot."""
+        return self._device.micro_location_name
+
+    @property
+    def icon(self):
+        return ICON_MICROLOCATION
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        """Enabled by default — it's the headline feature for tracked items."""
+        return True
+
+    @property
+    def extra_state_attributes(self) -> Mapping[str, Any] | None:
+        """Expose match confidence and context for automations/MCP."""
+        return {
+            "micro_location_id": self._device.micro_location_id,
+            "confidence": self._device.micro_location_confidence,
+            "area_name": self._device.area_name,
+            "last_seen": self._device.micro_location_last_seen,
+        }
+
+
+class BermudaSensorIn100Vcc(BermudaSensor):
+    """InPlay IN100 / DFRobot Fermion supply voltage (VCC). Only created for detected IN100 devices."""
+
+    _attr_translation_key = "in100_vcc"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def unique_id(self):
+        return f"{self._device.unique_id}_in100_vcc"
+
+    @property
+    def native_value(self):
+        return self._device.in100_vcc
+
+    @property
+    def device_class(self):
+        return SensorDeviceClass.VOLTAGE
+
+    @property
+    def native_unit_of_measurement(self):
+        return "V"
+
+    @property
+    def state_class(self):
+        return SensorStateClass.MEASUREMENT
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        """Only ever created for detected IN100 devices, so enable by default."""
+        return True
+
+
+class BermudaSensorIn100Temperature(BermudaSensor):
+    """InPlay IN100 / DFRobot Fermion temperature. Only created for detected IN100 devices."""
+
+    _attr_translation_key = "in100_temperature"
+
+    @property
+    def unique_id(self):
+        return f"{self._device.unique_id}_in100_temperature"
+
+    @property
+    def native_value(self):
+        return self._device.in100_temp_c
+
+    @property
+    def device_class(self):
+        return SensorDeviceClass.TEMPERATURE
+
+    @property
+    def native_unit_of_measurement(self):
+        return UnitOfTemperature.CELSIUS
+
+    @property
+    def state_class(self):
+        return SensorStateClass.MEASUREMENT
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        """Only ever created for detected IN100 devices, so enable by default."""
+        return True
+
+
+class BermudaSensorIn100AdcVoltage(BermudaSensor):
+    """InPlay IN100 / DFRobot Fermion ADC voltage. Only created for detected IN100 devices."""
+
+    _attr_translation_key = "in100_adc_voltage"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def unique_id(self):
+        return f"{self._device.unique_id}_in100_adc_voltage"
+
+    @property
+    def native_value(self):
+        return self._device.in100_adc_voltage
+
+    @property
+    def device_class(self):
+        return SensorDeviceClass.VOLTAGE
+
+    @property
+    def native_unit_of_measurement(self):
+        return "V"
+
+    @property
+    def state_class(self):
+        return SensorStateClass.MEASUREMENT
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        """Only ever created for detected IN100 devices, so enable by default."""
+        return True

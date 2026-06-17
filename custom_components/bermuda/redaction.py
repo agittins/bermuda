@@ -22,6 +22,32 @@ if TYPE_CHECKING:
 REDACT_GENERIC_RE = re.compile(r"(?P<start>[0-9A-Fa-f]{2})[:_-]([0-9A-Fa-f]{2}[:_-]){4}(?P<end>[0-9A-Fa-f]{2})")
 REDACT_GENERIC_SUB = r"\g<start>:xx:xx:xx:xx:\g<end>"
 
+# Second fallback: a bare 32-hex run (an IRK key or an iBeacon UUID) carries no
+# separators and so slips past REDACT_GENERIC_RE. An IRK is cryptographically
+# sensitive — it permanently de-anonymises a device across every MAC rotation — so
+# mask any standalone 32-hex run, keeping only the first 4 chars for correlation.
+REDACT_HEX32_RE = re.compile(r"(?<![0-9A-Fa-f])(?P<start>[0-9A-Fa-f]{4})[0-9A-Fa-f]{28}(?![0-9A-Fa-f])")
+REDACT_HEX32_SUB = r"\g<start>::redacted_hex32::"
+
+# Human-readable names (set by the user, or broadcast as a BLE local_name) can carry
+# personal information ("Jan's iPhone") and never look like a MAC, so the address
+# machinery never catches them. Register each name at least this long for substitution;
+# shorter ones are skipped to avoid swallowing unrelated substrings of the dump.
+REDACT_NAME_MIN_LENGTH = 3
+_REDACT_NAME_ATTRS = ("name_by_user", "name_devreg", "name_bt_local_name", "name_bt_serviceinfo")
+
+
+def _register_device_names(device: Any, redactions: dict[str, str], counter: int) -> int:
+    """Add a device's human-readable names to ``redactions`` and return the new counter."""
+    for attr in _REDACT_NAME_ATTRS:
+        name = getattr(device, attr, None)
+        if isinstance(name, str) and len(name) >= REDACT_NAME_MIN_LENGTH:
+            key = name.lower()
+            if key not in redactions:
+                counter += 1
+                redactions[key] = f"NAME_{counter}"
+    return counter
+
 
 def update_redaction_list(
     redactions: dict[str, str],
@@ -79,6 +105,9 @@ def update_redaction_list(
             else:
                 # Don't know what it is.
                 redactions[address] = f"OTHER_{i}_{address}"
+        # Names live on the device object regardless of how its address was labelled,
+        # so register them on every pass (not just when the address is new).
+        i = _register_device_names(device, redactions, i)
 
 
 def redact_value(
@@ -109,7 +138,8 @@ def redact_value(
             if redacted != datalower:
                 # Only adopt the lower-cased form if we actually redacted.
                 data = redacted
-        return generic_re.sub(generic_sub, data)
+        data = generic_re.sub(generic_sub, data)
+        return REDACT_HEX32_RE.sub(REDACT_HEX32_SUB, data)
     if isinstance(data, dict):
         return {
             redact_value(k, redactions, generic_re, generic_sub): redact_value(v, redactions, generic_re, generic_sub)

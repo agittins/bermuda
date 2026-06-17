@@ -14,6 +14,7 @@ to the combination of the scanner and the device it is reporting.
 
 from __future__ import annotations
 
+import statistics
 from typing import TYPE_CHECKING, Final
 
 from bluetooth_data_tools import monotonic_time_coarse
@@ -27,8 +28,9 @@ from .const import (
     CONF_SMOOTHING_SAMPLES,
     DISTANCE_TIMEOUT,
     HIST_KEEP_COUNT,
+    MOBILITY_STATIONARY,
 )
-from .distance_filter import minimum_hugging_average, peak_retreat_velocity
+from .distance_filter import median_abs_deviation, minimum_hugging_average, peak_retreat_velocity
 from .util import clean_charbuf, rssi_to_metres
 
 if TYPE_CHECKING:
@@ -76,12 +78,17 @@ class BermudaAdvert:
         self.stamp: float = 0
         self.new_stamp: float | None = None  # Set when a new advert is loaded from update
         self.rssi: float | None = None
+        self.rssi_filtered: float | None = None  # robust-clamped, EMA-smoothed RSSI (mobility-aware)
+        self.rssi_dispersion: float = 0.0  # MAD-based jitter estimate of the filtered RSSI
+        self.rssi_adjusted_raw: float | None = None  # raw RSSI + scanner offset, pre-filter
         self.tx_power: float | None = None
         self.rssi_distance: float | None = None
         self.rssi_distance_raw: float | None = None
         self.stale_update_count = 0  # How many times we did an update but no new stamps were found.
         self.hist_stamp: list[float] = []
         self.hist_rssi: list[int] = []
+        self.hist_rssi_adjusted: list[float] = []  # offset-adjusted RSSI samples (pre-filter)
+        self.hist_rssi_filtered: list[float] = []  # filtered RSSI history (for dispersion)
         self.hist_distance: list[float] = []
         self.hist_distance_by_interval: list[float] = []  # updated per-interval
         self.hist_interval = []  # WARNING: This is actually "age of ad when we polled"
@@ -246,6 +253,47 @@ class BermudaAdvert:
         # Finally, save the new advert timestamp.
         self.new_stamp = new_stamp
 
+    def _rssi_filter_policy(self) -> tuple[int, float, float]:
+        """Return mobility-aware RSSI filter params: (window, ema_alpha, base_outlier_db)."""
+        if self._device.get_mobility_type() == MOBILITY_STATIONARY:
+            return (13, 0.22, 12.0)
+        return (9, 0.45, 15.0)
+
+    def _update_filtered_rssi(self, adjusted_rssi: float) -> float:
+        """
+        Apply robust outlier handling + EMA to a new (offset-adjusted) RSSI sample.
+
+        Clamps a spike to the recent median when it exceeds a MAD-derived threshold,
+        then exponentially smooths it, and refreshes the dispersion (jitter) estimate.
+        The window/alpha/threshold come from the device's mobility mode.
+        """
+        window, alpha, outlier_db = self._rssi_filter_policy()
+        prior = self.hist_rssi_adjusted[:window]
+        sample = adjusted_rssi
+
+        if len(prior) >= 3:
+            med = statistics.median(prior)
+            mad = median_abs_deviation(prior, med)
+            robust_sigma = max(mad * 1.4826, 1.0)
+            threshold = max(outlier_db, robust_sigma * 3.0)
+            if abs(sample - med) > threshold:
+                sample = med
+
+        if self.rssi_filtered is None:
+            self.rssi_filtered = sample
+        else:
+            self.rssi_filtered = (alpha * sample) + ((1 - alpha) * self.rssi_filtered)
+
+        self.hist_rssi_adjusted.insert(0, sample)
+        self.hist_rssi_filtered.insert(0, self.rssi_filtered)
+        del self.hist_rssi_adjusted[HIST_KEEP_COUNT:]
+        del self.hist_rssi_filtered[HIST_KEEP_COUNT:]
+
+        filt_window = self.hist_rssi_filtered[:window]
+        self.rssi_dispersion = median_abs_deviation(filt_window) * 1.4826 if len(filt_window) >= 3 else 0.0
+
+        return self.rssi_filtered
+
     def _update_raw_distance(self, reading_is_new=True) -> float | None:
         """
         Converts rssi to raw distance and updates history stack and
@@ -269,7 +317,15 @@ class BermudaAdvert:
             # stale / no-stamp early-return). Nothing to recalculate yet.
             return self.rssi_distance_raw
 
-        distance = rssi_to_metres(self.rssi + self.conf_rssi_offset, ref_power, self.conf_attenuation)
+        adjusted_rssi = self.rssi + self.conf_rssi_offset
+        self.rssi_adjusted_raw = adjusted_rssi
+        if reading_is_new:
+            filtered_rssi = self._update_filtered_rssi(adjusted_rssi)
+        else:
+            # Override (e.g. a ref_power change between cycles): reuse the last
+            # filtered RSSI rather than feeding a phantom sample into the filter.
+            filtered_rssi = self.rssi_filtered if self.rssi_filtered is not None else adjusted_rssi
+        distance = rssi_to_metres(filtered_rssi, ref_power, self.conf_attenuation)
         self.rssi_distance_raw = distance
         if reading_is_new:
             # Add a new historical reading
@@ -369,14 +425,24 @@ class BermudaAdvert:
                 # and might have fewer side-effects.
                 self.hist_distance_by_interval.clear()
                 self.hist_distance_by_interval.append(self.rssi_distance_raw)
+                # Seed the RSSI filter so it starts fresh on arrival too.
+                if self.rssi_filtered is None:
+                    self.rssi_filtered = self.rssi_adjusted_raw
+                self.hist_rssi_filtered.clear()
+                if self.rssi_filtered is not None:
+                    self.hist_rssi_filtered.append(self.rssi_filtered)
 
         elif new_stamp is None and (self.stamp is None or self.stamp < monotonic_time_coarse() - DISTANCE_TIMEOUT):
             # DEVICE IS AWAY!
             # Last distance reading is stale, mark device distance as unknown.
             self.rssi_distance = None
+            self.rssi_filtered = None
+            self.rssi_dispersion = 0.0
             # Clear the smoothing history
             if len(self.hist_distance_by_interval) > 0:
                 self.hist_distance_by_interval.clear()
+            self.hist_rssi_filtered.clear()
+            self.hist_rssi_adjusted.clear()
 
         else:
             # Add the current reading (whether new or old) to
@@ -391,7 +457,7 @@ class BermudaAdvert:
             if velocity > self.conf_max_velocity:
                 if self._device.create_sensor:
                     _LOGGER.debug(
-                        "This sparrow %s flies too fast (%2fm/s), ignoring",
+                        "This sparrow %s flies too fast (%.2fm/s), ignoring",
                         self._device.name,
                         velocity,
                     )
