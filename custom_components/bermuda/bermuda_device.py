@@ -38,6 +38,11 @@ from .const import (
     BDADDR_TYPE_RANDOM_STATIC,
     BDADDR_TYPE_RANDOM_UNRESOLVABLE,
     BDADDR_TYPE_UNKNOWN,
+    CATEGORY_IBEACON,
+    CATEGORY_IRK,
+    CATEGORY_NAMED,
+    CATEGORY_PUBLIC,
+    CATEGORY_RANDOM,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
     DEFAULT_DEVTRACK_TIMEOUT,
@@ -52,6 +57,7 @@ from .const import (
     METADEVICE_TYPE_IBEACON_SOURCE,
     MOBILITY_MOVING,
     MOBILITY_OPTIONS,
+    VENDOR_CATEGORIES,
 )
 from .util import mac_norm
 
@@ -143,6 +149,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
 
         self.zone: str = STATE_NOT_HOME  # STATE_HOME or STATE_NOT_HOME
         self.manufacturer: str | None = None
+        self.manufacturer_id: int | None = None  # Bluetooth SIG company id, for vendor categorisation
         # InPlay IN100 / DFRobot Fermion telemetry (manufacturer data 0x0505).
         self.in100_detected: bool = False
         self.in100_vcc: float | None = None
@@ -346,6 +353,33 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         """Set the mobility mode, falling back to the default if invalid."""
         self.mobility_type = mobility_type if mobility_type in MOBILITY_OPTIONS else DEFAULT_MOBILITY_TYPE
 
+    @property
+    def category(self) -> str:
+        """
+        Single ESPresense-style fingerprint for this device.
+
+        Precedence: iBeacon → IRK (resolved private BLE) → known vendor (by company
+        id) → named (has an advertised local name) → random MAC → public MAC. Used to
+        group the discovery list and to track whole classes of device at once.
+        """
+        if self.address_type == ADDR_TYPE_IBEACON:
+            return CATEGORY_IBEACON
+        if self.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
+            return CATEGORY_IRK
+        vendor = VENDOR_CATEGORIES.get(self.manufacturer_id) if self.manufacturer_id is not None else None
+        if vendor is not None:
+            return vendor
+        if self.name_bt_local_name:
+            return CATEGORY_NAMED
+        if self.address_type in (
+            BDADDR_TYPE_RANDOM_RESOLVABLE,
+            BDADDR_TYPE_RANDOM_UNRESOLVABLE,
+            BDADDR_TYPE_RANDOM_STATIC,
+            BDADDR_TYPE_RANDOM_RESERVED,
+        ):
+            return CATEGORY_RANDOM
+        return CATEGORY_PUBLIC
+
     def apply_scanner_selection(self, bermuda_advert: BermudaAdvert | None, *, force_unknown: bool = False):
         """
         Given a BermudaAdvert entry, apply the distance and area attributes
@@ -518,6 +552,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
                 name, generic = self._coordinator.get_manufacturer_from_id(company_code)
                 if name and (self.manufacturer is None or not generic):
                     self.manufacturer = name
+                    self.manufacturer_id = company_code
 
                 if company_code == 0x004C:  # 76 Apple Inc
                     if man_data[:1] == b"\x02":  # iBeacon: Almost always 0x0215, but 0x15 is the length part
