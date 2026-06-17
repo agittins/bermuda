@@ -11,12 +11,21 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.config_entries import ConfigEntryState, ConfigSubentry
 from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
-from .const import _LOGGER, DOMAIN, PLATFORMS, STARTUP_MESSAGE
+from .const import (
+    _LOGGER,
+    CONF_RSSI_OFFSET,
+    CONF_RSSI_OFFSETS,
+    CONF_SCANNER,
+    DOMAIN,
+    PLATFORMS,
+    STARTUP_MESSAGE,
+    SUBENTRY_TYPE_CALIBRATION,
+)
 from .coordinator import BermudaDataUpdateCoordinator
 from .intents import async_register_intents
 from .util import mac_norm
@@ -105,7 +114,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> b
 async def async_migrate_entry(hass: HomeAssistant, config_entry: BermudaConfigEntry) -> bool:
     """Migrate previous config entries."""
     _LOGGER.debug("Migrating config from version %s.%s", config_entry.version, config_entry.minor_version)
-    # No migrations are currently required; config entries remain at version 1.
+    if config_entry.version < 2:
+        # v1 -> v2: per-scanner RSSI offsets move out of the options dict and become
+        # one calibration subentry each.
+        offsets = dict(config_entry.options.get(CONF_RSSI_OFFSETS, {}))
+        existing = {
+            se.data.get(CONF_SCANNER)
+            for se in config_entry.subentries.values()
+            if se.subentry_type == SUBENTRY_TYPE_CALIBRATION
+        }
+        for scanner, offset in offsets.items():
+            if scanner in existing:
+                continue
+            hass.config_entries.async_add_subentry(
+                config_entry,
+                ConfigSubentry(
+                    data={CONF_SCANNER: scanner, CONF_RSSI_OFFSET: offset},
+                    subentry_type=SUBENTRY_TYPE_CALIBRATION,
+                    title=scanner,
+                    unique_id=scanner,
+                ),
+            )
+        new_options = {key: val for key, val in config_entry.options.items() if key != CONF_RSSI_OFFSETS}
+        hass.config_entries.async_update_entry(config_entry, options=new_options, version=2)
+        _LOGGER.info("Migrated %d scanner RSSI offset(s) to calibration subentries", len(offsets))
     return True
 
 

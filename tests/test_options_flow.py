@@ -88,18 +88,14 @@ async def test_user_step_single_instance_allowed_abort(hass: HomeAssistant):
 
 
 async def test_options_init_shows_menu_with_all_steps(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """The options init step is a menu listing all four editable sub-steps."""
+    """The options init step is a menu listing the editable sub-steps."""
     result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
 
     assert result["type"] == FlowResultType.MENU
     assert result["step_id"] == "init"
     menu = set(result["menu_options"])
-    assert {
-        "globalopts",
-        "selectdevices",
-        "calibration1_global",
-        "calibration2_scanners",
-    } <= menu
+    # Per-scanner calibration moved to subentries, so it is no longer a menu item.
+    assert {"globalopts", "selectdevices", "area_entities"} <= menu
     # The init step builds status text from coordinator counts.
     placeholders = result.get("description_placeholders") or {}
     assert "status" in placeholders

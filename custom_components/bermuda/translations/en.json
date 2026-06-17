@@ -10,6 +10,42 @@
       }
     }
   },
+  "config_subentries": {
+    "calibration": {
+      "abort": {
+        "no_scanners": "Every known scanner already has a calibration offset."
+      },
+      "entry_type": "Scanner calibration",
+      "initiate_flow": {
+        "reconfigure": "Edit scanner offset",
+        "user": "Add scanner offset"
+      },
+      "step": {
+        "reconfigure": {
+          "data": {
+            "rssi_offset": "RSSI offset (dB)"
+          },
+          "data_description": {
+            "rssi_offset": "Added to this scanner's RSSI before distance is computed."
+          },
+          "description": "Adjust the dB offset for {scanner}.",
+          "title": "Edit RSSI offset"
+        },
+        "user": {
+          "data": {
+            "rssi_offset": "RSSI offset (dB)",
+            "scanner": "Scanner"
+          },
+          "data_description": {
+            "rssi_offset": "Added to this scanner's RSSI before distance is computed. Positive = treated as stronger/closer.",
+            "scanner": "The Bluetooth proxy to calibrate."
+          },
+          "description": "Add a dB offset for a scanner so its readings line up with the others.",
+          "title": "Per-scanner RSSI offset"
+        }
+      }
+    }
+  },
   "entity": {
     "device_tracker": {
       "bermuda_tracker": {
@@ -118,34 +154,6 @@
       "area_entities_distance": {
         "description": "Set a virtual distance (metres) per entity — smaller wins over BLE more easily. Grouped by area:\n\n{area_summary}",
         "title": "Per-entity virtual distance"
-      },
-      "calibration1_global": {
-        "data": {
-          "attenuation": "Attenuation",
-          "configured_devices": "Device",
-          "configured_scanners": "Scanner",
-          "ref_power": "Reference Power",
-          "save_and_close": "Save and Close"
-        },
-        "data_description": {
-          "attenuation": "After adjusting the above settings for 1m distance readings, move the device further away (for example 5 metres) and adust the attenuation until the calculated distances match the physical distance between the scanner and device. Click submit to see the new distance estimations.",
-          "ref_power": "To calibrate this setting, place the device 1 metre from the scanner, and adjust the value until the figures above reflect that 1m distance. Note that values will only recompute after clicking submit, and a more-negative number will result in a lower distance",
-          "save_and_close": "After you are happy with the calibration, check this box and click Submit. Your changes will be saved, and you can proceed to the next calibration step. Leave this box un-checked while you adjust and test the settings."
-        },
-        "description": "This step is to establish some global defaults for distance calculations.\n\n{details}\n{summary}\nExpand for instructions!{summary_end}\n\nIn later steps you can set per-device overrides, so it makes sense to choose your most common hardware as a 'reference pair' for this step. For example, if most of your scanners are ESPHome on a particular board, then choose one of those to use as the reference scanner. Likewise if you have a handful of a particular model of beacon, use one of those as your reference device.\n\n- Choose a device and a scanner below to use as your 'reference pair'\n- Physically place your chosen device at 1m (one metre) from the chosen scanner. Ensure they have a clear line of sight to each other, and avoid having them close to any organic life-forms which might interfere with the signal.\n- Click 'SUBMIT' and note the RSSI values in the table that will appear below. You can click 'SUBMIT' again at any time to refresh the values.\n- Once you have a stable signal strength, put that value into the `reference_power` field and click 'SUBMIT'.\n- You should now see the updated values, and the estimated distances should be close to 1 metre. Repeat as required until you are happy with the result.\n- Now move the device so that it is further from the scanner and measure this distance with a tape measure. Around 5 metres might be a good distance - the exact distance doesn't matter, but keeping a clear line of sight is important, and you might find longer distances will give you more accuracy, generally.\n- With the device at the new distance, click 'SUBMIT' again and you should see the most recent measurements will reflect the new distance, but will probably be inaccurate.\n- Experiment with different values for `attenuation` and clicking 'SUBMIT', until you get the estimated measurements to agree with your physical measurement.\n- Once you are happy with the calibration, tick 'Save and Close' and click 'SUBMIT'.\n{details_end}\n{suffix}",
-        "title": "Calibration 1: Global"
-      },
-      "calibration2_scanners": {
-        "data": {
-          "configured_devices": "Device",
-          "save_and_close": "Save and Close",
-          "scanner_info": "Per-Scanner RSSI Offsets"
-        },
-        "data_description": {
-          "scanner_info": "Leave at zero to accept the global default, or enter a non-zero number to offset the rssi reported by that scanner. Adjust until the estimated distance above matches the actual distance between that scanner and the selected transmitting device. Negative values will increase the distance, positive values will decrease it."
-        },
-        "description": "This step is optional but useful if your scanners have different sensitivities or varying antenna performance. Adjust the offset rssi for each scanner until the calculated distance to the selected device is correct. Leave the scanner you used in your \"reference pair\" in step 1 at Zero.\n\n{suffix}",
-        "title": "Calibration 2: Per-Scanner RSSI Offsets"
       },
       "globalopts": {
         "description": "Tune the global distance model, device-tracking timeouts and RSSI smoothing. These apply to every tracked device.",

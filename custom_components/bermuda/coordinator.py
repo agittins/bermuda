@@ -56,7 +56,9 @@ from .const import (
     CONF_MAX_RADIUS,
     CONF_MAX_VELOCITY,
     CONF_REF_POWER,
+    CONF_RSSI_OFFSET,
     CONF_RSSI_OFFSETS,
+    CONF_SCANNER,
     CONF_SMOOTHING_SAMPLES,
     CONF_UPDATE_INTERVAL,
     DEFAULT_AREA_ENTITY_DISTANCE,
@@ -72,6 +74,7 @@ from .const import (
     SAVEOUT_COOLDOWN,
     SIGNAL_DEVICE_IN100_NEW,
     SIGNAL_DEVICE_NEW,
+    SUBENTRY_TYPE_CALIBRATION,
     UPDATE_INTERVAL,
 )
 from .coordinator_metadevices import BermudaMetadeviceMixin
@@ -251,6 +254,15 @@ class BermudaDataUpdateCoordinator(
                     CONF_RSSI_OFFSETS,
                 ):
                     self.options[key] = val
+
+        # Per-scanner RSSI offsets now live in calibration subentries. Mirror them
+        # into the runtime options dict so the advert read-path stays unchanged;
+        # this is the sole source of offsets once an entry has been migrated to v2.
+        self.options[CONF_RSSI_OFFSETS] = {
+            se.data[CONF_SCANNER]: se.data[CONF_RSSI_OFFSET]
+            for se in getattr(entry, "subentries", {}).values()
+            if se.subentry_type == SUBENTRY_TYPE_CALIBRATION
+        }
 
         self.devices: dict[str, BermudaDevice] = {}
         # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
