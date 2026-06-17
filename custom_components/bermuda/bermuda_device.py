@@ -45,6 +45,8 @@ from .const import (
     CATEGORY_RANDOM,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
+    CONF_EXCLUDE_DEVICES,
+    CONF_TRACK_CATEGORIES,
     DEFAULT_DEVTRACK_TIMEOUT,
     DEFAULT_MOBILITY_TYPE,
     DOMAIN,
@@ -475,8 +477,12 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         else:
             self.zone = STATE_NOT_HOME
 
-        if self.address.upper() in self.options.get(CONF_DEVICES, []):
-            # We are a device we track. Flag for set-up:
+        addr = self.address.upper()
+        if addr not in self.options.get(CONF_EXCLUDE_DEVICES, []) and (
+            addr in self.options.get(CONF_DEVICES, []) or self.category in self.options.get(CONF_TRACK_CATEGORIES, [])
+        ):
+            # Tracked either explicitly (configured_devices) or by category
+            # (track_categories), and not on the exclusion denylist. Flag for set-up.
             self.create_sensor = True
 
     def process_advertisement(self, scanner_device: BermudaDevice, advertisementdata: AdvertisementData):

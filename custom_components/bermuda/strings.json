@@ -160,10 +160,14 @@
       },
       "selectdevices": {
         "data": {
-          "devices": "Devices to track"
+          "devices": "Devices to track",
+          "track_categories": "Track whole categories",
+          "exclude": "Exclude these"
         },
         "data_description": {
-          "devices": "Pick the BLE devices Bermuda should track. Type to search. iBeacons and random MACs are labelled; devices you track but that aren't currently seen show as (saved)."
+          "devices": "Pick the BLE devices Bermuda should track. Type to search. iBeacons and random MACs are labelled; devices you track but that aren't currently seen show as (saved).",
+          "track_categories": "Auto-track every device matching a selected category (e.g. all iBeacons or all named devices).",
+          "exclude": "Never track these, even if they match a tracked category."
         },
         "description": "Bermuda only creates tracker entities for the devices you select here. If the list is empty, no Bluetooth devices are being seen yet.",
         "title": "Select Devices"
@@ -361,6 +365,23 @@
             "rssi_offset": "Added to this scanner's RSSI before distance is computed."
           }
         }
+      }
+    }
+  },
+  "selector": {
+    "track_category": {
+      "options": {
+        "ibeacon": "iBeacons",
+        "irk": "Private (IRK) devices",
+        "named": "Named devices",
+        "apple": "Apple",
+        "samsung": "Samsung",
+        "google": "Google",
+        "garmin": "Garmin",
+        "amazfit": "Amazfit / Mi",
+        "microsoft": "Microsoft",
+        "random": "Random MAC",
+        "public": "Public MAC"
       }
     }
   }

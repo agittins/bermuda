@@ -29,7 +29,6 @@ from homeassistant.helpers.selector import (
 from homeassistant.helpers.translation import async_get_translations
 
 from .const import (
-    ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     BDADDR_TYPE_RANDOM_RESOLVABLE,
     CONF_AREA_ENTITIES,
@@ -38,10 +37,12 @@ from .const import (
     CONF_ATTENUATION,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
+    CONF_EXCLUDE_DEVICES,
     CONF_MAX_RADIUS,
     CONF_MAX_VELOCITY,
     CONF_REF_POWER,
     CONF_SMOOTHING_SAMPLES,
+    CONF_TRACK_CATEGORIES,
     CONF_UPDATE_INTERVAL,
     DEFAULT_AREA_ENTITY_DISTANCE,
     DEFAULT_ATTENUATION,
@@ -62,6 +63,7 @@ from .const import (
     OPT_MIN_UPDATE_INTERVAL,
     OPT_REF_POWER_MAX,
     OPT_REF_POWER_MIN,
+    TRACK_CATEGORIES,
 )
 from .options_text import _DESCRIPTION_TEXTS
 from .util import mac_redact
@@ -238,9 +240,11 @@ class BermudaOptionsFlowHandler(OptionsFlow):
         return self.async_show_form(step_id="globalopts", data_schema=data_schema)
 
     async def async_step_selectdevices(self, user_input=None):
-        """Choose which discovered devices to track, via one searchable selector."""
+        """Choose what to track: individual devices, whole categories, and exclusions."""
         if user_input is not None:
             self.options[CONF_DEVICES] = user_input.get("devices", [])
+            self.options[CONF_TRACK_CATEGORIES] = user_input.get("track_categories", [])
+            self.options[CONF_EXCLUDE_DEVICES] = user_input.get("exclude", [])
             return await self._update_options()
 
         self.devices = self.config_entry.runtime_data.coordinator.devices
@@ -249,24 +253,20 @@ class BermudaOptionsFlowHandler(OptionsFlow):
             # Scanners aren't tracked; Private BLE devices configure themselves.
             if device.is_scanner or device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
                 continue
+            # A random MAC unseen for >2h is not useful.
+            if device.address_type == BDADDR_TYPE_RANDOM_RESOLVABLE and device.last_seen < monotonic_time_coarse() - (
+                60 * 60 * 2
+            ):
+                continue
             addr = device.address.upper()
             manuf = f" · {device.manufacturer}" if device.manufacturer else ""
             rssi = f" · {device.area_rssi:.0f}dBm" if device.area_rssi is not None else ""
-            if device.address_type == ADDR_TYPE_IBEACON:
-                src = f" [{device.metadevice_sources[0].upper()}]" if device.metadevice_sources else ""
-                label = f"iBeacon {addr}{src}{manuf}{rssi}"
-            elif device.address_type == BDADDR_TYPE_RANDOM_RESOLVABLE:
-                if device.last_seen < monotonic_time_coarse() - (60 * 60 * 2):
-                    continue  # a random MAC unseen for >2h is not useful
-                label = f"{addr} · {device.name} (random){manuf}{rssi}"
-            else:
-                label = f"{addr} · {device.name}{manuf}{rssi}"
+            label = f"[{device.category}] {addr} · {device.name}{manuf}{rssi}"
             options_list.append(SelectOptionDict(value=addr, label=label))
 
         options_list.sort(key=lambda opt: opt["label"])
 
-        # Keep already-configured-but-no-longer-discovered devices selectable, so
-        # saving the form does not silently drop them from CONF_DEVICES.
+        # Keep already-configured-but-no-longer-discovered devices selectable.
         discovered = {opt["value"] for opt in options_list}
         options_list.extend(
             SelectOptionDict(value=address.upper(), label=f"{address.upper()} (saved)")
@@ -274,12 +274,29 @@ class BermudaOptionsFlowHandler(OptionsFlow):
             if isinstance(address, str) and address.upper() not in discovered
         )
 
+        device_selector = SelectSelector(SelectSelectorConfig(options=options_list, multiple=True, sort=False))
+        category_selector = SelectSelector(
+            SelectSelectorConfig(
+                options=[SelectOptionDict(value=cat, label=cat) for cat in TRACK_CATEGORIES],
+                multiple=True,
+                sort=False,
+                translation_key="track_category",
+            )
+        )
         data_schema = vol.Schema(
             {
                 vol.Optional(
                     "devices",
                     default=[a.upper() for a in self.options.get(CONF_DEVICES, []) if isinstance(a, str)],
-                ): SelectSelector(SelectSelectorConfig(options=options_list, multiple=True, sort=False)),
+                ): device_selector,
+                vol.Optional(
+                    "track_categories",
+                    default=list(self.options.get(CONF_TRACK_CATEGORIES, [])),
+                ): category_selector,
+                vol.Optional(
+                    "exclude",
+                    default=[a.upper() for a in self.options.get(CONF_EXCLUDE_DEVICES, []) if isinstance(a, str)],
+                ): device_selector,
             }
         )
         return self.async_show_form(step_id="selectdevices", data_schema=data_schema)

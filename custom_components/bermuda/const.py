@@ -184,6 +184,10 @@ CONFDATA_SCANNERS = "scanners"
 # Configuration and options
 
 CONF_DEVICES = "configured_devices"
+# ESPresense-style bulk tracking: track every device whose category is selected,
+# minus an explicit exclusion denylist (see BermudaDevice.category).
+CONF_TRACK_CATEGORIES = "track_categories"
+CONF_EXCLUDE_DEVICES = "exclude_devices"
 
 CONF_SCANNERS = "configured_scanners"
 
