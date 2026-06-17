@@ -39,8 +39,11 @@ def _advert(scanner: str, area: str | None, rssi_filtered: float, distance: floa
         rssi=rssi_filtered,
         conf_rssi_offset=0.0,
         rssi_dispersion=dispersion,
-        stamp=NOW if stamp is None else stamp,
-        scanner_device=SimpleNamespace(last_seen=NOW),
+        # Default stamp far in the future so contenders never age out of
+        # AREA_MAX_AD_AGE on a slow suite; an explicit stamp= overrides this
+        # (e.g. the stale-advert characterization tests).
+        stamp=(NOW + 1e6) if stamp is None else stamp,
+        scanner_device=SimpleNamespace(last_seen=NOW + 1e6),
     )
 
 

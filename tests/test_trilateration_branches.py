@@ -42,8 +42,10 @@ def _advert(scanner: str, area: str | None, rssi_filtered: float, distance: floa
         rssi=rssi_filtered,
         conf_rssi_offset=0.0,
         rssi_dispersion=dispersion,
-        stamp=NOW,
-        scanner_device=SimpleNamespace(last_seen=NOW),
+        # Stamp far in the future so contenders never age out of AREA_MAX_AD_AGE,
+        # regardless of how slow the suite is or whether the clock freeze holds.
+        stamp=NOW + 1e6,
+        scanner_device=SimpleNamespace(last_seen=NOW + 1e6),
     )
 
 
