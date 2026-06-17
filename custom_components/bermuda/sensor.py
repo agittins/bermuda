@@ -96,6 +96,7 @@ async def async_setup_entry(
             entities.append(BermudaSensorRssi(coordinator, entry, address))
             entities.append(BermudaSensorAreaLastSeen(coordinator, entry, address))
             entities.append(BermudaSensorAreaSwitchReason(coordinator, entry, address))
+            entities.append(BermudaSensorMicroLocation(coordinator, entry, address))
 
             # _LOGGER.debug("Sensor received new_device signal for %s", address)
             # We set update before add to False because we are being

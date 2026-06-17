@@ -12,11 +12,13 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     EntityCategory,
     UnitOfLength,
+    UnitOfTemperature,
 )
 
 from .const import (
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
+    ICON_MICROLOCATION,
 )
 from .entity import BermudaEntity
 
@@ -91,6 +93,10 @@ class BermudaSensor(BermudaEntity, SensorEntity):
             attribs["floor_id"] = self._device.floor_id
             attribs["floor_name"] = self._device.floor_name
             attribs["floor_level"] = self._device.floor_level
+            # Surface the finer-grained spot here too, so dashboards/automations
+            # can read it without enabling the dedicated micro-location sensor.
+            attribs["micro_location"] = self._device.micro_location_name
+            attribs["micro_location_confidence"] = self._device.micro_location_confidence
         attribs["current_mac"] = current_mac
 
         return attribs

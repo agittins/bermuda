@@ -38,6 +38,35 @@ Bermuda aims to let you track any bluetooth device, and have Home Assistant tell
 - Provides a comprehensive json/yaml dump of devices and their distances from each bluetooth
   receiver, via the `bermuda.dump_devices` service.
 
+## Micro-locations (sub-area spots)
+
+Areas in Home Assistant are as fine-grained as one-per-scanner: a device is placed in the
+Area of whichever proxy is closest. **Micro-locations** let you go finer, by naming specific
+spots and calibrating them by example. Tell Bermuda *"my keys are on the key hook"* and it
+snapshots the RF fingerprint (the pattern of distances across all your proxies) and remembers
+that spot, tied to that item. Later it reports `Key hook` vs `Sidetable drawer` as a
+**Micro-location** sensor and as an attribute on the Area sensor.
+
+It's designed to be driven without the configuration menu, so MCP clients, the voice
+assistant, and automations can all use it:
+
+- **Services:** `bermuda.calibrate_location`, `bermuda.where_is`, `bermuda.list_locations`,
+  `bermuda.remove_location`, `bermuda.rename_location`. The existing configuration knobs are
+  exposed as services too (`bermuda.track_device`, `bermuda.untrack_device`,
+  `bermuda.set_global_calibration`, `bermuda.set_scanner_offset`, `bermuda.get_config`), so a
+  bluetooth device can be set up and calibrated entirely from an MCP client or automation.
+- **Voice/Assist intents:** `BermudaCalibrateLocation`, `BermudaWhereIs`, `BermudaListLocations`
+  (e.g. "where are my keys?", "remember the keys are on the key hook").
+
+How well it can tell two nearby spots apart depends on your setup: it works best for
+**stationary items** (keys, remotes, tags) with **several proxies** in range from different
+vantage points. "Key hook vs kitchen counter" is very doable; "drawer vs the nightstand right
+above it" is at the edge of what BLE can resolve. Moving furniture or proxies will need a quick
+recalibration. None of this changes the existing Area logic — it's purely additive.
+
+_(Micro-locations and the MCP service/intent API were ported from
+[belikh/bermuda2](https://github.com/belikh/bermuda2).)_
+
 ## What you need:
 
 - Home Assistant. The current release of Bermuda requires at least ![haminverbadge]

@@ -73,10 +73,10 @@ def test_area_sensor_icon_uses_device_area_icon():
     assert ent.icon == "mdi:home"
 
 
-def test_area_sensor_device_class_is_custom():
-    """The area sensor exposes its arbitrary custom device class."""
+def test_area_sensor_has_no_device_class():
+    """The text area sensor exposes no device_class (so it shows up in the HA logbook)."""
     ent = _make_entity(BermudaSensor)
-    assert ent.device_class == "bermuda__custom_device_class"
+    assert ent.device_class is None
 
 
 def test_area_sensor_extra_attributes_plain_device():
@@ -90,6 +90,8 @@ def test_area_sensor_extra_attributes_plain_device():
         floor_id="floor_1",
         floor_name="Ground",
         floor_level=0,
+        micro_location_name="Key hook",
+        micro_location_confidence=0.8,
     )
     attribs = ent.extra_state_attributes
     assert attribs["current_mac"] == "aa:bb:cc:dd:ee:ff"
@@ -99,6 +101,9 @@ def test_area_sensor_extra_attributes_plain_device():
     assert attribs["floor_id"] == "floor_1"
     assert attribs["floor_name"] == "Ground"
     assert attribs["floor_level"] == 0
+    # The area branch also surfaces the micro-location for dashboards/automations.
+    assert attribs["micro_location"] == "Key hook"
+    assert attribs["micro_location_confidence"] == 0.8
 
 
 def test_area_sensor_extra_attributes_metadevice_picks_latest_mac():
@@ -117,6 +122,8 @@ def test_area_sensor_extra_attributes_metadevice_picks_latest_mac():
         floor_id="f",
         floor_name="F",
         floor_level=1,
+        micro_location_name=None,
+        micro_location_confidence=None,
         adverts=adverts,
     )
     attribs = ent.extra_state_attributes
@@ -134,6 +141,8 @@ def test_area_sensor_extra_attributes_metadevice_no_valid_adverts():
         floor_id="f",
         floor_name="F",
         floor_level=1,
+        micro_location_name=None,
+        micro_location_confidence=None,
         adverts={"src": SimpleNamespace(stamp=0, device_address="never:used")},
     )
     attribs = ent.extra_state_attributes
@@ -174,6 +183,8 @@ def test_floor_sensor_extra_attributes_includes_area_branch():
         floor_id="f1",
         floor_name="First",
         floor_level=2,
+        micro_location_name=None,
+        micro_location_confidence=None,
     )
     attribs = ent.extra_state_attributes
     assert attribs["floor_name"] == "First"
@@ -210,6 +221,64 @@ def test_scanner_sensor_native_value_not_home_when_scanner_unknown():
     ent.coordinator.devices = {}
     ent._device = SimpleNamespace(area_advert=SimpleNamespace(scanner_address="missing"))
     assert ent.native_value == STATE_NOT_HOME
+
+
+def test_scanner_sensor_exposes_nearest_scanner_entity_id():
+    """The nearest-scanner sensor surfaces the scanner device's HA entity_id (PR #374)."""
+    ent = _make_entity(BermudaSensorScanner)
+    scanner_device = SimpleNamespace(name="Proxy", scanner_entity_id="switch.proxy_relay")
+    ent.coordinator = MagicMock()
+    ent.coordinator.devices = {"scanner-addr": scanner_device}
+    ent._device = SimpleNamespace(
+        address="aa:bb:cc:dd:ee:ff",
+        address_type=BDADDR_TYPE_RANDOM_STATIC,
+        area_advert=SimpleNamespace(scanner_address="scanner-addr"),
+    )
+    assert ent.extra_state_attributes["scanner_entity_id"] == "switch.proxy_relay"
+
+
+def test_scanner_sensor_no_entity_id_attr_when_scanner_has_none():
+    """When the nearest scanner has no resolved entity_id, the attribute is omitted."""
+    ent = _make_entity(BermudaSensorScanner)
+    scanner_device = SimpleNamespace(name="Proxy", scanner_entity_id=None)
+    ent.coordinator = MagicMock()
+    ent.coordinator.devices = {"scanner-addr": scanner_device}
+    ent._device = SimpleNamespace(
+        address="aa:bb:cc:dd:ee:ff",
+        address_type=BDADDR_TYPE_RANDOM_STATIC,
+        area_advert=SimpleNamespace(scanner_address="scanner-addr"),
+    )
+    assert "scanner_entity_id" not in ent.extra_state_attributes
+
+
+# --------------------------------------------------------------------------- #
+# BermudaSensorAreaSwitchReason                                                #
+# --------------------------------------------------------------------------- #
+
+
+def test_area_switch_reason_state_is_concise_reason_with_diagnostic_attr():
+    """State is the concise reason; the full AreaTests dump is an attribute (PR #753)."""
+    ent = _make_entity(BermudaSensorAreaSwitchReason)
+    ent._device = SimpleNamespace(
+        address="aa:bb:cc:dd:ee:ff",
+        address_type=BDADDR_TYPE_RANDOM_STATIC,
+        diag_area_switch_reason="WIN by not losing!",
+        diag_area_switch="device|Phone\nreason|WIN by not losing!\n",
+    )
+    assert ent.native_value == "WIN by not losing!"
+    assert ent.extra_state_attributes["diagnostic"] == "device|Phone\nreason|WIN by not losing!\n"
+
+
+def test_area_switch_reason_state_none_when_no_switch_recorded():
+    """With no recorded reason the state is None."""
+    ent = _make_entity(BermudaSensorAreaSwitchReason)
+    ent._device = SimpleNamespace(
+        address="aa:bb:cc:dd:ee:ff",
+        address_type=BDADDR_TYPE_RANDOM_STATIC,
+        diag_area_switch_reason=None,
+        diag_area_switch=None,
+    )
+    assert ent.native_value is None
 
 
 # --------------------------------------------------------------------------- #
@@ -413,20 +482,13 @@ def test_scanner_range_raw_native_value_none_when_absent():
 
 
 def test_area_switch_reason_native_value_truncated():
-    """The diagnostic value is truncated to 255 characters."""
+    """The concise reason is defensively truncated to 255 characters."""
     ent = _make_entity(BermudaSensorAreaSwitchReason)
     long_reason = "x" * 400
-    ent._device = SimpleNamespace(diag_area_switch=long_reason)
+    ent._device = SimpleNamespace(diag_area_switch_reason=long_reason, diag_area_switch=None)
     value = ent.native_value
     assert value == "x" * 255
     assert len(value) == 255
-
-
-def test_area_switch_reason_native_value_none():
-    """No diagnostic => None."""
-    ent = _make_entity(BermudaSensorAreaSwitchReason)
-    ent._device = SimpleNamespace(diag_area_switch=None)
-    assert ent.native_value is None
 
 
 def test_area_last_seen_native_value_and_icon():
@@ -639,3 +701,26 @@ def test_entity_device_info_name_propagates():
     )
     info = ent.device_info
     assert info["name"] == "My Phone"
+
+
+# --------------------------------------------------------------------------- #
+# BermudaSensorScannerRange.available                                          #
+# --------------------------------------------------------------------------- #
+
+
+def test_scanner_range_available_tracks_roster_and_coordinator():
+    """A per-scanner range sensor is available only while its proxy is in the roster."""
+    ent = _make_entity(BermudaSensorScannerRange)
+    ent._scanner = SimpleNamespace(address="aa:bb:cc:dd:ee:ff")
+
+    # In the roster, coordinator healthy -> available.
+    ent.coordinator = SimpleNamespace(last_update_success=True, scanner_list={"aa:bb:cc:dd:ee:ff"})
+    assert ent.available is True
+
+    # Proxy dropped from the roster -> unavailable.
+    ent.coordinator = SimpleNamespace(last_update_success=True, scanner_list=set())
+    assert ent.available is False
+
+    # Coordinator update failure -> unavailable even while still in the roster.
+    ent.coordinator = SimpleNamespace(last_update_success=False, scanner_list={"aa:bb:cc:dd:ee:ff"})
+    assert ent.available is False

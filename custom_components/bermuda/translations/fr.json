@@ -192,6 +192,128 @@
         }
       },
       "name": "Exporter les appareils"
+    },
+    "calibrate_location": {
+      "name": "Calibrer une micro-localisation",
+      "description": "Enregistre l'emplacement actuel d'un appareil suivi comme micro-localisation nommée (p. ex. « Crochet à clés »), en capturant l'empreinte RF de chaque proxy qui l'entend. Relancer avec le même appareil et le même nom recalibre cet emplacement.",
+      "fields": {
+        "device": {
+          "name": "Appareil",
+          "description": "L'appareil/objet suivi à calibrer. Un nom d'appareil, une MAC/UUID, ou un identifiant d'appareil Home Assistant."
+        },
+        "name": {
+          "name": "Nom de l'emplacement",
+          "description": "Le nom de cet emplacement, p. ex. « Crochet à clés » ou « Tiroir »."
+        },
+        "area": {
+          "name": "Zone",
+          "description": "Zone Home Assistant optionnelle à associer à cet emplacement. Par défaut, la zone actuelle de l'appareil."
+        }
+      }
+    },
+    "where_is": {
+      "name": "Où se trouve",
+      "description": "Indique la zone actuelle d'un appareil et la micro-localisation correspondante, avec un indice de confiance.",
+      "fields": {
+        "device": {
+          "name": "Appareil",
+          "description": "L'appareil/objet à localiser. Un nom d'appareil, une MAC/UUID, ou un identifiant d'appareil Home Assistant."
+        }
+      }
+    },
+    "list_locations": {
+      "name": "Lister les micro-localisations",
+      "description": "Liste les micro-localisations enregistrées, éventuellement filtrées sur un appareil.",
+      "fields": {
+        "device": {
+          "name": "Appareil",
+          "description": "Appareil optionnel pour filtrer. Laisser vide pour lister tous les emplacements enregistrés."
+        }
+      }
+    },
+    "remove_location": {
+      "name": "Supprimer une micro-localisation",
+      "description": "Supprime une micro-localisation enregistrée d'un appareil, par son nom.",
+      "fields": {
+        "device": {
+          "name": "Appareil",
+          "description": "L'appareil auquel appartient l'emplacement."
+        },
+        "name": {
+          "name": "Nom de l'emplacement",
+          "description": "Le nom de l'emplacement à supprimer."
+        }
+      }
+    },
+    "rename_location": {
+      "name": "Renommer une micro-localisation",
+      "description": "Renomme une micro-localisation enregistrée d'un appareil.",
+      "fields": {
+        "device": {
+          "name": "Appareil",
+          "description": "L'appareil auquel appartient l'emplacement."
+        },
+        "name": {
+          "name": "Nom actuel",
+          "description": "Le nom actuel de l'emplacement."
+        },
+        "new_name": {
+          "name": "Nouveau nom",
+          "description": "Le nouveau nom de l'emplacement."
+        }
+      }
+    },
+    "track_device": {
+      "name": "Suivre un appareil",
+      "description": "Ajoute un appareil Bluetooth aux appareils suivis par Bermuda (crée ses capteurs).",
+      "fields": {
+        "device": {
+          "name": "Appareil",
+          "description": "L'appareil à suivre. Un nom d'appareil, une MAC/UUID, ou un identifiant d'appareil Home Assistant."
+        }
+      }
+    },
+    "untrack_device": {
+      "name": "Ne plus suivre un appareil",
+      "description": "Retire un appareil des appareils suivis par Bermuda.",
+      "fields": {
+        "device": {
+          "name": "Appareil",
+          "description": "L'appareil à ne plus suivre."
+        }
+      }
+    },
+    "set_global_calibration": {
+      "name": "Définir la calibration globale",
+      "description": "Définit la puissance de référence et/ou l'atténuation globales utilisées pour les estimations de distance.",
+      "fields": {
+        "ref_power": {
+          "name": "Puissance de référence",
+          "description": "RSSI (dBm) mesuré à 1 m. Plus négatif donne des distances estimées plus courtes."
+        },
+        "attenuation": {
+          "name": "Atténuation",
+          "description": "Facteur d'atténuation environnementale utilisé au-delà de 1 m."
+        }
+      }
+    },
+    "set_scanner_offset": {
+      "name": "Définir le décalage RSSI d'un scanner",
+      "description": "Définit un décalage RSSI par scanner (l'étape de calibration par proxy, en service).",
+      "fields": {
+        "scanner": {
+          "name": "Scanner",
+          "description": "Le scanner/proxy à ajuster. Un nom ou une adresse de scanner."
+        },
+        "rssi_offset": {
+          "name": "Décalage RSSI",
+          "description": "Décalage ajouté au RSSI de ce scanner. Négatif augmente la distance, positif la réduit."
+        }
+      }
+    },
+    "get_config": {
+      "name": "Obtenir la configuration",
+      "description": "Renvoie la calibration actuelle de Bermuda, les appareils suivis, les scanners et le nombre de micro-localisations."
     }
   }
 }

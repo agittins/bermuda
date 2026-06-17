@@ -65,10 +65,12 @@ from .const import (
     DOMAIN,
     PRUNE_TIME_REDACTIONS,
     SAVEOUT_COOLDOWN,
+    SIGNAL_DEVICE_IN100_NEW,
     SIGNAL_DEVICE_NEW,
     UPDATE_INTERVAL,
 )
 from .coordinator_metadevices import BermudaMetadeviceMixin
+from .coordinator_microlocation import BermudaMicrolocationMixin
 from .coordinator_scanners import BermudaScannerMixin
 from .manufacturers import load_manufacturer_ids, lookup_manufacturer
 from .pruning import prune_devices as _prune_devices
@@ -92,7 +94,9 @@ Cancellable = Callable[[], None]
 # https://github.com/astral-sh/ruff/issues/4244
 
 
-class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, DataUpdateCoordinator[None]):
+class BermudaDataUpdateCoordinator(
+    BermudaScannerMixin, BermudaMetadeviceMixin, BermudaMicrolocationMixin, DataUpdateCoordinator[None]
+):
     """
     Class to manage fetching data from the Bluetooth component.
 
@@ -244,6 +248,9 @@ class BermudaDataUpdateCoordinator(BermudaScannerMixin, BermudaMetadeviceMixin, 
 
         self.devices: dict[str, BermudaDevice] = {}
         # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
+
+        # Micro-location (sub-area RF fingerprinting) + the MCP-friendly services.
+        self._microloc_init(hass, entry)
 
         # Register for newly discovered / changed BLE devices
         if self.config_entry is not None:

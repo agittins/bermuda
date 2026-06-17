@@ -22,3 +22,147 @@ dump_devices:
       default: false
       selector:
         boolean:
+
+calibrate_location:
+  name: Calibrate micro-location
+  description: >-
+    Record a tracked device's current spot as a named micro-location (eg "Key
+    hook"), by snapshotting the RF fingerprint from every proxy that can hear
+    it. Re-running with the same device and name re-calibrates that spot.
+  fields:
+    device:
+      required: true
+      example: "Keys"
+      selector:
+        text:
+    name:
+      required: true
+      example: "Key hook"
+      selector:
+        text:
+    area:
+      required: false
+      example: "Kitchen"
+      selector:
+        text:
+
+where_is:
+  name: Where is
+  description: Report a device's current area and matched micro-location, with confidence.
+  fields:
+    device:
+      required: true
+      example: "Keys"
+      selector:
+        text:
+
+list_locations:
+  name: List micro-locations
+  description: List saved micro-locations, optionally filtered to one device.
+  fields:
+    device:
+      required: false
+      example: "Keys"
+      selector:
+        text:
+
+remove_location:
+  name: Remove micro-location
+  description: Delete a device's saved micro-location by name.
+  fields:
+    device:
+      required: true
+      example: "Keys"
+      selector:
+        text:
+    name:
+      required: true
+      example: "Key hook"
+      selector:
+        text:
+
+rename_location:
+  name: Rename micro-location
+  description: Rename a device's saved micro-location.
+  fields:
+    device:
+      required: true
+      example: "Keys"
+      selector:
+        text:
+    name:
+      required: true
+      example: "Key hook"
+      selector:
+        text:
+    new_name:
+      required: true
+      example: "Coat hook"
+      selector:
+        text:
+
+track_device:
+  name: Track device
+  description: Add a Bluetooth device to Bermuda's tracked devices (creates its sensors).
+  fields:
+    device:
+      required: true
+      example: "AA:BB:CC:DD:EE:FF"
+      selector:
+        text:
+
+untrack_device:
+  name: Untrack device
+  description: Remove a device from Bermuda's tracked devices.
+  fields:
+    device:
+      required: true
+      example: "Keys"
+      selector:
+        text:
+
+set_global_calibration:
+  name: Set global calibration
+  description: Set the global reference power and/or attenuation used for distance estimates.
+  fields:
+    ref_power:
+      required: false
+      example: -55
+      selector:
+        number:
+          min: -127
+          max: 0
+          step: 0.5
+          mode: box
+    attenuation:
+      required: false
+      example: 3
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.1
+          mode: box
+
+set_scanner_offset:
+  name: Set scanner RSSI offset
+  description: Set a per-scanner RSSI offset (the per-proxy calibration step, as a service).
+  fields:
+    scanner:
+      required: true
+      example: "Kitchen Proxy"
+      selector:
+        text:
+    rssi_offset:
+      required: true
+      example: 0
+      selector:
+        number:
+          min: -127
+          max: 127
+          step: 1
+          mode: box
+
+get_config:
+  name: Get configuration
+  description: Return Bermuda's current calibration, tracked devices, scanners and micro-location count.

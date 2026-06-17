@@ -18,6 +18,7 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import _LOGGER, DOMAIN, PLATFORMS, STARTUP_MESSAGE
 from .coordinator import BermudaDataUpdateCoordinator
+from .intents import async_register_intents
 from .util import mac_norm
 
 if TYPE_CHECKING:
@@ -93,6 +94,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> b
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+
+    # Register voice/Assist intents so micro-locations are reachable from MCP
+    # clients and the conversation agent, not just via services.
+    async_register_intents(hass)
 
     return True
 
