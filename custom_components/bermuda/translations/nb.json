@@ -3,29 +3,14 @@
     "abort": {
       "single_instance_allowed": "Denne integrasjonen kan kun konfigureres en gang."
     },
-    "error": {
-      "auth": "Brukernavn/Passord er feil."
-    },
     "step": {
       "user": {
-        "data": {
-          "password": "Passord",
-          "username": "Brukernavn"
-        },
         "description": "Hvis du trenger hjep til konfigurasjon ta en titt her: https://github.com/foXaCe/bermuda",
         "title": "Bermuda BLE Trilateration"
       }
     }
   },
   "options": {
-    "step": {
-      "user": {
-        "data": {
-          "binary_sensor": "Binær sensor aktivert",
-          "sensor": "Sensor aktivert",
-          "switch": "Bryter aktivert"
-        }
-      }
-    }
+    "step": {}
   }
 }

@@ -3,15 +3,8 @@
     "abort": {
       "single_instance_allowed": "Al geconfigureerd. Slechts één configuratie mogelijk."
     },
-    "error": {
-      "auth": "Gebruikersnaam/wachtwoord is verkeerd."
-    },
     "step": {
       "user": {
-        "data": {
-          "password": "Wachtwoord",
-          "username": "Gebruikersnaam"
-        },
         "description": "Als je hulp nodig hebt met de configuratie, kijk dan op onze [GitHub pagina](https://github.com/foXaCe/bermuda)",
         "title": "Bermuda BLE Trilateration"
       }
@@ -34,55 +27,7 @@
       "some_active": "Er zijn ten minste enkele actieve apparaten, dat is goed."
     },
     "step": {
-      "calibration1_global": {
-        "data": {
-          "attenuation": "Demping",
-          "configured_devices": "Apparaat",
-          "configured_scanners": "Scanner",
-          "ref_power": "Referentievermogen",
-          "save_and_close": "Opslaan en sluiten"
-        },
-        "data_description": {
-          "attenuation": "Na het aanpassen van de bovenstaande instellingen voor afstandsmetingen van 1 meter, plaats het apparaat verder weg (bijvoorbeeld 5 meter) en past de demping opnieuw aan totdat de berekende afstanden overeenkomen met de fysieke afstand tussen de scanner en het apparaat. Klik op Verzenden om de nieuwe afstandsschattingen te bekijken.",
-          "ref_power": "Om deze instelling te kalibreren, plaats het apparaat op 1 meter van de scanner en pas de waarde aan totdat de bovenstaande getallen een afstand van 1 meter weergeven. \n\nLet op: De waarden worden pas opnieuw berekend nadat je op Verzenden hebt geklikt. En en negatieve waarde resulteert in een lagere afstand.",
-          "save_and_close": "Wanneer je tevreden bent met de kalibratie, vink dit vakje aan en klik op Verzenden. Uw wijzigingen worden opgeslagen en je kunt doorgaan naar de volgende kalibratiestap. Laat dit vakje uitgevinkt terwijl de instellingen nog worden aanpast en getest."
-        },
-        "description": "Deze stap is bedoeld om een aantal globale standaardwaarden voor afstandsberekeningen in te stellen.\n\n{details}\n{summary}\nKlik om uit te vouwen voor instructies!{summary_end}\n\nIn latere stappen kunt je per apparaat overschrijvingen instellen, dus is het logisch om nu de meest voorkomende hardware te kiezen als 'referentiepaar' voor deze stap. Als de meeste van uw scanners bijvoorbeeld ESPHome zijn op een bepaald type bord, kies er dan een om te gebruiken als referentiescanner. Als je een handvol van een bepaald bakenmodel heeft, gebruik dan één daarvan als referentieapparaat.\n\n- Kies hieronder een apparaat en een scanner die je als 'referentiepaar' wilt gebruiken\n- Plaats uw gekozen apparaat fysiek op 1 meter van de gekozen scanner. Zorg ervoor dat ze een duidelijk zicht op elkaar hebben en vermijd dat ze zich in de buurt van organische levensvormen bevinden die het signaal kunnen verstoren.\n- Klik op 'Verzenden' en bekijk de RSSI-waarden in de tabel die hieronder verschijnt. Klik opnieuw op 'Verzenden' om de waarden te vernieuwen.\n- Zodra er een stabiele signaalsterkte is, vult je die waarde in het veld `Referentievermogen` in en klik daarna op 'Verzenden'.\n- De waarden worden bijgewerkt en de geschatte afstanden zouden dicht bij 1 meter moeten liggen. Herhaal dit zo nodig totdat je tevreden bent met het resultaat.\n- Verplaats het apparaat nu verder van de scanner en meet deze afstand met een meetlint. Ongeveer 5 meter is bijvoorbeeld een goede afstand, de exacte afstand doet er niet toe maar het is belangrijk om de vije zichtlijn te behouden, en je zult merken dat langere afstanden over het algemeen meer nauwkeurigheid geven.\n- Met het apparaat op de nieuwe afstand, klik nogmaals op 'Verzenden'. De meest recente metingen laten de nieuwe afstand zien, maar zullen waarschijnlijk onnauwkeurig zijn.\n- Experimenteer met verschillende waarden voor 'Demping' en klik op 'Verzenden', totdat er geschatte metingen zijn die overeenkomen met de fysieke afstand.\n- Eenmaal tevreden met de kalibratie, Klik dan op 'Opslaan en sluiten' en klik daarna op 'Verzenden'.\n{details_end}\n{suffix}",
-        "suffix": "Nadat je op Verzenden hebt geklikt, worden hier de nieuwe afstanden weergegeven.",
-        "title": "Kalibratie 1: Globaal"
-      },
-      "calibration2_scanners": {
-        "data": {
-          "configured_devices": "Apparaat",
-          "save_and_close": "Opslaan en sluiten",
-          "scanner_info": "Per-Scanner RSSI compensatie"
-        },
-        "data_description": {
-          "scanner_info": "Laat op 0 staan om de globale waarde te gebruiken, of voer een ander getal in om de RSSI die door die scanner wordt gerapporteerd te compenseren. Pas aan totdat de geschatte afstand hierboven overeenkomt met de werkelijke afstand tussen die scanner en het geselecteerde zendapparaat. Negatieve waarden vergroten de afstand, positieve waarden verkleinen deze."
-        },
-        "description": "This step is optional but useful if your scanners have different sensitivities or varying antenna performance. Adjust the offset RSSI for each scanner until the calculated distance to the selected device is correct. Leave the scanner you used in your \"reference pair\" in step 1 at Zero.\n\n{suffix}",
-        "title": "Kalibratie 2: Per-Scanner RSSI compensatie"
-      },
       "globalopts": {
-        "data": {
-          "attenuation": "Attenuation - Omgevingsdempingsfactor voor afstandsberekening/kalibratie.",
-          "configured_devices": "Geconfigureerde apparaten - Selecteer welke Bluetooth-apparaten of beacons moeten worden gevolgd met sensoren.",
-          "devtracker_nothome_timeout": "Devtracker Timeout - Tijd in seconden om een apparaat als \"Afwezig\" te beschouwen.",
-          "max_area_radius": "Maximale radius in meters voor eenvoudige ruimte detectie",
-          "max_velocity": "Maximale snelheid in meter per seconde - negeer metingen met snellere afstandstoename dan deze limiet.",
-          "ref_power": "Referentievermogen - Standaard RSSI-waarde op 1 meter afstand, voor afstandskalibratie.",
-          "smoothing_samples": "Smoothing Samples - Hoeveel samples er gebruikt worden voor het afvlakken van afstandsmetingen.",
-          "update_interval": "Update Interval - Hoe vaak (in seconden) de sensormetingen worden bijgewerkt."
-        },
-        "data_description": {
-          "attenuation": "Na het instellen van het referentievermogen op 1 meter afstand, kan de dempingsfactor aangepast worden zodat andere afstanden, min of meer, correct gelezen worden.",
-          "devtracker_nothome_timeout": "Hoe snel device_tracker-entiteiten als `not_home` worden gemarkeerd nadat er geen advertenties meer worden gezien. 30 tot 300 seconden is waarschijnlijk goed.",
-          "max_area_radius": "Met de eenvoudige `RUIMTE` functie wordt een apparaat gemarkeerd alszijnde in de ruimte van de dichtsbijzijnde scanner, als het zich binnen deze straal bevindt. \nAls deze waarde te te klein wordt ingesteld zullen apparaten als `Onbekend` gemarkeerd worden bij verplaatsing tussen scanners. \nAls deze waarde te groot wordt ingesteld zullen apparaten altijd verschijnen als in hun dichtsbijzijnde ruimte.",
-          "max_velocity": "Als uit een meting blijkt dat een apparaat sneller weg beweegt dan dit, wordt die meting genegeerd. 3m/s (10km/h) is goed.\nMensen lopen normaal gesproken met een snelheid van 1,4 m/s. Maar als ze een schaar vasthouden, bewegen ze met een snelheid van 3 m/s.",
-          "ref_power": "Plaats het meest gebruikelijke Bluetooth-apparaat of beacon op 1 meter (3,28') afstand van de meest gebruikelijke scanner/proxy. Pas het referentievermogen aan totdat de afstandssensor een laagste (niet gemiddelde) afstand van 1 meter aangeeft.",
-          "smoothing_samples": "Hoeveel samples worden gebruikt om de gemiddelde afvlakking te berekenen. Een groter getal zorgt voor langzamere afstandstoename. Afstandsafnames worden hierdoor niet beïnvloed. 10 of 20 lijkt goed.",
-          "update_interval": "Afstandsafnames worden nog steeds onmiddellijk worden geactiveerd, maar afstandstoenames worden hiermee beperkt om de groei van de database te verminderen."
-        },
         "title": "Globale instellingen"
       },
       "init": {
@@ -90,9 +35,7 @@
         "title": "Bermuda configureren"
       },
       "selectdevices": {
-        "data": {
-          "configured_devices": "Apparaat"
-        },
+        "data": {},
         "description": "Kies welke apparaten moeten worden gevolgd. Als er geen apparaten hieronder verschijnen, ziet Bermuda geen gegevens van Bluetooth-scanners. Zorg ervoor dat je een esphome ble_proxy-apparaat, Shelly-apparaten met Bluetooth-proxy geconfigureerd of een lokale Bluetooth-adapter hebt.",
         "title": "Selecteer apparaten"
       }
@@ -117,6 +60,5 @@
       },
       "name": "Dump Devices"
     }
-  },
-  "title": "Bermuda BLE Trilateratie"
+  }
 }

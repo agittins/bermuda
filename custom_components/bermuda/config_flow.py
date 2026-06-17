@@ -10,8 +10,10 @@ from homeassistant.core import callback
 from .const import (
     DOMAIN,
     NAME,
+    SUBENTRY_TYPE_CALIBRATION,
 )
 from .options_flow import BermudaOptionsFlowHandler
+from .subentry_flow import BermudaCalibrationSubentryFlow
 
 _GITHUB_URL = "https://github.com/foXaCe/bermuda"
 
@@ -28,7 +30,7 @@ if TYPE_CHECKING:
 class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for bermuda."""
 
-    VERSION = 1
+    VERSION = 2  # v2: per-scanner RSSI offsets moved from options into subentries
     # CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
     def __init__(self) -> None:
@@ -71,6 +73,15 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry):  # noqa: ARG004
         return BermudaOptionsFlowHandler()
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls,
+        config_entry,  # noqa: ARG003
+    ) -> dict[str, type[config_entries.ConfigSubentryFlow]]:
+        """Per-scanner RSSI calibration offsets are managed as config subentries."""
+        return {SUBENTRY_TYPE_CALIBRATION: BermudaCalibrationSubentryFlow}
 
     # async def _show_config_form(self, user_input):  # pylint: disable=unused-argument
     #     """Show the configuration form to edit location data."""

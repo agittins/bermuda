@@ -170,6 +170,12 @@ CONF_SAVE_AND_CLOSE = "save_and_close"
 CONF_SCANNER_INFO = "scanner_info"
 CONF_RSSI_OFFSETS = "rssi_offsets"
 
+# Per-scanner RSSI calibration is managed as config subentries (one per scanner).
+# CONF_RSSI_OFFSETS remains the coordinator's runtime dict, mirrored from subentries.
+SUBENTRY_TYPE_CALIBRATION = "calibration"
+CONF_SCANNER = "scanner"
+CONF_RSSI_OFFSET = "rssi_offset"
+
 # Area-entity presence overrides (ported/adapted from knoop7/bermuda-intent).
 # HA entities (motion/contact/etc.) whose area, when the entity is "on", competes
 # with BLE at a configurable "virtual distance" (smaller = higher priority).

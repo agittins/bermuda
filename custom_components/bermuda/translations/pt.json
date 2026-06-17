@@ -3,15 +3,8 @@
     "abort": {
       "single_instance_allowed": "Apenas uma única instância é permitida."
     },
-    "error": {
-      "auth": "Nome de utilizador/palavra-passe incorretos."
-    },
     "step": {
       "user": {
-        "data": {
-          "password": "Palavra-passe",
-          "username": "Nome de utilizador"
-        },
         "description": "Se precisar de ajuda com a configuração, consulte a nossa [página no GitHub](https://github.com/foXaCe/bermuda)",
         "title": "Bermuda BLE Trilateration"
       }
@@ -34,54 +27,7 @@
       "some_active": "Tem pelo menos alguns dispositivos ativos, isso é bom."
     },
     "step": {
-      "calibration1_global": {
-        "data": {
-          "attenuation": "Atenuação",
-          "configured_devices": "Dispositivo",
-          "configured_scanners": "Scanner",
-          "ref_power": "Potência de Referência",
-          "save_and_close": "Salvar e Fechar"
-        },
-        "data_description": {
-          "attenuation": "Após ajustar as definições acima para leituras de 1m, mova o dispositivo para mais longe e ajuste a atenuação até que a distância calculada corresponda à distância física.",
-          "ref_power": "Para calibrar esta definição, coloque o dispositivo a 1 metro do scanner e ajuste o valor até que as figuras acima reflitam essa distância de 1m.",
-          "save_and_close": "Depois de estar satisfeito com a calibração, marque esta opção e clique em Enviar. As alterações serão salvas e pode prosseguir para o próximo passo de calibração. Deixe desmarcado enquanto ajusta e testa as configurações."
-        },
-        "description": "Este passo é para estabelecer algumas predefinições globais para cálculos de distância.\n\n{details}\n{summary}\nExpanda para instruções!{summary_end}\n\nNos passos seguintes, pode definir substituições por dispositivo, por isso faz sentido escolher o hardware mais comum como 'par de referência' para este passo. Por exemplo, se a maioria dos seus scanners for ESPHome num modelo específico, escolha um desses como scanner de referência.\n\n- Escolha um dispositivo e um scanner abaixo para usar como 'par de referência'\n- Coloque fisicamente o dispositivo escolhido a 1m (um metro) do scanner escolhido. Certifique-se de que têm linha de visão clara e evite colocá-los próximos a seres vivos que possam interferir com o sinal.\n- Clique em 'ENVIAR' e anote os valores RSSI na tabela que aparecerá abaixo. Pode clicar em 'ENVIAR' novamente a qualquer momento para atualizar os valores.\n- Assim que tiver um sinal estável, insira esse valor no campo `ref_power` e clique em 'ENVIAR'.\n- Agora, mova o dispositivo para uma distância maior e meça essa distância com uma fita métrica.\n- Experimente diferentes valores para `attenuation` e clique em 'ENVIAR' até que as medições estimadas concordem com a distância física.\n- Quando estiver satisfeito com a calibração, marque 'Salvar e Fechar' e clique em 'ENVIAR'.\n{details_end}\n{suffix}",
-        "title": "Calibração 1: Global"
-      },
-      "calibration2_scanners": {
-        "data": {
-          "configured_devices": "Dispositivo",
-          "save_and_close": "Salvar e Fechar",
-          "scanner_info": "Compensações por Scanner"
-        },
-        "data_description": {
-          "scanner_info": "Deixe a zero para aceitar o padrão global, ou insira um número para ajustar o RSSI reportado por esse scanner. Ajuste até que a distância estimada corresponda à distância real."
-        },
-        "description": "Este passo é opcional, mas útil se os seus scanners tiverem sensibilidades ou desempenhos de antena diferentes. Ajuste a compensação RSSI para cada scanner até que a distância calculada para o dispositivo selecionado esteja correta.",
-        "title": "Calibração 2: Compensações por Scanner"
-      },
       "globalopts": {
-        "data": {
-          "attenuation": "Atenuação - fator de atenuação do ambiente para cálculo/calibração de distância.",
-          "configured_devices": "Dispositivos configurados - selecione os dispositivos ou beacons Bluetooth a monitorizar com sensores.",
-          "devtracker_nothome_timeout": "Timeout do Devtracker em segundos para considerar um dispositivo como `Fora de Casa`.",
-          "max_area_radius": "Raio máximo em metros para deteção simples de ÁREA",
-          "max_velocity": "Velocidade máxima em metros por segundo - ignorar leituras que indiquem movimento mais rápido que este limite (3m/s ou 10km/h é uma boa configuração).",
-          "ref_power": "Potência de referência - RSSI padrão a 1 metro de distância, para calibração de distância.",
-          "smoothing_samples": "Amostras de suavização - número de amostras usadas para suavizar as leituras de distância.",
-          "update_interval": "Intervalo de atualização - frequência (em segundos) das atualizações dos sensores."
-        },
-        "data_description": {
-          "attenuation": "Após definir ref_power a 1 metro, ajuste a atenuação para que outras distâncias sejam lidas corretamente.",
-          "devtracker_nothome_timeout": "Tempo necessário para marcar entidades como `fora de casa` após cessarem anúncios Bluetooth. 30 a 300 segundos é recomendado.",
-          "max_area_radius": "Na funcionalidade simples `ÁREA`, um dispositivo será marcado como estando na ÁREA do recetor mais próximo, se estiver dentro deste raio. Se definir um valor pequeno, os dispositivos podem ficar como `desconhecido` entre recetores; valores grandes sempre os mostrarão na ÁREA mais próxima.",
-          "max_velocity": "Se uma leitura indicar que um dispositivo se move mais rápido do que este limite, essa leitura será ignorada. Humanos normalmente caminham a 1.4m/s; com objetos rápidos, movem-se até 3m/s.",
-          "ref_power": "Coloque o beacon mais comum a 1 metro do scanner mais usado e ajuste ref_power até que o sensor de distância mostre 1 metro.",
-          "smoothing_samples": "Quantas amostras usar para suavizar leituras de distância. Valores maiores tornam os aumentos de distância mais lentos. Reduções de distância não são afetadas.",
-          "update_interval": "Distâncias que encurtam ainda serão atualizadas imediatamente, mas distâncias que aumentam serão limitadas por este intervalo para reduzir o crescimento da base de dados."
-        },
         "title": "Definições globais"
       },
       "init": {

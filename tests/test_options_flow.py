@@ -27,6 +27,7 @@ from custom_components.bermuda.const import (
     CONF_AREA_ENTITY_DISTANCES,
     CONF_ATTENUATION,
     CONF_DEVICES,
+    CONF_DEVTRACK_TIMEOUT,
     CONF_MAX_RADIUS,
     CONF_MAX_VELOCITY,
     CONF_REF_POWER,
@@ -87,35 +88,40 @@ async def test_user_step_single_instance_allowed_abort(hass: HomeAssistant):
 
 
 async def test_options_init_shows_menu_with_all_steps(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """The options init step is a menu listing all four editable sub-steps."""
+    """The options init step is a menu listing the editable sub-steps."""
     result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
 
     assert result["type"] == FlowResultType.MENU
     assert result["step_id"] == "init"
     menu = set(result["menu_options"])
-    assert {
-        "globalopts",
-        "selectdevices",
-        "calibration1_global",
-        "calibration2_scanners",
-    } <= menu
+    # Per-scanner calibration moved to subentries, so it is no longer a menu item.
+    assert {"globalopts", "selectdevices", "area_entities"} <= menu
     # The init step builds status text from coordinator counts.
     placeholders = result.get("description_placeholders") or {}
     assert "status" in placeholders
 
 
+def _nest_globals(flat: dict) -> dict:
+    """Wrap flat global options into the collapsible-section structure the form expects."""
+    groups = {
+        "distance_model": (CONF_REF_POWER, CONF_ATTENUATION, CONF_MAX_RADIUS),
+        "tracking": (CONF_DEVTRACK_TIMEOUT, CONF_UPDATE_INTERVAL),
+        "smoothing": (CONF_SMOOTHING_SAMPLES, CONF_MAX_VELOCITY),
+    }
+    return {section: {k: flat[k] for k in keys if k in flat} for section, keys in groups.items()}
+
+
 async def test_options_navigate_to_globalopts_form(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """Choosing 'globalopts' from the menu renders the global options form."""
+    """Choosing 'globalopts' from the menu renders the sectioned global options form."""
     result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], user_input={"next_step_id": "globalopts"}
     )
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "globalopts"
-    # The schema must expose at least the headline global options.
-    schema_keys = {str(k.schema) for k in result["data_schema"].schema}
-    assert CONF_MAX_RADIUS in schema_keys
-    assert CONF_REF_POWER in schema_keys
+    # The schema groups the fields into collapsible sections.
+    sections = {str(k.schema) for k in result["data_schema"].schema}
+    assert {"distance_model", "tracking", "smoothing"} <= sections
 
 
 async def test_options_globalopts_writes_options_and_coordinator(
@@ -128,13 +134,15 @@ async def test_options_globalopts_writes_options_and_coordinator(
     )
     assert result["step_id"] == "globalopts"
 
-    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input=dict(MOCK_OPTIONS_GLOBALS))
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input=_nest_globals(MOCK_OPTIONS_GLOBALS)
+    )
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["title"] == NAME
 
     await hass.async_block_till_done()
 
-    # The options on the entry now equal what we submitted.
+    # The sections are flattened back, so the stored options equal the flat input.
     assert setup_bermuda_entry.options == MOCK_OPTIONS_GLOBALS
     # And the live coordinator (runtime_data) sees the same config entry options.
     coordinator = setup_bermuda_entry.runtime_data.coordinator
@@ -158,9 +166,9 @@ async def test_options_globalopts_schema_rejects_out_of_range(
     schema = result["data_schema"]
 
     # The valid baseline still passes validation unchanged.
-    schema(dict(MOCK_OPTIONS_GLOBALS))
+    schema(_nest_globals(MOCK_OPTIONS_GLOBALS))
 
-    # Each positive-only field rejects a zero value.
+    # Each positive-only field rejects a zero value (in whichever section it lives).
     for key in (
         CONF_ATTENUATION,
         CONF_SMOOTHING_SAMPLES,
@@ -171,13 +179,13 @@ async def test_options_globalopts_schema_rejects_out_of_range(
         bad = dict(MOCK_OPTIONS_GLOBALS)
         bad[key] = 0
         with pytest.raises(vol.Invalid):
-            schema(bad)
+            schema(_nest_globals(bad))
 
     # ref_power is a dBm value: must stay within [-127, 0].
     too_high = dict(MOCK_OPTIONS_GLOBALS)
     too_high[CONF_REF_POWER] = 5
     with pytest.raises(vol.Invalid):
-        schema(too_high)
+        schema(_nest_globals(too_high))
 
 
 # --------------------------------------------------------------------------- #
@@ -215,10 +223,8 @@ async def test_options_selectdevices_shows_form_with_injected_device(
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "selectdevices"
     schema_keys = {str(k.schema) for k in result["data_schema"].schema}
-    # The injected standard device makes the "standard_devices" selector appear,
-    # alongside the always-present search field.
-    assert "device_filter" in schema_keys
-    assert "standard_devices" in schema_keys
+    # A single searchable devices selector replaces the old per-category selectors.
+    assert "devices" in schema_keys
 
 
 async def test_options_selectdevices_submit_writes_devices(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
@@ -233,11 +239,8 @@ async def test_options_selectdevices_submit_writes_devices(hass: HomeAssistant, 
     )
     assert result["step_id"] == "selectdevices"
 
-    # Provide the selection. device_filter must equal _last_device_filter ("")
-    # so the handler treats this as a real submission, not a filter change.
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={"device_filter": "", "standard_devices": [addr.upper()]},
+        result["flow_id"], user_input={"devices": [addr.upper()]}
     )
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
@@ -245,27 +248,11 @@ async def test_options_selectdevices_submit_writes_devices(hass: HomeAssistant, 
     assert setup_bermuda_entry.options.get(CONF_DEVICES) == [addr.upper()]
 
 
-async def test_options_selectdevices_filter_only_refreshes_form(
-    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry
-):
-    """Changing only the filter re-shows the form rather than creating an entry."""
-    coordinator = setup_bermuda_entry.runtime_data.coordinator
-    _inject_device(coordinator, "AA:BB:CC:DD:EE:03")
-
-    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"next_step_id": "selectdevices"}
-    )
-    assert result["step_id"] == "selectdevices"
-
-    # A non-empty filter differs from the initial _last_device_filter (""),
-    # so the handler should store it and re-render the form.
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={"device_filter": "nonexistentfilter", "standard_devices": []},
-    )
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "selectdevices"
+def _devices_selector_values(result) -> set[str]:
+    """Return the option values offered by the selectdevices 'devices' selector."""
+    schema = result["data_schema"].schema
+    key = next(k for k in schema if str(k.schema) == "devices")
+    return {opt["value"] for opt in schema[key].config["options"]}
 
 
 async def test_options_selectdevices_random_mac_recent_appears(
@@ -284,8 +271,7 @@ async def test_options_selectdevices_random_mac_recent_appears(
         result["flow_id"], user_input={"next_step_id": "selectdevices"}
     )
     assert result["step_id"] == "selectdevices"
-    schema_keys = {str(k.schema) for k in result["data_schema"].schema}
-    assert "random_devices" in schema_keys
+    assert "AA:BB:CC:DD:EE:04" in _devices_selector_values(result)
 
 
 async def test_options_area_entities_two_step_flow(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):

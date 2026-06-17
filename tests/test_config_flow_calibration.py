@@ -227,8 +227,18 @@ def _inject_device(coordinator, address: str, *, address_type=BDADDR_TYPE_OTHER,
     return device
 
 
+def _offered_values(result) -> set[str]:
+    """Collect every option value across the form's selectors."""
+    offered: set[str] = set()
+    for validator in result["data_schema"].schema.values():
+        cfg = getattr(validator, "config", None)
+        if isinstance(cfg, dict) and "options" in cfg:
+            offered |= {opt["value"] for opt in cfg["options"]}
+    return offered
+
+
 async def test_selectdevices_ibeacon_metadevice_listed(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """An iBeacon meta-device produces the grouped 'ibeacon_devices' selector."""
+    """An iBeacon meta-device is offered as a labelled option in the devices selector."""
     coordinator = setup_bermuda_entry.runtime_data.coordinator
     dev = _inject_device(
         coordinator,
@@ -244,8 +254,7 @@ async def test_selectdevices_ibeacon_metadevice_listed(hass: HomeAssistant, setu
         result["flow_id"], user_input={"next_step_id": "selectdevices"}
     )
     assert result["step_id"] == "selectdevices"
-    schema_keys = {str(k.schema) for k in result["data_schema"].schema}
-    assert "ibeacon_devices" in schema_keys
+    assert "AA:BB:CC:DD:EE:10" in _offered_values(result)
 
 
 async def test_selectdevices_skips_scanner_and_private_and_stale_random(
@@ -276,49 +285,6 @@ async def test_selectdevices_skips_scanner_and_private_and_stale_random(
     assert "standard_devices" not in schema_keys
 
 
-async def test_selectdevices_pagination_warning(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """More than 50 standard devices triggers the pagination warning text."""
-    coordinator = setup_bermuda_entry.runtime_data.coordinator
-    for i in range(55):
-        _inject_device(coordinator, f"AA:BB:CC:DD:11:{i:02X}")
-
-    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"next_step_id": "selectdevices"}
-    )
-    assert result["step_id"] == "selectdevices"
-    help_text = (result.get("description_placeholders") or {}).get("filter_help", "")
-    # The pagination warning fragment (language-independent emoji marker).
-    assert "⚠️" in help_text
-
-
-async def test_selectdevices_ibeacon_and_random_pagination(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """Over-50 iBeacon and over-50 recent-random lists both trigger pagination.
-
-    The iBeacons here carry empty ``metadevice_sources`` to exercise the
-    no-source-mac branch of the label builder.
-    """
-    coordinator = setup_bermuda_entry.runtime_data.coordinator
-    now = monotonic_time_coarse()
-    for i in range(55):
-        beacon = _inject_device(coordinator, f"BB:BB:CC:DD:11:{i:02X}", address_type=ADDR_TYPE_IBEACON)
-        beacon.metadevice_sources = []  # empty -> source_mac branch (line 382)
-    for i in range(55):
-        rnd = _inject_device(coordinator, f"CC:BB:CC:DD:11:{i:02X}", address_type=BDADDR_TYPE_RANDOM_RESOLVABLE)
-        rnd.last_seen = now  # recent so it isn't pruned
-
-    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"next_step_id": "selectdevices"}
-    )
-    assert result["step_id"] == "selectdevices"
-    schema_keys = {str(k.schema) for k in result["data_schema"].schema}
-    assert "ibeacon_devices" in schema_keys
-    assert "random_devices" in schema_keys
-    help_text = (result.get("description_placeholders") or {}).get("filter_help", "")
-    assert "⚠️" in help_text
-
-
 async def test_selectdevices_saved_but_not_discovered_added(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
     """A configured device that is no longer discovered is still offered ('saved')."""
     coordinator = setup_bermuda_entry.runtime_data.coordinator
@@ -339,232 +305,5 @@ async def test_selectdevices_saved_but_not_discovered_added(hass: HomeAssistant,
     # The saved-but-undiscovered address must still be offered (labelled "(saved)")
     # in a rendered selector, otherwise saving the form would silently drop it.
     schema_keys = {str(k.schema) for k in result["data_schema"].schema}
-    assert "standard_devices" in schema_keys
-    offered_values = set()
-    for marker, validator in result["data_schema"].schema.items():  # noqa: B007
-        cfg = getattr(validator, "config", None)
-        if isinstance(cfg, dict) and "options" in cfg:
-            offered_values |= {opt["value"] for opt in cfg["options"]}
-    assert "AA:BB:CC:DD:EE:31" in offered_values
-
-
-# --------------------------------------------------------------------------- #
-# calibration1_global
-# --------------------------------------------------------------------------- #
-
-
-async def test_calibration1_shows_form(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """Opening calibration1 (no input) renders the form with device + scanner fields."""
-    _inject_calibration_fixtures(hass, setup_bermuda_entry)
-
-    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"next_step_id": "calibration1_global"}
-    )
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "calibration1_global"
-    schema_keys = {str(k.schema) for k in result["data_schema"].schema}
-    assert {CONF_DEVICES, CONF_SCANNERS, CONF_REF_POWER, CONF_ATTENUATION, CONF_SAVE_AND_CLOSE} <= schema_keys
-    placeholders = result.get("description_placeholders") or {}
-    # The "ugly token hack" HTML placeholders are injected.
-    assert placeholders.get("details") == "<details>"
-
-
-async def test_calibration1_submit_renders_results_table(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """Submitting calibration1 (save unticked) recalculates and renders the table.
-
-    The estimate row must contain the exact distance computed by
-    ``rssi_to_metres`` for the first historical RSSI sample.
-    """
-    coordinator, reg_id = _inject_calibration_fixtures(hass, setup_bermuda_entry)
-
-    ref_power = -55.0
-    attenuation = 3.0
-
-    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"next_step_id": "calibration1_global"}
-    )
-    assert result["step_id"] == "calibration1_global"
-
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_DEVICES: reg_id,
-            CONF_SCANNERS: SCANNER_ADDR,
-            CONF_REF_POWER: ref_power,
-            CONF_ATTENUATION: attenuation,
-            CONF_SAVE_AND_CLOSE: False,
-        },
-    )
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "calibration1_global"
-    suffix = (result.get("description_placeholders") or {})["suffix"]
-
-    # Characterization: the first column's estimate is computed from HIST_RSSI[0].
-    expected = rssi_to_metres(HIST_RSSI[0], ref_power, attenuation)
-    assert f"`{expected:>5.2f}`" in suffix
-    # The RSSI row echoes the historical rssi value.
-    assert f"`{HIST_RSSI[0]:>5}`" in suffix
-    # The device name heads the table.
-    assert "Tracked Tag" in suffix
-
-
-async def test_calibration1_submit_scanner_no_record_error(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """Selecting a scanner the device never heard yields an err_scanner_no_record."""
-    coordinator, reg_id = _inject_calibration_fixtures(hass, setup_bermuda_entry)
-    # Add a third scanner to the list that the tracked device never saw.
-    coordinator.devices["77:77:77:77:77:77"] = _make_fake_scanner_device("77:77:77:77:77:77", "Ghost")
-    coordinator._scanner_list.add("77:77:77:77:77:77")
-
-    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"next_step_id": "calibration1_global"}
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_DEVICES: reg_id,
-            CONF_SCANNERS: "77:77:77:77:77:77",
-            CONF_REF_POWER: -55.0,
-            CONF_ATTENUATION: 3.0,
-            CONF_SAVE_AND_CLOSE: False,
-        },
-    )
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "calibration1_global"
-    assert result.get("errors") == {"base": "err_scanner_no_record"}
-
-
-async def test_calibration1_save_and_close_persists_options(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """Ticking 'save and close' writes ref_power/attenuation and ends the flow."""
-    coordinator, reg_id = _inject_calibration_fixtures(hass, setup_bermuda_entry)
-
-    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"next_step_id": "calibration1_global"}
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_DEVICES: reg_id,
-            CONF_SCANNERS: SCANNER_ADDR,
-            CONF_REF_POWER: -61.0,
-            CONF_ATTENUATION: 2.5,
-            CONF_SAVE_AND_CLOSE: True,
-        },
-    )
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    await hass.async_block_till_done()
-    assert setup_bermuda_entry.options[CONF_REF_POWER] == -61.0
-    assert setup_bermuda_entry.options[CONF_ATTENUATION] == 2.5
-
-
-# --------------------------------------------------------------------------- #
-# calibration2_scanners
-# --------------------------------------------------------------------------- #
-
-
-async def test_calibration2_shows_form(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """Opening calibration2 (no input) renders the device + scanner_info form."""
-    _inject_calibration_fixtures(hass, setup_bermuda_entry)
-
-    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"next_step_id": "calibration2_scanners"}
-    )
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "calibration2_scanners"
-    schema_keys = {str(k.schema) for k in result["data_schema"].schema}
-    assert {CONF_DEVICES, CONF_SCANNER_INFO, CONF_SAVE_AND_CLOSE} <= schema_keys
-
-
-async def test_calibration2_submit_renders_results_table(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """Submitting calibration2 (refresh) recalculates per-scanner distance rows."""
-    coordinator, reg_id = _inject_calibration_fixtures(hass, setup_bermuda_entry)
-
-    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"next_step_id": "calibration2_scanners"}
-    )
-    assert result["step_id"] == "calibration2_scanners"
-
-    offset = 5
-    scanner_info = {"Kitchen Proxy": offset, "Lounge Proxy": 0}
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_DEVICES: reg_id,
-            CONF_SCANNER_INFO: scanner_info,
-            CONF_SAVE_AND_CLOSE: False,
-        },
-    )
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "calibration2_scanners"
-    suffix = (result.get("description_placeholders") or {})["suffix"]
-
-    # Characterization: Kitchen row uses HIST_RSSI[0] + offset and defaults.
-    expected = rssi_to_metres(HIST_RSSI[0] + offset, DEFAULT_REF_POWER, DEFAULT_ATTENUATION)
-    assert f"`{expected:>6.2f}`" in suffix
-    # Lounge advert only had 3 samples, so columns 3/4 fall back to '-'.
-    assert "`-`" in suffix
-    assert "Kitchen Proxy" in suffix and "Lounge Proxy" in suffix
-
-
-async def test_calibration2_save_clips_offsets(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
-    """'Save and close' persists rssi offsets, clipping into the [-127, 127] range."""
-    coordinator, reg_id = _inject_calibration_fixtures(hass, setup_bermuda_entry)
-
-    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={"next_step_id": "calibration2_scanners"}
-    )
-    # Out-of-range values must be clipped to +/-127 on save.
-    scanner_info = {"Kitchen Proxy": 500, "Lounge Proxy": -999}
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_DEVICES: reg_id,
-            CONF_SCANNER_INFO: scanner_info,
-            CONF_SAVE_AND_CLOSE: True,
-        },
-    )
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    await hass.async_block_till_done()
-    offsets = setup_bermuda_entry.options[CONF_RSSI_OFFSETS]
-    assert offsets[SCANNER_ADDR] == 127
-    assert offsets[SCANNER2_ADDR] == -127
-
-
-# --------------------------------------------------------------------------- #
-# _get_bermuda_device_from_registry
-# --------------------------------------------------------------------------- #
-
-
-async def test_get_bermuda_device_from_registry_resolves_and_misses(
-    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry
-):
-    """The registry resolver maps a HA device id back to a Bermuda device (or None)."""
-    coordinator, reg_id = _inject_calibration_fixtures(hass, setup_bermuda_entry)
-
-    flow = BermudaOptionsFlowHandler()
-    flow.hass = hass
-    flow.handler = setup_bermuda_entry.entry_id
-    flow.coordinator = coordinator
-
-    # A real registry id with a matching bluetooth connection resolves.
-    device = flow._get_bermuda_device_from_registry(reg_id)
-    assert device is not None
-    assert device.address == TRACKED_ADDR
-
-    # An unknown registry id resolves to None.
-    assert flow._get_bermuda_device_from_registry("does-not-exist") is None
-
-    # A registry device with no recognised connection also resolves to None.
-    devreg = dr.async_get(hass)
-    other = devreg.async_get_or_create(
-        config_entry_id=setup_bermuda_entry.entry_id,
-        identifiers={(DOMAIN, "no-connection")},
-        name="No Connection",
-    )
-    assert flow._get_bermuda_device_from_registry(other.id) is None
+    assert "devices" in schema_keys
+    assert "AA:BB:CC:DD:EE:31" in _offered_values(result)
