@@ -21,6 +21,15 @@
         "name": "Reference Power at 1m (0 for default)"
       }
     },
+    "select": {
+      "mobility_type": {
+        "name": "Mobility Type",
+        "state": {
+          "moving": "Moving",
+          "stationary": "Stationary"
+        }
+      }
+    },
     "sensor": {
       "active_proxy_count": {
         "name": "Active proxy count"
@@ -43,6 +52,18 @@
       "floor": {
         "name": "Floor"
       },
+      "in100_adc_voltage": {
+        "name": "IN100 ADC voltage"
+      },
+      "in100_temperature": {
+        "name": "IN100 temperature"
+      },
+      "in100_vcc": {
+        "name": "IN100 supply voltage"
+      },
+      "micro_location": {
+        "name": "Micro-location"
+      },
       "nearest_rssi": {
         "name": "Nearest RSSI"
       },
@@ -60,27 +81,6 @@
       },
       "visible_device_count": {
         "name": "Visible device count"
-      },
-      "micro_location": {
-        "name": "Micro-location"
-      },
-      "in100_vcc": {
-        "name": "IN100 supply voltage"
-      },
-      "in100_temperature": {
-        "name": "IN100 temperature"
-      },
-      "in100_adc_voltage": {
-        "name": "IN100 ADC voltage"
-      }
-    },
-    "select": {
-      "mobility_type": {
-        "name": "Mobility Type",
-        "state": {
-          "moving": "Moving",
-          "stationary": "Stationary"
-        }
       }
     }
   },
@@ -103,6 +103,22 @@
       "some_active": "You have at least some active devices, this is good."
     },
     "step": {
+      "area_entities": {
+        "data": {
+          "area_entities": "Presence entities",
+          "area_entity_distance": "Default virtual distance (m)"
+        },
+        "data_description": {
+          "area_entities": "Entities whose area is used while they are on.",
+          "area_entity_distance": "Distance the triggered area competes at; lower beats more BLE readings. Default 0.1 m."
+        },
+        "description": "Pick Home Assistant entities (motion, occupancy, contact, ...) whose area should reinforce or override BLE detection. When an entity is on, its area competes with BLE at a 'virtual distance' (smaller = stronger override).",
+        "title": "Area presence entities"
+      },
+      "area_entities_distance": {
+        "description": "Set a virtual distance (metres) per entity — smaller wins over BLE more easily. Grouped by area:\n\n{area_summary}",
+        "title": "Per-entity virtual distance"
+      },
       "calibration1_global": {
         "data": {
           "attenuation": "Attenuation",
@@ -171,26 +187,28 @@
         },
         "description": "{filter_help}\n\nChoose which devices you wish to track. If no devices appear below, then Bermuda is not seeing any data coming from Bluetooth scanners. Ensure you have an esphome ble_proxy device, Shelly devices with bluetooth proxy configured or a local bluetooth adaptor.",
         "title": "Select Devices"
-      },
-      "area_entities": {
-        "title": "Area presence entities",
-        "description": "Pick Home Assistant entities (motion, occupancy, contact, ...) whose area should reinforce or override BLE detection. When an entity is on, its area competes with BLE at a 'virtual distance' (smaller = stronger override).",
-        "data": {
-          "area_entities": "Presence entities",
-          "area_entity_distance": "Default virtual distance (m)"
-        },
-        "data_description": {
-          "area_entities": "Entities whose area is used while they are on.",
-          "area_entity_distance": "Distance the triggered area competes at; lower beats more BLE readings. Default 0.1 m."
-        }
-      },
-      "area_entities_distance": {
-        "title": "Per-entity virtual distance",
-        "description": "Set a virtual distance (metres) per entity — smaller wins over BLE more easily. Grouped by area:\n\n{area_summary}"
       }
     }
   },
   "services": {
+    "calibrate_location": {
+      "description": "Record a tracked device's current spot as a named micro-location (eg 'Key hook'), by snapshotting the RF fingerprint from every proxy that can hear it. Re-running with the same device and name re-calibrates that spot.",
+      "fields": {
+        "area": {
+          "description": "Optional Home Assistant area to associate with this spot. Defaults to the device's current area.",
+          "name": "Area"
+        },
+        "device": {
+          "description": "The tracked device/item to calibrate. A device name, MAC/UUID, or Home Assistant device id.",
+          "name": "Device"
+        },
+        "name": {
+          "description": "The name for this spot, eg 'Key hook' or 'Sidetable drawer'.",
+          "name": "Location name"
+        }
+      },
+      "name": "Calibrate micro-location"
+    },
     "dump_devices": {
       "description": "Returns the internal data structure, optionally limited to the given address(es). Includes the rssi and other info from each scanner",
       "fields": {
@@ -209,127 +227,109 @@
       },
       "name": "Dump Devices"
     },
-    "calibrate_location": {
-      "name": "Calibrate micro-location",
-      "description": "Record a tracked device's current spot as a named micro-location (eg 'Key hook'), by snapshotting the RF fingerprint from every proxy that can hear it. Re-running with the same device and name re-calibrates that spot.",
-      "fields": {
-        "device": {
-          "name": "Device",
-          "description": "The tracked device/item to calibrate. A device name, MAC/UUID, or Home Assistant device id."
-        },
-        "name": {
-          "name": "Location name",
-          "description": "The name for this spot, eg 'Key hook' or 'Sidetable drawer'."
-        },
-        "area": {
-          "name": "Area",
-          "description": "Optional Home Assistant area to associate with this spot. Defaults to the device's current area."
-        }
-      }
-    },
-    "where_is": {
-      "name": "Where is",
-      "description": "Report a device's current area and matched micro-location, with confidence.",
-      "fields": {
-        "device": {
-          "name": "Device",
-          "description": "The device/item to locate. A device name, MAC/UUID, or Home Assistant device id."
-        }
-      }
+    "get_config": {
+      "description": "Return Bermuda's current calibration, tracked devices, scanners and micro-location count.",
+      "name": "Get configuration"
     },
     "list_locations": {
-      "name": "List micro-locations",
       "description": "List saved micro-locations, optionally filtered to one device.",
       "fields": {
         "device": {
-          "name": "Device",
-          "description": "Optional device to filter by. Leave blank to list all saved spots."
+          "description": "Optional device to filter by. Leave blank to list all saved spots.",
+          "name": "Device"
         }
-      }
+      },
+      "name": "List micro-locations"
     },
     "remove_location": {
-      "name": "Remove micro-location",
       "description": "Delete a device's saved micro-location by name.",
       "fields": {
         "device": {
-          "name": "Device",
-          "description": "The device the spot belongs to."
+          "description": "The device the spot belongs to.",
+          "name": "Device"
         },
         "name": {
-          "name": "Location name",
-          "description": "The name of the spot to remove."
+          "description": "The name of the spot to remove.",
+          "name": "Location name"
         }
-      }
+      },
+      "name": "Remove micro-location"
     },
     "rename_location": {
-      "name": "Rename micro-location",
       "description": "Rename a device's saved micro-location.",
       "fields": {
         "device": {
-          "name": "Device",
-          "description": "The device the spot belongs to."
+          "description": "The device the spot belongs to.",
+          "name": "Device"
         },
         "name": {
-          "name": "Current name",
-          "description": "The current name of the spot."
+          "description": "The current name of the spot.",
+          "name": "Current name"
         },
         "new_name": {
-          "name": "New name",
-          "description": "The new name for the spot."
+          "description": "The new name for the spot.",
+          "name": "New name"
         }
-      }
+      },
+      "name": "Rename micro-location"
+    },
+    "set_global_calibration": {
+      "description": "Set the global reference power and/or attenuation used for distance estimates.",
+      "fields": {
+        "attenuation": {
+          "description": "Environmental attenuation factor used beyond 1 metre.",
+          "name": "Attenuation"
+        },
+        "ref_power": {
+          "description": "RSSI (dBm) measured at 1 metre. More negative means shorter estimated distances.",
+          "name": "Reference power"
+        }
+      },
+      "name": "Set global calibration"
+    },
+    "set_scanner_offset": {
+      "description": "Set a per-scanner RSSI offset (the per-proxy calibration step, as a service).",
+      "fields": {
+        "rssi_offset": {
+          "description": "Offset added to this scanner's RSSI. Negative increases distance, positive decreases it.",
+          "name": "RSSI offset"
+        },
+        "scanner": {
+          "description": "The scanner/proxy to adjust. A scanner name or address.",
+          "name": "Scanner"
+        }
+      },
+      "name": "Set scanner RSSI offset"
     },
     "track_device": {
-      "name": "Track device",
       "description": "Add a Bluetooth device to Bermuda's tracked devices (creates its sensors).",
       "fields": {
         "device": {
-          "name": "Device",
-          "description": "The device to track. A device name, MAC/UUID, or Home Assistant device id."
+          "description": "The device to track. A device name, MAC/UUID, or Home Assistant device id.",
+          "name": "Device"
         }
-      }
+      },
+      "name": "Track device"
     },
     "untrack_device": {
-      "name": "Untrack device",
       "description": "Remove a device from Bermuda's tracked devices.",
       "fields": {
         "device": {
-          "name": "Device",
-          "description": "The device to stop tracking."
+          "description": "The device to stop tracking.",
+          "name": "Device"
         }
-      }
+      },
+      "name": "Untrack device"
     },
-    "set_global_calibration": {
-      "name": "Set global calibration",
-      "description": "Set the global reference power and/or attenuation used for distance estimates.",
+    "where_is": {
+      "description": "Report a device's current area and matched micro-location, with confidence.",
       "fields": {
-        "ref_power": {
-          "name": "Reference power",
-          "description": "RSSI (dBm) measured at 1 metre. More negative means shorter estimated distances."
-        },
-        "attenuation": {
-          "name": "Attenuation",
-          "description": "Environmental attenuation factor used beyond 1 metre."
+        "device": {
+          "description": "The device/item to locate. A device name, MAC/UUID, or Home Assistant device id.",
+          "name": "Device"
         }
-      }
-    },
-    "set_scanner_offset": {
-      "name": "Set scanner RSSI offset",
-      "description": "Set a per-scanner RSSI offset (the per-proxy calibration step, as a service).",
-      "fields": {
-        "scanner": {
-          "name": "Scanner",
-          "description": "The scanner/proxy to adjust. A scanner name or address."
-        },
-        "rssi_offset": {
-          "name": "RSSI offset",
-          "description": "Offset added to this scanner's RSSI. Negative increases distance, positive decreases it."
-        }
-      }
-    },
-    "get_config": {
-      "name": "Get configuration",
-      "description": "Return Bermuda's current calibration, tracked devices, scanners and micro-location count."
+      },
+      "name": "Where is"
     }
   }
 }
