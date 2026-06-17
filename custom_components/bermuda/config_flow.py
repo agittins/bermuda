@@ -13,7 +13,7 @@ from .const import (
 )
 from .options_flow import BermudaOptionsFlowHandler
 
-_GITHUB_URL = "https://github.com/agittins/bermuda"
+_GITHUB_URL = "https://github.com/foXaCe/bermuda"
 
 if TYPE_CHECKING:
     from homeassistant.components.bluetooth import BluetoothServiceInfoBleak

@@ -21,7 +21,7 @@ DOMAIN = "bermuda"
 # either way it works).
 VERSION = "0.0.0"
 
-ISSUE_URL = "https://github.com/agittins/bermuda/issues"
+ISSUE_URL = "https://github.com/foXaCe/bermuda/issues"
 
 # Icons
 ICON_DEFAULT_AREA: Final = "mdi:land-plots-marker"
