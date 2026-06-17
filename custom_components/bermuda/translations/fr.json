@@ -171,6 +171,22 @@
         },
         "description": "{filter_help}\n\nChoisissez les appareils que vous souhaitez suivre. Si aucun appareil n'apparaît ci-dessous, c'est que Bermuda ne voit aucune donnée provenant des scanners Bluetooth. Assurez-vous d'avoir un appareil ESPHome ble_proxy, des appareils Shelly avec proxy Bluetooth configuré ou un adaptateur Bluetooth local.",
         "title": "Sélectionner les appareils"
+      },
+      "area_entities": {
+        "title": "Entités de présence par zone",
+        "description": "Choisissez des entités Home Assistant (mouvement, occupation, contact…) dont la zone renforce ou remplace la détection BLE. Quand une entité est active, sa zone concourt avec le BLE à une « distance virtuelle » (plus petite = override plus fort).",
+        "data": {
+          "area_entities": "Entités de présence",
+          "area_entity_distance": "Distance virtuelle par défaut (m)"
+        },
+        "data_description": {
+          "area_entities": "Entités dont la zone est utilisée quand elles sont actives.",
+          "area_entity_distance": "Distance à laquelle la zone déclenchée concourt ; plus basse = bat plus de lectures BLE. Défaut 0,1 m."
+        }
+      },
+      "area_entities_distance": {
+        "title": "Distance virtuelle par entité",
+        "description": "Définissez une distance virtuelle (mètres) par entité — plus petite l'emporte plus facilement sur le BLE. Regroupé par zone :\n\n{area_summary}"
       }
     }
   },

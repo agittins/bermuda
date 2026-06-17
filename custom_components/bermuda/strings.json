@@ -171,6 +171,22 @@
         },
         "description": "{filter_help}\n\nChoose which devices you wish to track. If no devices appear below, then Bermuda is not seeing any data coming from Bluetooth scanners. Ensure you have an esphome ble_proxy device, Shelly devices with bluetooth proxy configured or a local bluetooth adaptor.",
         "title": "Select Devices"
+      },
+      "area_entities": {
+        "title": "Area presence entities",
+        "description": "Pick Home Assistant entities (motion, occupancy, contact, ...) whose area should reinforce or override BLE detection. When an entity is on, its area competes with BLE at a 'virtual distance' (smaller = stronger override).",
+        "data": {
+          "area_entities": "Presence entities",
+          "area_entity_distance": "Default virtual distance (m)"
+        },
+        "data_description": {
+          "area_entities": "Entities whose area is used while they are on.",
+          "area_entity_distance": "Distance the triggered area competes at; lower beats more BLE readings. Default 0.1 m."
+        }
+      },
+      "area_entities_distance": {
+        "title": "Per-entity virtual distance",
+        "description": "Set a virtual distance (metres) per entity — smaller wins over BLE more easily. Grouped by area:\n\n{area_summary}"
       }
     }
   },

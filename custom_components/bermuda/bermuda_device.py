@@ -372,6 +372,18 @@ class BermudaDevice(BermudaScannerDeviceMixin):
                 self.area_name,
             )
 
+    def apply_area_override(self, area_id: str, distance: float) -> None:
+        """
+        Force this device's area from an external presence entity (not a BLE scanner).
+
+        Used by the area-entity override: the area comes from a triggered HA entity at
+        a virtual distance, so there is no winning advert (area_advert is cleared).
+        """
+        self._update_area_and_floor(area_id)
+        self.area_distance = distance
+        self.area_rssi = 0
+        self.area_advert = None
+
     def get_scanner(self, scanner_address) -> BermudaAdvert | None:
         """
         Given a scanner address, return the most recent BermudaDeviceScanner (advert) that matches.

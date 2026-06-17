@@ -41,11 +41,15 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util.dt import get_age, now
 
+from .area_entity import BermudaAreaEntityManager
 from .bermuda_device import BermudaDevice
 from .bermuda_irk import BermudaIrkManager
 from .const import (
     _LOGGER,
     _LOGGER_SPAM_LESS,
+    CONF_AREA_ENTITIES,
+    CONF_AREA_ENTITY_DISTANCE,
+    CONF_AREA_ENTITY_DISTANCES,
     CONF_ATTENUATION,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
@@ -55,6 +59,7 @@ from .const import (
     CONF_RSSI_OFFSETS,
     CONF_SMOOTHING_SAMPLES,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_AREA_ENTITY_DISTANCE,
     DEFAULT_ATTENUATION,
     DEFAULT_DEVTRACK_TIMEOUT,
     DEFAULT_MAX_RADIUS,
@@ -175,6 +180,7 @@ class BermudaDataUpdateCoordinator(
         self.er = er.async_get(self.hass)
         self.dr = dr.async_get(self.hass)
         self.fr = fr.async_get(self.hass)
+        self.area_entity_manager = BermudaAreaEntityManager(self.hass)
         self.have_floors: bool = self.init_floors()
 
         self._scanners_without_areas: list[str] | None = None  # Tracks any proxies that don't have an area assigned.
@@ -577,6 +583,14 @@ class BermudaDataUpdateCoordinator(
 
             # Phase 4: Area refresh
             self._refresh_areas_by_min_distance()
+
+            # Phase 4a: presence-entity overrides — a triggered HA entity (motion,
+            # contact, ...) can win the device's area over BLE at a virtual distance.
+            self._apply_area_entity_overrides()
+
+            # Phase 4b: refine to a named "micro-location" (eg Key hook) where a
+            # saved fingerprint matches. Purely additive — never alters the Area.
+            self._refresh_microlocations()
             await asyncio.sleep(0)
 
             # If any *configured* devices have not yet been seen, create device
@@ -726,7 +740,61 @@ class BermudaDataUpdateCoordinator(
         """Set a device's closest scanner/area (see the trilateration module)."""
         refresh_area_by_min_distance(device, self.options)
 
-    async def service_dump_devices(self, call: ServiceCall) -> ServiceResponse:  # pylint: disable=unused-argument;
+    def _apply_area_entity_overrides(self):
+        """
+        Override a device's area when a triggered presence entity wins on virtual distance.
+
+        Runs after BLE area selection: each configured HA entity that is "on" makes its
+        area a candidate at a (small) virtual distance; if that beats the device's
+        BLE-derived area_distance (or the device has no / Unknown area), the device is
+        moved into the entity's area. Lets motion/contact sensors reinforce or override
+        BLE presence. Ported from knoop7/bermuda-intent.
+        """
+        configured = self.options.get(CONF_AREA_ENTITIES, [])
+        if not configured:
+            return
+        default_dist = self.options.get(CONF_AREA_ENTITY_DISTANCE, DEFAULT_AREA_ENTITY_DISTANCE)
+        per_entity_dists = self.options.get(CONF_AREA_ENTITY_DISTANCES, {})
+        triggered_areas = self.area_entity_manager.get_triggered_areas_with_distances(
+            configured, per_entity_dists, default_dist
+        )
+        if not triggered_areas:
+            return
+
+        for device in self.devices.values():
+            if not device.create_sensor:
+                continue
+            current_distance = device.area_distance
+            current_area_id = device.area_id
+
+            best_area_id: str | None = None
+            best_distance: float | None = None
+            for area_id, (_area_name, virtual_dist) in triggered_areas.items():
+                if current_area_id == area_id:
+                    # Already here via BLE: the entity only "wins" if it is virtually closer.
+                    if current_distance is not None and current_distance <= virtual_dist:
+                        continue
+                    best_area_id, best_distance = area_id, virtual_dist
+                    break
+                if (current_distance is None or virtual_dist < current_distance) and (
+                    best_area_id is None or virtual_dist < best_distance
+                ):
+                    best_area_id, best_distance = area_id, virtual_dist
+
+            if best_area_id is not None:
+                old_area = device.area_name
+                device.apply_area_override(best_area_id, best_distance)
+                if old_area != device.area_name:
+                    _LOGGER.debug(
+                        "Area entity override: %s moved %s -> %s (virtual %.2fm beat BLE %s)",
+                        device.name,
+                        old_area or "none",
+                        device.area_name,
+                        best_distance,
+                        f"{current_distance:.1f}m" if current_distance is not None else "none",
+                    )
+
+    async def service_dump_devices(self, call: ServiceCall) -> ServiceResponse:
         """Return a dump of beacon advertisements by receiver."""
         out = {}
         addresses_input = call.data.get("addresses", "")

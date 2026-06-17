@@ -10,18 +10,28 @@ filter-only refresh).
 
 from __future__ import annotations
 
+import pytest
+import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bermuda.const import (
     BDADDR_TYPE_RANDOM_RESOLVABLE,
     BDADDR_TYPE_OTHER,
+    CONF_AREA_ENTITIES,
+    CONF_AREA_ENTITY_DISTANCE,
+    CONF_AREA_ENTITY_DISTANCES,
     CONF_ATTENUATION,
     CONF_DEVICES,
     CONF_MAX_RADIUS,
+    CONF_MAX_VELOCITY,
     CONF_REF_POWER,
+    CONF_SMOOTHING_SAMPLES,
+    CONF_UPDATE_INTERVAL,
     DOMAIN,
     NAME,
 )
@@ -132,6 +142,44 @@ async def test_options_globalopts_writes_options_and_coordinator(
     assert coordinator.config_entry.options[CONF_ATTENUATION] == MOCK_OPTIONS_GLOBALS[CONF_ATTENUATION]
 
 
+async def test_options_globalopts_schema_rejects_out_of_range(
+    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry
+):
+    """The globalopts schema rejects zero/negative values and out-of-range ref_power.
+
+    These bounds stop a user from setting attenuation=0 (division by zero in
+    rssi_to_metres) or smoothing/interval/velocity<=0 (which break the smoothing
+    and timing loops).
+    """
+    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "globalopts"}
+    )
+    schema = result["data_schema"]
+
+    # The valid baseline still passes validation unchanged.
+    schema(dict(MOCK_OPTIONS_GLOBALS))
+
+    # Each positive-only field rejects a zero value.
+    for key in (
+        CONF_ATTENUATION,
+        CONF_SMOOTHING_SAMPLES,
+        CONF_MAX_VELOCITY,
+        CONF_UPDATE_INTERVAL,
+        CONF_MAX_RADIUS,
+    ):
+        bad = dict(MOCK_OPTIONS_GLOBALS)
+        bad[key] = 0
+        with pytest.raises(vol.Invalid):
+            schema(bad)
+
+    # ref_power is a dBm value: must stay within [-127, 0].
+    too_high = dict(MOCK_OPTIONS_GLOBALS)
+    too_high[CONF_REF_POWER] = 5
+    with pytest.raises(vol.Invalid):
+        schema(too_high)
+
+
 # --------------------------------------------------------------------------- #
 # Options flow: selectdevices
 # --------------------------------------------------------------------------- #
@@ -238,3 +286,47 @@ async def test_options_selectdevices_random_mac_recent_appears(
     assert result["step_id"] == "selectdevices"
     schema_keys = {str(k.schema) for k in result["data_schema"].schema}
     assert "random_devices" in schema_keys
+
+
+async def test_options_area_entities_two_step_flow(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
+    """The area-entities wizard collects entities then per-entity virtual distances."""
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    entry = er.async_get(hass).async_get_or_create("binary_sensor", "test", "motion_aef")
+    er.async_get(hass).async_update_entity(entry.entity_id, area_id=kitchen.id)
+
+    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "area_entities"}
+    )
+    assert result["step_id"] == "area_entities"
+
+    # Stage 1: pick the entity and a global default distance -> advances to stage 2.
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={CONF_AREA_ENTITIES: [entry.entity_id], CONF_AREA_ENTITY_DISTANCE: 0.2},
+    )
+    assert result["step_id"] == "area_entities_distance"
+
+    # Stage 2: per-entity distance -> persists everything.
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={entry.entity_id: 1.5})
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    assert setup_bermuda_entry.options.get(CONF_AREA_ENTITIES) == [entry.entity_id]
+    assert setup_bermuda_entry.options.get(CONF_AREA_ENTITY_DISTANCE) == 0.2
+    assert setup_bermuda_entry.options.get(CONF_AREA_ENTITY_DISTANCES) == {entry.entity_id: 1.5}
+
+
+async def test_options_area_entities_empty_skips_distance_step(
+    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry
+):
+    """Selecting no entities persists immediately, skipping the per-entity step."""
+    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "area_entities"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={CONF_AREA_ENTITIES: [], CONF_AREA_ENTITY_DISTANCE: 0.1}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    assert setup_bermuda_entry.options.get(CONF_AREA_ENTITIES) == []
