@@ -143,6 +143,14 @@ class BermudaDevice(BermudaScannerDeviceMixin):
 
         self.zone: str = STATE_NOT_HOME  # STATE_HOME or STATE_NOT_HOME
         self.manufacturer: str | None = None
+        # InPlay IN100 / DFRobot Fermion telemetry (manufacturer data 0x0505).
+        self.in100_detected: bool = False
+        self.in100_vcc: float | None = None
+        self.in100_temp_c: float | None = None
+        self.in100_adc_voltage: float | None = None
+        self.in100_raw_payload_hex: str | None = None
+        self.in100_last_payload_len: int | None = None
+        self.create_in100_done: bool = False  # IN100 telemetry sensors have been spun up
         self._hascanner: BaseHaRemoteScanner | BaseHaScanner | None = None  # HA's scanner
         self._is_scanner: bool = False
         self._is_remote_scanner: bool | None = None
@@ -550,6 +558,46 @@ class BermudaDevice(BermudaScannerDeviceMixin):
                         # for the sources.
                         self.make_name()
                         self._coordinator.register_ibeacon_source(self)
+
+        # Decode InPlay IN100 / DFRobot Fermion telemetry (manufacturer data 0x0505).
+        self._parse_in100_telemetry(advert)
+
+    def _parse_in100_telemetry(self, advert: BermudaAdvert) -> None:
+        """
+        Decode InPlay IN100 / DFRobot Fermion telemetry from manufacturer data 0x0505.
+
+        Only the latest manufacturer-data entry is considered (telemetry is
+        time-sensitive); the first five bytes encode supply voltage, temperature and an
+        ADC voltage. A short/malformed payload clears the decoded values but still flags
+        the device as detected. Ported/adapted from kamilzierke/bermuda.
+        """
+        latest = advert.manufacturer_data[0] if advert.manufacturer_data else None
+        man_data = latest.get(MANUFACTURER_ID_INPLAY) if latest else None
+        if man_data is None:
+            return
+
+        self.in100_raw_payload_hex = man_data.hex()
+        self.in100_last_payload_len = len(man_data)
+        self.in100_detected = True
+
+        applied_fallback_name = False
+        if self.manufacturer is None:
+            self.manufacturer = "InPlay / DFRobot"
+            applied_fallback_name = True
+
+        # Reset the decoded values; a short payload leaves them cleared.
+        self.in100_vcc = None
+        self.in100_temp_c = None
+        self.in100_adc_voltage = None
+
+        if len(man_data) >= IN100_PAYLOAD_LEN:
+            payload = man_data[:IN100_PAYLOAD_LEN]
+            self.in100_vcc = payload[0] / 32.0
+            self.in100_temp_c = int.from_bytes(payload[1:3], byteorder="big", signed=True) / 100.0
+            self.in100_adc_voltage = int.from_bytes(payload[3:5], byteorder="big", signed=False) / 1000.0
+
+        if applied_fallback_name:
+            self.make_name()
 
     def to_dict(self):
         """Convert class to serialisable dict for dump_devices."""

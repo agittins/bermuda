@@ -9,6 +9,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import (
     _LOGGER,
+    SIGNAL_DEVICE_IN100_NEW,
     SIGNAL_DEVICE_NEW,
     SIGNAL_SCANNERS_CHANGED,
 )
@@ -76,6 +77,7 @@ async def async_setup_entry(
 
     created_devices: list[str] = []  # list of already-created devices
     created_scanners: dict[str, list[str]] = {}  # list of scanner:address for created entities
+    created_in100: list[str] = []  # devices that have had IN100 telemetry sensors created
 
     @callback
     def device_new(address: str) -> None:
@@ -140,9 +142,30 @@ async def async_setup_entry(
         """Callback for event from coordinator advising that the roster of scanners has changed."""
         create_scanner_entities()
 
+    @callback
+    def device_in100_new(address: str) -> None:
+        """
+        Create IN100 telemetry sensors once a tracked device broadcasts 0x0505.
+
+        Fired by the coordinator only for devices flagged ``in100_detected``, so the
+        three diagnostic/telemetry sensors are never spun up for ordinary BLE devices.
+        """
+        if address not in created_in100:
+            async_add_entities(
+                [
+                    BermudaSensorIn100Vcc(coordinator, entry, address),
+                    BermudaSensorIn100Temperature(coordinator, entry, address),
+                    BermudaSensorIn100AdcVoltage(coordinator, entry, address),
+                ],
+                False,
+            )
+            created_in100.append(address)
+        coordinator.in100_sensors_created(address)
+
     # Connect device_new to a signal so the coordinator can call it
     _LOGGER.debug("Registering device_new and scanners_changed callbacks")
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, device_new))
+    entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_IN100_NEW, device_in100_new))
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_SCANNERS_CHANGED, scanners_changed))
 
     # Create Global Bermuda entities

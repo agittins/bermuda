@@ -460,12 +460,23 @@ class BermudaDataUpdateCoordinator(
             dev.create_number_done = True
         self._check_all_platforms_created(address)
 
-    # def button_created(self, address):
-    #     """Receives report from number platform that sensors have been set up."""
-    #     dev = self._get_device(address)
-    #     if dev is not None:
-    #         dev.create_button_done = True
-    #     self._check_all_platforms_created(address)
+    def select_created(self, address):
+        """Receives report from the select platform that entities have been set up."""
+        dev = self._get_device(address)
+        if dev is not None:
+            dev.create_select_done = True
+        self._check_all_platforms_created(address)
+
+    def in100_sensors_created(self, address):
+        """
+        Receives report from the sensor platform that IN100 telemetry sensors are set up.
+
+        Independent of the create_all_done quorum: these sensors are created only for
+        devices that broadcast IN100 telemetry, so this flag must not gate completion.
+        """
+        dev = self._get_device(address)
+        if dev is not None:
+            dev.create_in100_done = True
 
     def count_active_devices(self) -> int:
         """
@@ -619,6 +630,11 @@ class BermudaDataUpdateCoordinator(
                         # Note that the below should be OK thread-wise, debugger indicates this is being
                         # called by _run in events.py, so pretty sure we are "in the event loop".
                         async_dispatcher_send(self.hass, SIGNAL_DEVICE_NEW, address)
+                    # Spin up IN100 telemetry sensors only once a device actually broadcasts
+                    # 0x0505 (may be long after its base sensors — fires until the platform
+                    # reports back via in100_sensors_created).
+                    if device.in100_detected and not device.create_in100_done:
+                        async_dispatcher_send(self.hass, SIGNAL_DEVICE_IN100_NEW, address)
 
             # Phase 5: Device Pruning (only runs periodically)
             self.prune_devices()
