@@ -166,10 +166,18 @@
           "smoothing_samples": "How many samples to average distance smoothing. Bigger numbers make for slower distance increases. Shortening distances are not affected. 10 or 20 seems good.",
           "update_interval": "Shortening distances will still trigger immediately, but increasing distances will be rate limited by this to reduce how much your database grows."
         },
+        "description": "Tune the global distance model, device-tracking timeouts and RSSI smoothing. These apply to every tracked device.",
         "title": "Global settings"
       },
       "init": {
         "description": "Bermuda can currently see:\n- {device_counter_active} active out of {device_counter_devices} bluetooth devices.\n- {scanner_counter_active} active out of {scanner_counter_scanners} bluetooth scanner devices.\n\n{status}",
+        "menu_options": {
+          "area_entities": "Area presence entities",
+          "calibration1_global": "Calibration · Global distance model",
+          "calibration2_scanners": "Calibration · Per-scanner RSSI offsets",
+          "globalopts": "Global options",
+          "selectdevices": "Select devices to track"
+        },
         "title": "Configure Bermuda"
       },
       "selectdevices": {

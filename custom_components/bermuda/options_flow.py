@@ -176,15 +176,17 @@ class BermudaOptionsFlowHandler(OptionsFlow):
         messages["status"] += scanner_table
 
         # return await self.async_step_globalopts()
+        # Menu labels come from translations (options.step.init.menu_options.*),
+        # so every menu entry is localised like the rest of the flow.
         return self.async_show_menu(
             step_id="init",
-            menu_options={
-                "globalopts": "Global Options",
-                "selectdevices": "Select Devices",
-                "area_entities": "Area Presence Entities",
-                "calibration1_global": "Calibration 1: Global",
-                "calibration2_scanners": "Calibration 2: Scanner RSSI Offsets",
-            },
+            menu_options=[
+                "globalopts",
+                "selectdevices",
+                "area_entities",
+                "calibration1_global",
+                "calibration2_scanners",
+            ],
             description_placeholders=messages,
         )
 

@@ -166,10 +166,18 @@
           "smoothing_samples": "Combien d'échantillons moyenner pour le lissage de la distance. Des nombres plus grands ralentissent l'augmentation de la distance. Les distances décroissantes ne sont pas affectées. 10 ou 20 semble bien.",
           "update_interval": "Le raccourcissement des distances déclenchera toujours immédiatement, mais l'augmentation des distances sera limitée par cela pour réduire la croissance de votre base de données."
         },
+        "description": "Réglez le modèle de distance global, les délais de suivi et le lissage RSSI. Ces réglages s'appliquent à tous les appareils suivis.",
         "title": "Paramètres globaux"
       },
       "init": {
         "description": "Bermuda peut actuellement voir :\n- {device_counter_active} actifs sur {device_counter_devices} appareils Bluetooth.\n- {scanner_counter_active} actifs sur {scanner_counter_scanners} scanners Bluetooth.\n\n{status}",
+        "menu_options": {
+          "area_entities": "Entités de présence par zone",
+          "calibration1_global": "Calibration · Modèle de distance global",
+          "calibration2_scanners": "Calibration · Offsets RSSI par scanner",
+          "globalopts": "Options globales",
+          "selectdevices": "Choisir les appareils à suivre"
+        },
         "title": "Configurer Bermuda"
       },
       "selectdevices": {
