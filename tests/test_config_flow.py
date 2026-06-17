@@ -79,11 +79,15 @@ async def test_options_flow(hass: HomeAssistant, setup_bermuda_entry: MockConfig
     assert result.get("type") == FlowResultType.FORM
     assert result.get("step_id") == "globalopts"
 
-    # Enter some fake data into the form
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input=MOCK_OPTIONS_GLOBALS,
-    )
+    # Enter some fake data into the form. globalopts groups its fields into
+    # collapsible sections, so the input must be nested accordingly.
+    flat = dict(MOCK_OPTIONS_GLOBALS)
+    nested = {
+        "distance_model": {k: flat[k] for k in ("ref_power", "attenuation", "max_area_radius") if k in flat},
+        "tracking": {k: flat[k] for k in ("devtracker_nothome_timeout", "update_interval") if k in flat},
+        "smoothing": {k: flat[k] for k in ("smoothing_samples", "max_velocity") if k in flat},
+    }
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input=nested)
 
     # Verify that the flow finishes
     assert result.get("type") == FlowResultType.CREATE_ENTRY

@@ -148,25 +148,47 @@
         "title": "Calibration 2 : Décalages RSSI par scanner"
       },
       "globalopts": {
-        "data": {
-          "attenuation": "Atténuation — Facteur d'atténuation de l'environnement pour le calcul/calibrage de la distance.",
-          "devtracker_nothome_timeout": "Délai d'expiration Devtracker en secondes pour considérer un appareil comme `Absent`.",
-          "max_area_radius": "Rayon maximum en mètres pour la détection ZONE simple",
-          "max_velocity": "Vitesse maximale en mètres par seconde — ignorer les lectures impliquant un mouvement plus rapide que cette limite. 3 m/s (10 km/h) est une bonne valeur.",
-          "ref_power": "Puissance de référence — RSSI par défaut à 1 mètre de distance, pour le calibrage de la distance.",
-          "smoothing_samples": "Échantillons de lissage — combien d'échantillons utiliser pour lisser les lectures de distance.",
-          "update_interval": "Intervalle de mise à jour — À quelle fréquence (en secondes) mettre à jour les lectures des capteurs."
-        },
-        "data_description": {
-          "attenuation": "Après avoir réglé ref_power à 1 mètre, ajustez l'atténuation pour que les autres distances se lisent correctement — plus ou moins.",
-          "devtracker_nothome_timeout": "Combien de temps attendre avant de marquer les entités device_tracker comme `absent` après avoir cessé de voir les annonces. 30 à 300 secondes est probablement une bonne valeur.",
-          "max_area_radius": "Dans la fonctionnalité `AREA` simple, un appareil sera marqué comme étant dans la ZONE de son récepteur le plus proche, s'il se trouve dans ce rayon. Si vous le réglez petit, les appareils passeront à `inconnu` entre les récepteurs, mais s'il est grand, les appareils apparaîtront toujours dans leur zone la plus proche.",
-          "max_velocity": "Si une lecture implique qu'un appareil s'éloigne plus rapidement que cela, nous ignorons cette lecture. Les humains marchent normalement à 1,4 m/s, s'ils tiennent des ciseaux, ils se déplacent à 3 m/s.",
-          "ref_power": "Placez votre balise la plus courante à 1 mètre (3,28') de votre proxy/scanner le plus courant. Ajustez ref_power jusqu'à ce que le capteur de distance affiche une distance minimale (pas moyenne) de 1 mètre.",
-          "smoothing_samples": "Combien d'échantillons moyenner pour le lissage de la distance. Des nombres plus grands ralentissent l'augmentation de la distance. Les distances décroissantes ne sont pas affectées. 10 ou 20 semble bien.",
-          "update_interval": "Le raccourcissement des distances déclenchera toujours immédiatement, mais l'augmentation des distances sera limitée par cela pour réduire la croissance de votre base de données."
-        },
         "description": "Réglez le modèle de distance global, les délais de suivi et le lissage RSSI. Ces réglages s'appliquent à tous les appareils suivis.",
+        "sections": {
+          "distance_model": {
+            "data": {
+              "attenuation": "Atténuation — Facteur d'atténuation de l'environnement pour le calcul/calibrage de la distance.",
+              "max_area_radius": "Rayon maximum en mètres pour la détection ZONE simple",
+              "ref_power": "Puissance de référence — RSSI par défaut à 1 mètre de distance, pour le calibrage de la distance."
+            },
+            "data_description": {
+              "attenuation": "Après avoir réglé ref_power à 1 mètre, ajustez l'atténuation pour que les autres distances se lisent correctement — plus ou moins.",
+              "max_area_radius": "Dans la fonctionnalité `AREA` simple, un appareil sera marqué comme étant dans la ZONE de son récepteur le plus proche, s'il se trouve dans ce rayon. Si vous le réglez petit, les appareils passeront à `inconnu` entre les récepteurs, mais s'il est grand, les appareils apparaîtront toujours dans leur zone la plus proche.",
+              "ref_power": "Placez votre balise la plus courante à 1 mètre (3,28') de votre proxy/scanner le plus courant. Ajustez ref_power jusqu'à ce que le capteur de distance affiche une distance minimale (pas moyenne) de 1 mètre."
+            },
+            "description": "Puissance de référence, atténuation et rayon max — la relation RSSI→distance.",
+            "name": "Modèle de distance"
+          },
+          "smoothing": {
+            "data": {
+              "max_velocity": "Vitesse maximale en mètres par seconde — ignorer les lectures impliquant un mouvement plus rapide que cette limite. 3 m/s (10 km/h) est une bonne valeur.",
+              "smoothing_samples": "Échantillons de lissage — combien d'échantillons utiliser pour lisser les lectures de distance."
+            },
+            "data_description": {
+              "max_velocity": "Si une lecture implique qu'un appareil s'éloigne plus rapidement que cela, nous ignorons cette lecture. Les humains marchent normalement à 1,4 m/s, s'ils tiennent des ciseaux, ils se déplacent à 3 m/s.",
+              "smoothing_samples": "Combien d'échantillons moyenner pour le lissage de la distance. Des nombres plus grands ralentissent l'augmentation de la distance. Les distances décroissantes ne sont pas affectées. 10 ou 20 semble bien."
+            },
+            "description": "Nombre d'échantillons et limite de vitesse qui stabilisent les distances.",
+            "name": "Lissage RSSI"
+          },
+          "tracking": {
+            "data": {
+              "devtracker_nothome_timeout": "Délai d'expiration Devtracker en secondes pour considérer un appareil comme `Absent`.",
+              "update_interval": "Intervalle de mise à jour — À quelle fréquence (en secondes) mettre à jour les lectures des capteurs."
+            },
+            "data_description": {
+              "devtracker_nothome_timeout": "Combien de temps attendre avant de marquer les entités device_tracker comme `absent` après avoir cessé de voir les annonces. 30 à 300 secondes est probablement une bonne valeur.",
+              "update_interval": "Le raccourcissement des distances déclenchera toujours immédiatement, mais l'augmentation des distances sera limitée par cela pour réduire la croissance de votre base de données."
+            },
+            "description": "Délai avant « Absent » et fréquence de rafraîchissement des capteurs.",
+            "name": "Suivi des appareils"
+          }
+        },
         "title": "Paramètres globaux"
       },
       "init": {

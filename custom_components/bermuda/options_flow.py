@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import voluptuous as vol
 from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.config_entries import OptionsFlow
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import (
     DeviceSelector,
@@ -191,43 +192,70 @@ class BermudaOptionsFlowHandler(OptionsFlow):
         )
 
     async def async_step_globalopts(self, user_input=None):
-        """Handle global options flow."""
+        """Global options, grouped into collapsible sections for readability."""
         if user_input is not None:
-            self.options.update(user_input)
+            # Each section nests its fields; flatten them back into the flat options.
+            for value in user_input.values():
+                self.options.update(value)
             return await self._update_options()
 
-        data_schema = {
-            vol.Required(
-                CONF_MAX_RADIUS,
-                default=self.options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS),
-            ): vol.All(vol.Coerce(float), vol.Range(min=OPT_MIN_MAX_RADIUS)),
-            vol.Required(
-                CONF_MAX_VELOCITY,
-                default=self.options.get(CONF_MAX_VELOCITY, DEFAULT_MAX_VELOCITY),
-            ): vol.All(vol.Coerce(float), vol.Range(min=OPT_MIN_MAX_VELOCITY)),
-            vol.Required(
-                CONF_DEVTRACK_TIMEOUT,
-                default=self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT),
-            ): vol.All(vol.Coerce(int), vol.Range(min=OPT_MIN_DEVTRACK_TIMEOUT)),
-            vol.Required(
-                CONF_UPDATE_INTERVAL,
-                default=self.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
-            ): vol.All(vol.Coerce(float), vol.Range(min=OPT_MIN_UPDATE_INTERVAL)),
-            vol.Required(
-                CONF_SMOOTHING_SAMPLES,
-                default=self.options.get(CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES),
-            ): vol.All(vol.Coerce(int), vol.Range(min=OPT_MIN_SMOOTHING_SAMPLES)),
-            vol.Required(
-                CONF_ATTENUATION,
-                default=self.options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
-            ): vol.All(vol.Coerce(float), vol.Range(min=OPT_MIN_ATTENUATION)),
-            vol.Required(
-                CONF_REF_POWER,
-                default=self.options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
-            ): vol.All(vol.Coerce(float), vol.Range(min=OPT_REF_POWER_MIN, max=OPT_REF_POWER_MAX)),
-        }
+        def _opt(key, default):
+            return self.options.get(key, default)
 
-        return self.async_show_form(step_id="globalopts", data_schema=vol.Schema(data_schema))
+        def _float(min_=None, max_=None):
+            return vol.All(vol.Coerce(float), vol.Range(min=min_, max=max_))
+
+        def _int(min_=None):
+            return vol.All(vol.Coerce(int), vol.Range(min=min_))
+
+        data_schema = vol.Schema(
+            {
+                vol.Required("distance_model"): section(
+                    vol.Schema(
+                        {
+                            vol.Required(CONF_REF_POWER, default=_opt(CONF_REF_POWER, DEFAULT_REF_POWER)): _float(
+                                OPT_REF_POWER_MIN, OPT_REF_POWER_MAX
+                            ),
+                            vol.Required(CONF_ATTENUATION, default=_opt(CONF_ATTENUATION, DEFAULT_ATTENUATION)): _float(
+                                OPT_MIN_ATTENUATION
+                            ),
+                            vol.Required(CONF_MAX_RADIUS, default=_opt(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS)): _float(
+                                OPT_MIN_MAX_RADIUS
+                            ),
+                        }
+                    ),
+                    {"collapsed": False},
+                ),
+                vol.Required("tracking"): section(
+                    vol.Schema(
+                        {
+                            vol.Required(
+                                CONF_DEVTRACK_TIMEOUT, default=_opt(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT)
+                            ): _int(OPT_MIN_DEVTRACK_TIMEOUT),
+                            vol.Required(
+                                CONF_UPDATE_INTERVAL, default=_opt(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+                            ): _float(OPT_MIN_UPDATE_INTERVAL),
+                        }
+                    ),
+                    {"collapsed": True},
+                ),
+                vol.Required("smoothing"): section(
+                    vol.Schema(
+                        {
+                            vol.Required(
+                                CONF_SMOOTHING_SAMPLES, default=_opt(CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES)
+                            ): _int(OPT_MIN_SMOOTHING_SAMPLES),
+                            vol.Required(
+                                CONF_MAX_VELOCITY, default=_opt(CONF_MAX_VELOCITY, DEFAULT_MAX_VELOCITY)
+                            ): _float(OPT_MIN_MAX_VELOCITY),
+                        }
+                    ),
+                    {"collapsed": True},
+                ),
+            }
+        )
+
+        return self.async_show_form(step_id="globalopts", data_schema=data_schema)
 
     async def async_step_selectdevices(self, user_input=None):
         """Handle a flow initialized by the user."""
