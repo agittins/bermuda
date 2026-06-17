@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.components.private_ble_device import coordinator as pble_coordinator
-from homeassistant.const import STATE_HOME, STATE_NOT_HOME
+from homeassistant.const import CONF_NAME, STATE_HOME, STATE_NOT_HOME
 from homeassistant.core import callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
@@ -46,6 +46,7 @@ from .const import (
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
     CONF_EXCLUDE_DEVICES,
+    CONF_REF_POWER,
     CONF_TRACK_CATEGORIES,
     DEFAULT_DEVTRACK_TIMEOUT,
     DEFAULT_MOBILITY_TYPE,
@@ -107,6 +108,15 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         self.ref_power: float = 0  # If non-zero, use in place of global ref_power.
         self.ref_power_changed: float = 0  # Stamp for last change to ref_power, for cache zapping.
         self.options = self._coordinator.options
+        # Per-device enrolment from a "device" subentry (authoritative at setup; the
+        # ref_power number entity may still tweak it live within the session).
+        self.name_subentry: str | None = None
+        _dc = getattr(self._coordinator, "device_config", None)
+        _device_cfg = _dc.get(_address.upper()) if isinstance(_dc, dict) else None
+        if _device_cfg:
+            if _device_cfg.get(CONF_REF_POWER):
+                self.ref_power = _device_cfg[CONF_REF_POWER]
+            self.name_subentry = _device_cfg.get(CONF_NAME) or None
         self.unique_id: str | None = _address  # mac address formatted.
         self.address_type = BDADDR_TYPE_UNKNOWN
 
@@ -297,7 +307,8 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         to manufacturer name and bluetooth address.
         """
         _newname = (
-            self.name_by_user
+            self.name_by_user  # an explicit Home Assistant rename always wins
+            or self.name_subentry  # then a per-device enrolment subentry name
             or self.name_devreg
             or self.name_bt_local_name
             or self.name_bt_serviceinfo
@@ -467,12 +478,14 @@ class BermudaDevice(BermudaScannerDeviceMixin):
                     "scanner_not_instance", "Scanner device is not a BermudaDevice instance, skipping."
                 )
 
-        # Update whether this device has been seen recently, for device_tracker:
-        if (
-            self.last_seen is not None
-            and monotonic_time_coarse() - self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT)
-            < self.last_seen
-        ):
+        # Update whether this device has been seen recently, for device_tracker.
+        # A "device" enrolment subentry may override the global away timeout per-device.
+        _dc = getattr(self._coordinator, "device_config", None)
+        _dev_cfg = _dc.get(self.address.upper(), {}) if isinstance(_dc, dict) else {}
+        _timeout = _dev_cfg.get(CONF_DEVTRACK_TIMEOUT) or self.options.get(
+            CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT
+        )
+        if self.last_seen is not None and monotonic_time_coarse() - _timeout < self.last_seen:
             self.zone = STATE_HOME
         else:
             self.zone = STATE_NOT_HOME

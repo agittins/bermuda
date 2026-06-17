@@ -44,6 +44,47 @@
           "title": "Offset RSSI par scanner"
         }
       }
+    },
+    "device": {
+      "abort": {
+        "no_devices": "Tous les appareils découverts sont déjà enrôlés."
+      },
+      "entry_type": "Appareil suivi",
+      "initiate_flow": {
+        "reconfigure": "Modifier l'appareil",
+        "user": "Enrôler un appareil"
+      },
+      "step": {
+        "reconfigure": {
+          "data": {
+            "devtracker_nothome_timeout": "Délai d'absence (s)",
+            "name": "Nom (optionnel)",
+            "ref_power": "Puissance de référence (rssi à 1 m)"
+          },
+          "data_description": {
+            "devtracker_nothome_timeout": "Secondes sans lecture avant que l'appareil soit « Absent ».",
+            "name": "Remplace le nom annoncé (un renommage Home Assistant reste prioritaire).",
+            "ref_power": "RSSI à 1 m par appareil. Remplace la valeur globale au démarrage."
+          },
+          "description": "Ajuster l'enrôlement de {device}.",
+          "title": "Modifier l'appareil"
+        },
+        "user": {
+          "data": {
+            "address": "Appareil",
+            "devtracker_nothome_timeout": "Délai d'absence (s)",
+            "name": "Nom (optionnel)",
+            "ref_power": "Puissance de référence (rssi à 1 m)"
+          },
+          "data_description": {
+            "devtracker_nothome_timeout": "Secondes sans lecture avant que l'appareil soit « Absent ».",
+            "name": "Remplace le nom annoncé (un renommage Home Assistant reste prioritaire).",
+            "ref_power": "RSSI à 1 m par appareil. Remplace la valeur globale au démarrage."
+          },
+          "description": "Suivre un appareil avec son propre nom, sa puissance de référence et son délai d'absence.",
+          "title": "Enrôler un appareil"
+        }
+      }
     }
   },
   "entity": {

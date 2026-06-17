@@ -11,9 +11,10 @@ from .const import (
     DOMAIN,
     NAME,
     SUBENTRY_TYPE_CALIBRATION,
+    SUBENTRY_TYPE_DEVICE,
 )
 from .options_flow import BermudaOptionsFlowHandler
-from .subentry_flow import BermudaCalibrationSubentryFlow
+from .subentry_flow import BermudaCalibrationSubentryFlow, BermudaDeviceSubentryFlow
 
 _GITHUB_URL = "https://github.com/foXaCe/bermuda"
 
@@ -80,8 +81,11 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         cls,
         config_entry,  # noqa: ARG003
     ) -> dict[str, type[config_entries.ConfigSubentryFlow]]:
-        """Per-scanner RSSI calibration offsets are managed as config subentries."""
-        return {SUBENTRY_TYPE_CALIBRATION: BermudaCalibrationSubentryFlow}
+        """Per-scanner calibration and per-device enrolment are managed as config subentries."""
+        return {
+            SUBENTRY_TYPE_CALIBRATION: BermudaCalibrationSubentryFlow,
+            SUBENTRY_TYPE_DEVICE: BermudaDeviceSubentryFlow,
+        }
 
     # async def _show_config_form(self, user_input):  # pylint: disable=unused-argument
     #     """Show the configuration form to edit location data."""

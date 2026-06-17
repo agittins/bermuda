@@ -366,6 +366,47 @@
           }
         }
       }
+    },
+    "device": {
+      "entry_type": "Tracked device",
+      "initiate_flow": {
+        "user": "Enrol a device",
+        "reconfigure": "Edit device"
+      },
+      "abort": {
+        "no_devices": "Every discovered device is already enrolled."
+      },
+      "step": {
+        "user": {
+          "title": "Enrol a device",
+          "description": "Track a device with its own name, reference power and away timeout.",
+          "data": {
+            "address": "Device",
+            "name": "Name (optional)",
+            "ref_power": "Reference power (rssi @ 1 m)",
+            "devtracker_nothome_timeout": "Away timeout (s)"
+          },
+          "data_description": {
+            "name": "Overrides the advertised name (a Home Assistant rename still wins).",
+            "ref_power": "Per-device rssi at 1 m. Overrides the global value at startup.",
+            "devtracker_nothome_timeout": "Seconds without a reading before this device is Not Home."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit device",
+          "description": "Adjust the enrolment for {device}.",
+          "data": {
+            "name": "Name (optional)",
+            "ref_power": "Reference power (rssi @ 1 m)",
+            "devtracker_nothome_timeout": "Away timeout (s)"
+          },
+          "data_description": {
+            "name": "Overrides the advertised name (a Home Assistant rename still wins).",
+            "ref_power": "Per-device rssi at 1 m. Overrides the global value at startup.",
+            "devtracker_nothome_timeout": "Seconds without a reading before this device is Not Home."
+          }
+        }
+      }
     }
   },
   "selector": {

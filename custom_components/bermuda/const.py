@@ -211,6 +211,10 @@ SUBENTRY_TYPE_CALIBRATION = "calibration"
 CONF_SCANNER = "scanner"
 CONF_RSSI_OFFSET = "rssi_offset"
 
+# Per-device enrollment (ESPresense-style): name + ref_power + timeout as a subentry.
+SUBENTRY_TYPE_DEVICE = "device"
+CONF_ADDRESS = "address"
+
 # Area-entity presence overrides (ported/adapted from knoop7/bermuda-intent).
 # HA entities (motion/contact/etc.) whose area, when the entity is "on", competes
 # with BLE at a configurable "virtual distance" (smaller = higher priority).
