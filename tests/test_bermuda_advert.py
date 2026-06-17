@@ -78,6 +78,29 @@ def test_bermuda_advert_initialization(bermuda_advert):
     assert bermuda_advert.rssi == -70
 
 
+def test_rssi_filter_ema_and_outlier_clamp(bermuda_advert):
+    """The mobility-aware RSSI filter smooths stable readings and clamps a spike."""
+    ba = bermuda_advert
+    # A run of stable readings: the filtered value tracks the input closely.
+    for _ in range(5):
+        ba._update_filtered_rssi(-70.0)
+    assert -72 < ba.rssi_filtered < -68
+    # A wild spike (well beyond the MAD-derived threshold) is clamped to the median,
+    # so it can't drag the filtered value all the way up.
+    ba._update_filtered_rssi(-30.0)
+    assert ba.rssi_filtered < -50
+    assert ba.rssi_dispersion >= 0.0
+
+
+def test_rssi_filter_policy_depends_on_mobility(bermuda_advert):
+    """Stationary devices use a longer/steadier RSSI window than moving ones."""
+    ba = bermuda_advert
+    ba._device.get_mobility_type = lambda: "stationary"
+    assert ba._rssi_filter_policy() == (13, 0.22, 12.0)
+    ba._device.get_mobility_type = lambda: "moving"
+    assert ba._rssi_filter_policy() == (9, 0.45, 15.0)
+
+
 def test_apply_new_scanner(bermuda_advert, mock_scanner_device):
     """Test apply_new_scanner method."""
     bermuda_advert.apply_new_scanner(mock_scanner_device)

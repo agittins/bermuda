@@ -16,6 +16,7 @@ from homeassistant.components.bluetooth import (
 from .const import (
     _LOGGER,
     _LOGGER_SPAM_LESS,
+    AREA_NAME_UNKNOWN,
     ICON_DEFAULT_AREA,
     ICON_DEFAULT_FLOOR,
 )
@@ -179,6 +180,16 @@ class BermudaScannerDeviceMixin:
             _mac_name = scanner_devreg_mac.name
             _mac_name_by_user = scanner_devreg_mac.name_by_user
 
+        # Resolve a representative HA entity_id for this scanner's device (e.g. a
+        # Shelly switch/light), so a tracked device can expose its nearest scanner's
+        # entity_id for downstream automations (labels, custom attributes, etc.).
+        self.scanner_entity_id = None
+        if self.entry_id is not None:
+            scanner_entities = list(self._coordinator.er.entities.get_entries_for_device_id(self.entry_id))
+            if scanner_entities:
+                preferred = [e for e in scanner_entities if e.domain in ("switch", "light")]
+                self.scanner_entity_id = (preferred or scanner_entities)[0].entity_id
+
         # As of ESPHome 2025.3.0 (via aioesphomeapi 29.3.1) ESPHome proxies now
         # report their BLE MAC address instead of their WIFI MAC in the hascanner
         # details.
@@ -215,12 +226,18 @@ class BermudaScannerDeviceMixin:
 
         self._update_area_and_floor(_area_id)
 
-    def _update_area_and_floor(self, area_id: str | None):
-        """Given an area_id, update the area and floor properties."""
+    def _update_area_and_floor(self, area_id: str | None, *, force_unknown: bool = False):
+        """
+        Given an area_id, update the area and floor properties.
+
+        ``force_unknown`` reports the explicit "Unknown" area name (evidence too weak
+        to place the device) rather than None (which the entities map to not_home).
+        """
+        self.area_is_unknown = force_unknown and area_id is None
         if area_id is None:
             self.area = None
             self.area_id = None
-            self.area_name = None
+            self.area_name = AREA_NAME_UNKNOWN if force_unknown else None
             self.area_icon = ICON_DEFAULT_AREA
             self.floor = None
             self.floor_id = None

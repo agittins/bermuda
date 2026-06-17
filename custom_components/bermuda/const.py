@@ -34,6 +34,7 @@ PLATFORMS = [
     Platform.SENSOR,
     Platform.DEVICE_TRACKER,
     Platform.NUMBER,
+    Platform.SELECT,
 ]
 
 # Should probably retrieve this from the component, but it's in "DOMAIN" *shrug*

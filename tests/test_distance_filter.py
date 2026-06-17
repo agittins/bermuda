@@ -5,7 +5,22 @@ from __future__ import annotations
 import pytest
 
 from custom_components.bermuda.const import DISTANCE_INFINITE
-from custom_components.bermuda.distance_filter import minimum_hugging_average, peak_retreat_velocity
+from custom_components.bermuda.distance_filter import (
+    median_abs_deviation,
+    minimum_hugging_average,
+    peak_retreat_velocity,
+)
+
+
+def test_median_abs_deviation():
+    """MAD is the median of absolute deviations from the (median) centre."""
+    assert median_abs_deviation([]) == 0.0
+    assert median_abs_deviation([5.0]) == 0.0
+    assert median_abs_deviation([1.0, 1.0, 1.0]) == 0.0
+    # median=3; deviations=[2,1,0,1,97]; median deviation=1.0 (robust to the outlier).
+    assert median_abs_deviation([1.0, 2.0, 3.0, 4.0, 100.0]) == 1.0
+    # explicit centre.
+    assert median_abs_deviation([1.0, 2.0, 3.0], center=2.0) == 1.0
 
 
 class TestPeakRetreatVelocity:

@@ -328,12 +328,24 @@ class BermudaDevice(BermudaScannerDeviceMixin):
             # new measurement(s) immediately.
             self.ref_power_changed = monotonic_time_coarse()
 
-    def apply_scanner_selection(self, bermuda_advert: BermudaAdvert | None):
+    def get_mobility_type(self) -> str:
+        """Return the validated mobility mode (moving/stationary)."""
+        if self.mobility_type in MOBILITY_OPTIONS:
+            return self.mobility_type
+        return MOBILITY_MOVING
+
+    def set_mobility_type(self, mobility_type: str | None) -> None:
+        """Set the mobility mode, falling back to the default if invalid."""
+        self.mobility_type = mobility_type if mobility_type in MOBILITY_OPTIONS else DEFAULT_MOBILITY_TYPE
+
+    def apply_scanner_selection(self, bermuda_advert: BermudaAdvert | None, *, force_unknown: bool = False):
         """
         Given a BermudaAdvert entry, apply the distance and area attributes
         from it to this device.
 
         Used to apply a "winning" scanner's data to the device for setting closest Area.
+        ``force_unknown`` reports the explicit "Unknown" area (evidence too weak to
+        place the device) rather than not_home (device not seen at all).
         """
         old_area = self.area_name
         if bermuda_advert is not None and bermuda_advert.rssi_distance is not None:
@@ -348,7 +360,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         else:
             # Not close to any scanners, or closest scanner has timed out!
             self.area_advert = None
-            self._update_area_and_floor(None)
+            self._update_area_and_floor(None, force_unknown=force_unknown)
             self.area_distance = None
             self.area_rssi = None
 
