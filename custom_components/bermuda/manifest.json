@@ -16,5 +16,5 @@
   "issue_tracker": "https://github.com/foXaCe/bermuda/issues",
   "loggers": ["custom_components.bermuda"],
   "requirements": [],
-  "version": "0.9.4"
+  "version": "0.10.0"
 }

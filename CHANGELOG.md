@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-18
+
 ### Security
 - Personal device names (user-set names and BLE `local_name`s such as "Jan's iPhone") are now redacted in the `dump_devices` output and diagnostics — the address-only redactor never washed them
 - A bare 32-hex run (an IRK key or iBeacon UUID with no separators) is now masked by a generic fallback, so an IRK can no longer slip through even when it is not a top-level device entry
