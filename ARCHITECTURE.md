@@ -41,7 +41,7 @@ dynamically as devices/scanners appear, via the `SIGNAL_DEVICE_NEW` /
 |---|---|
 | `__init__.py` | Setup/unload of the config entry, `dump_devices` service, device-removal. |
 | `coordinator.py` | The update orchestrator: advert ingest, scanner & metadevice management, registry-change handling, pruning, redaction, the dump service. |
-| `bermuda_device.py` | `BermudaDevice` — internal state for one tracked device or scanner (address typing, names, area/floor, beacon ids, InPlay IN100 `0x0505` telemetry decode). |
+| `bermuda_device.py` | `BermudaDevice` — internal state for one tracked device or scanner (address typing, names, area/floor, beacon ids, the ESPresense-style `category` fingerprint, InPlay IN100 `0x0505` telemetry decode). |
 | `bermuda_advert.py` | `BermudaAdvert` — one (device, scanner) relationship; advert history + `calculate_data()`. |
 | `distance_filter.py` | **Pure** smoothing maths (velocity/anti-teleport filter, minimum-hugging average, MAD). |
 | `trilateration.py` | Score-based, mobility-aware area arbitration with adaptive hysteresis + the explicit `Unknown` outcome (`refresh_area_by_min_distance`, `AreaTests`). |
@@ -53,7 +53,9 @@ dynamically as devices/scanners appear, via the `SIGNAL_DEVICE_NEW` /
 | `bermuda_irk.py` | IRK / resolvable-private-address resolution for Private BLE devices. |
 | `entity.py` | `BermudaEntity` / `BermudaGlobalEntity` bases (unique_id, device_info, rate-limiting). |
 | `sensor.py` · `number.py` · `device_tracker.py` · `select.py` | Entity platforms (`select.py` = per-device mobility mode). |
-| `config_flow.py` | `BermudaFlowHandler` (config) + `BermudaOptionsFlowHandler` (options + calibration wizards). |
+| `config_flow.py` | `BermudaFlowHandler` (config) + registers the options flow and the subentry flows. |
+| `options_flow.py` | `BermudaOptionsFlowHandler` — menu, sectioned global options, device/category tracking, area-entity wizard. |
+| `subentry_flow.py` | Config subentry flows: per-scanner RSSI calibration, and per-device enrolment (name / ref_power / away timeout). |
 | `diagnostics.py` | `async_get_config_entry_diagnostics` (redacted dump + manager diagnostics). |
 | `system_health.py` | System Health page info callback (proxy/device counts). |
 | `const.py` | All constants (no logic). `util.py` | Pure helpers (mac formatting, rssi→metres, resolvable-address test). |
