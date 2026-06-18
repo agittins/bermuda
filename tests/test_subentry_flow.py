@@ -2,17 +2,26 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
+from bluetooth_data_tools import monotonic_time_coarse
+from homeassistant.const import CONF_NAME, STATE_NOT_HOME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bermuda import async_migrate_entry
+from custom_components.bermuda.bermuda_device import BermudaDevice
 from custom_components.bermuda.const import (
+    CONF_ADDRESS,
+    CONF_DEVTRACK_TIMEOUT,
+    CONF_REF_POWER,
     CONF_RSSI_OFFSET,
     CONF_RSSI_OFFSETS,
     CONF_SCANNER,
     DOMAIN,
     SUBENTRY_TYPE_CALIBRATION,
+    SUBENTRY_TYPE_DEVICE,
 )
 
 
@@ -89,3 +98,53 @@ async def test_subentry_aborts_when_no_scanners(hass: HomeAssistant, setup_bermu
     )
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "no_scanners"
+
+
+# --------------------------------------------------------------------------- #
+# Per-device enrolment subentry
+# --------------------------------------------------------------------------- #
+
+
+async def test_device_subentry_add_and_coordinator_config(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
+    """Enrolling a device persists name/ref_power/timeout and the coordinator mirrors it."""
+    coordinator = setup_bermuda_entry.runtime_data.coordinator
+    dev = coordinator._get_or_create_device("AA:BB:CC:DD:EE:A0")
+    addr = dev.address.upper()
+
+    result = await hass.config_entries.subentries.async_init(
+        (setup_bermuda_entry.entry_id, SUBENTRY_TYPE_DEVICE), context={"source": "user"}
+    )
+    assert result["type"] == FlowResultType.FORM
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {CONF_ADDRESS: addr, CONF_NAME: "Jan's keys", CONF_REF_POWER: -62.0, CONF_DEVTRACK_TIMEOUT: 90},
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    subs = [se for se in setup_bermuda_entry.subentries.values() if se.subentry_type == SUBENTRY_TYPE_DEVICE]
+    assert len(subs) == 1
+    assert subs[0].data[CONF_NAME] == "Jan's keys"
+    # The entry reloads; the fresh coordinator mirrors the per-device config.
+    assert setup_bermuda_entry.runtime_data.coordinator.device_config[addr][CONF_REF_POWER] == -62.0
+
+
+def test_device_config_applies_ref_power_and_name():
+    coordinator = MagicMock()
+    coordinator.options = {}
+    coordinator.device_config = {"AA:BB:CC:DD:EE:FF": {CONF_NAME: "My beacon", CONF_REF_POWER: -60.0}}
+    dev = BermudaDevice(address="AA:BB:CC:DD:EE:FF", coordinator=coordinator)
+    assert dev.ref_power == -60.0
+    assert dev.name_subentry == "My beacon"
+    assert dev.make_name() == "My beacon"
+
+
+def test_device_config_per_device_timeout_is_used():
+    coordinator = MagicMock()
+    coordinator.options = {CONF_DEVTRACK_TIMEOUT: 30}
+    coordinator.device_config = {"AA:BB:CC:DD:EE:FF": {CONF_DEVTRACK_TIMEOUT: 5}}
+    dev = BermudaDevice(address="AA:BB:CC:DD:EE:FF", coordinator=coordinator)
+    dev.last_seen = monotonic_time_coarse() - 10  # last seen 10s ago
+    dev.calculate_data()
+    # The per-device 5s timeout is used (not the global 30s): 10s > 5s -> Not Home.
+    assert dev.zone == STATE_NOT_HOME

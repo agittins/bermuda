@@ -95,6 +95,37 @@ BDADDR_TYPE_NOT_MAC48: Final = "bd_addr_not_mac48"
 ADDR_TYPE_IBEACON: Final = "addr_type_ibeacon"
 ADDR_TYPE_PRIVATE_BLE_DEVICE: Final = "addr_type_private_ble_device"
 
+# Device categories (ESPresense-style fingerprints) — used to group the discovery
+# list and to track whole classes of device at once (see CONF_TRACK_CATEGORIES).
+CATEGORY_IBEACON: Final = "ibeacon"
+CATEGORY_IRK: Final = "irk"
+CATEGORY_NAMED: Final = "named"
+CATEGORY_RANDOM: Final = "random"
+CATEGORY_PUBLIC: Final = "public"
+# Vendor categories keyed by Bluetooth SIG company identifier (curated, extensible).
+VENDOR_CATEGORIES: Final[dict[int, str]] = {
+    0x004C: "apple",
+    0x0006: "microsoft",
+    0x0075: "samsung",
+    0x00E0: "google",
+    0x0087: "garmin",
+    0x0157: "amazfit",
+}
+# Categories a user may opt to auto-track, in display order.
+TRACK_CATEGORIES: Final = [
+    CATEGORY_IBEACON,
+    CATEGORY_IRK,
+    CATEGORY_NAMED,
+    "apple",
+    "samsung",
+    "google",
+    "garmin",
+    "amazfit",
+    "microsoft",
+    CATEGORY_RANDOM,
+    CATEGORY_PUBLIC,
+]
+
 
 class IrkTypes(Enum):
     """
@@ -153,6 +184,10 @@ CONFDATA_SCANNERS = "scanners"
 # Configuration and options
 
 CONF_DEVICES = "configured_devices"
+# ESPresense-style bulk tracking: track every device whose category is selected,
+# minus an explicit exclusion denylist (see BermudaDevice.category).
+CONF_TRACK_CATEGORIES = "track_categories"
+CONF_EXCLUDE_DEVICES = "exclude_devices"
 
 CONF_SCANNERS = "configured_scanners"
 
@@ -175,6 +210,10 @@ CONF_RSSI_OFFSETS = "rssi_offsets"
 SUBENTRY_TYPE_CALIBRATION = "calibration"
 CONF_SCANNER = "scanner"
 CONF_RSSI_OFFSET = "rssi_offset"
+
+# Per-device enrollment (ESPresense-style): name + ref_power + timeout as a subentry.
+SUBENTRY_TYPE_DEVICE = "device"
+CONF_ADDRESS = "address"
 
 # Area-entity presence overrides (ported/adapted from knoop7/bermuda-intent).
 # HA entities (motion/contact/etc.) whose area, when the entity is "on", competes

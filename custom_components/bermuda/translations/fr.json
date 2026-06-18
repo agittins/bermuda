@@ -44,6 +44,47 @@
           "title": "Offset RSSI par scanner"
         }
       }
+    },
+    "device": {
+      "abort": {
+        "no_devices": "Tous les appareils découverts sont déjà enrôlés."
+      },
+      "entry_type": "Appareil suivi",
+      "initiate_flow": {
+        "reconfigure": "Modifier l'appareil",
+        "user": "Enrôler un appareil"
+      },
+      "step": {
+        "reconfigure": {
+          "data": {
+            "devtracker_nothome_timeout": "Délai d'absence (s)",
+            "name": "Nom (optionnel)",
+            "ref_power": "Puissance de référence (rssi à 1 m)"
+          },
+          "data_description": {
+            "devtracker_nothome_timeout": "Secondes sans lecture avant que l'appareil soit « Absent ».",
+            "name": "Remplace le nom annoncé (un renommage Home Assistant reste prioritaire).",
+            "ref_power": "RSSI à 1 m par appareil. Remplace la valeur globale au démarrage."
+          },
+          "description": "Ajuster l'enrôlement de {device}.",
+          "title": "Modifier l'appareil"
+        },
+        "user": {
+          "data": {
+            "address": "Appareil",
+            "devtracker_nothome_timeout": "Délai d'absence (s)",
+            "name": "Nom (optionnel)",
+            "ref_power": "Puissance de référence (rssi à 1 m)"
+          },
+          "data_description": {
+            "devtracker_nothome_timeout": "Secondes sans lecture avant que l'appareil soit « Absent ».",
+            "name": "Remplace le nom annoncé (un renommage Home Assistant reste prioritaire).",
+            "ref_power": "RSSI à 1 m par appareil. Remplace la valeur globale au démarrage."
+          },
+          "description": "Suivre un appareil avec son propre nom, sa puissance de référence et son délai d'absence.",
+          "title": "Enrôler un appareil"
+        }
+      }
     }
   },
   "entity": {
@@ -212,13 +253,34 @@
       },
       "selectdevices": {
         "data": {
-          "devices": "Appareils à suivre"
+          "devices": "Appareils à suivre",
+          "exclude": "Exclure ceux-ci",
+          "track_categories": "Suivre des catégories entières"
         },
         "data_description": {
-          "devices": "Choisissez les appareils BLE que Bermuda doit suivre. Tapez pour rechercher. Les iBeacons et MAC aléatoires sont étiquetés ; les appareils suivis mais non détectés actuellement apparaissent en (saved)."
+          "devices": "Choisissez les appareils BLE que Bermuda doit suivre. Tapez pour rechercher. Les iBeacons et MAC aléatoires sont étiquetés ; les appareils suivis mais non détectés actuellement apparaissent en (saved).",
+          "exclude": "Ne jamais suivre ceux-ci, même s'ils correspondent à une catégorie suivie.",
+          "track_categories": "Suit automatiquement tout appareil d'une catégorie sélectionnée (ex. tous les iBeacons ou tous les appareils nommés)."
         },
         "description": "Bermuda ne crée des entités de suivi que pour les appareils sélectionnés ici. Si la liste est vide, aucun appareil Bluetooth n'est encore détecté.",
         "title": "Sélectionner les appareils"
+      }
+    }
+  },
+  "selector": {
+    "track_category": {
+      "options": {
+        "amazfit": "Amazfit / Mi",
+        "apple": "Apple",
+        "garmin": "Garmin",
+        "google": "Google",
+        "ibeacon": "iBeacons",
+        "irk": "Appareils privés (IRK)",
+        "microsoft": "Microsoft",
+        "named": "Appareils nommés",
+        "public": "MAC publique",
+        "random": "MAC aléatoire",
+        "samsung": "Samsung"
       }
     }
   },

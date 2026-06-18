@@ -47,6 +47,7 @@ from .bermuda_irk import BermudaIrkManager
 from .const import (
     _LOGGER,
     _LOGGER_SPAM_LESS,
+    CONF_ADDRESS,
     CONF_AREA_ENTITIES,
     CONF_AREA_ENTITY_DISTANCE,
     CONF_AREA_ENTITY_DISTANCES,
@@ -75,6 +76,7 @@ from .const import (
     SIGNAL_DEVICE_IN100_NEW,
     SIGNAL_DEVICE_NEW,
     SUBENTRY_TYPE_CALIBRATION,
+    SUBENTRY_TYPE_DEVICE,
     UPDATE_INTERVAL,
 )
 from .coordinator_metadevices import BermudaMetadeviceMixin
@@ -262,6 +264,16 @@ class BermudaDataUpdateCoordinator(
             se.data[CONF_SCANNER]: se.data[CONF_RSSI_OFFSET]
             for se in getattr(entry, "subentries", {}).values()
             if se.subentry_type == SUBENTRY_TYPE_CALIBRATION
+        }
+
+        # Per-device enrolment (name / ref_power / timeout) from "device" subentries,
+        # keyed by upper-case address. Applied to each device as it is created, and
+        # read for the per-device away timeout. The subentry is the source of truth;
+        # the ref_power number entity remains for live, in-session tweaks.
+        self.device_config: dict[str, dict] = {
+            se.data[CONF_ADDRESS].upper(): dict(se.data)
+            for se in getattr(entry, "subentries", {}).values()
+            if se.subentry_type == SUBENTRY_TYPE_DEVICE and se.data.get(CONF_ADDRESS)
         }
 
         self.devices: dict[str, BermudaDevice] = {}

@@ -44,6 +44,47 @@
           "title": "Per-scanner RSSI offset"
         }
       }
+    },
+    "device": {
+      "abort": {
+        "no_devices": "Every discovered device is already enrolled."
+      },
+      "entry_type": "Tracked device",
+      "initiate_flow": {
+        "reconfigure": "Edit device",
+        "user": "Enrol a device"
+      },
+      "step": {
+        "reconfigure": {
+          "data": {
+            "devtracker_nothome_timeout": "Away timeout (s)",
+            "name": "Name (optional)",
+            "ref_power": "Reference power (rssi @ 1 m)"
+          },
+          "data_description": {
+            "devtracker_nothome_timeout": "Seconds without a reading before this device is Not Home.",
+            "name": "Overrides the advertised name (a Home Assistant rename still wins).",
+            "ref_power": "Per-device rssi at 1 m. Overrides the global value at startup."
+          },
+          "description": "Adjust the enrolment for {device}.",
+          "title": "Edit device"
+        },
+        "user": {
+          "data": {
+            "address": "Device",
+            "devtracker_nothome_timeout": "Away timeout (s)",
+            "name": "Name (optional)",
+            "ref_power": "Reference power (rssi @ 1 m)"
+          },
+          "data_description": {
+            "devtracker_nothome_timeout": "Seconds without a reading before this device is Not Home.",
+            "name": "Overrides the advertised name (a Home Assistant rename still wins).",
+            "ref_power": "Per-device rssi at 1 m. Overrides the global value at startup."
+          },
+          "description": "Track a device with its own name, reference power and away timeout.",
+          "title": "Enrol a device"
+        }
+      }
     }
   },
   "entity": {
@@ -212,13 +253,34 @@
       },
       "selectdevices": {
         "data": {
-          "devices": "Devices to track"
+          "devices": "Devices to track",
+          "exclude": "Exclude these",
+          "track_categories": "Track whole categories"
         },
         "data_description": {
-          "devices": "Pick the BLE devices Bermuda should track. Type to search. iBeacons and random MACs are labelled; devices you track but that aren't currently seen show as (saved)."
+          "devices": "Pick the BLE devices Bermuda should track. Type to search. iBeacons and random MACs are labelled; devices you track but that aren't currently seen show as (saved).",
+          "exclude": "Never track these, even if they match a tracked category.",
+          "track_categories": "Auto-track every device matching a selected category (e.g. all iBeacons or all named devices)."
         },
         "description": "Bermuda only creates tracker entities for the devices you select here. If the list is empty, no Bluetooth devices are being seen yet.",
         "title": "Select Devices"
+      }
+    }
+  },
+  "selector": {
+    "track_category": {
+      "options": {
+        "amazfit": "Amazfit / Mi",
+        "apple": "Apple",
+        "garmin": "Garmin",
+        "google": "Google",
+        "ibeacon": "iBeacons",
+        "irk": "Private (IRK) devices",
+        "microsoft": "Microsoft",
+        "named": "Named devices",
+        "public": "Public MAC",
+        "random": "Random MAC",
+        "samsung": "Samsung"
       }
     }
   },

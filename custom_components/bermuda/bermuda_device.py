@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.components.private_ble_device import coordinator as pble_coordinator
-from homeassistant.const import STATE_HOME, STATE_NOT_HOME
+from homeassistant.const import CONF_NAME, STATE_HOME, STATE_NOT_HOME
 from homeassistant.core import callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
@@ -38,8 +38,16 @@ from .const import (
     BDADDR_TYPE_RANDOM_STATIC,
     BDADDR_TYPE_RANDOM_UNRESOLVABLE,
     BDADDR_TYPE_UNKNOWN,
+    CATEGORY_IBEACON,
+    CATEGORY_IRK,
+    CATEGORY_NAMED,
+    CATEGORY_PUBLIC,
+    CATEGORY_RANDOM,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
+    CONF_EXCLUDE_DEVICES,
+    CONF_REF_POWER,
+    CONF_TRACK_CATEGORIES,
     DEFAULT_DEVTRACK_TIMEOUT,
     DEFAULT_MOBILITY_TYPE,
     DOMAIN,
@@ -52,6 +60,7 @@ from .const import (
     METADEVICE_TYPE_IBEACON_SOURCE,
     MOBILITY_MOVING,
     MOBILITY_OPTIONS,
+    VENDOR_CATEGORIES,
 )
 from .util import mac_norm
 
@@ -99,6 +108,15 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         self.ref_power: float = 0  # If non-zero, use in place of global ref_power.
         self.ref_power_changed: float = 0  # Stamp for last change to ref_power, for cache zapping.
         self.options = self._coordinator.options
+        # Per-device enrolment from a "device" subentry (authoritative at setup; the
+        # ref_power number entity may still tweak it live within the session).
+        self.name_subentry: str | None = None
+        _dc = getattr(self._coordinator, "device_config", None)
+        _device_cfg = _dc.get(_address.upper()) if isinstance(_dc, dict) else None
+        if _device_cfg:
+            if _device_cfg.get(CONF_REF_POWER):
+                self.ref_power = _device_cfg[CONF_REF_POWER]
+            self.name_subentry = _device_cfg.get(CONF_NAME) or None
         self.unique_id: str | None = _address  # mac address formatted.
         self.address_type = BDADDR_TYPE_UNKNOWN
 
@@ -143,6 +161,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
 
         self.zone: str = STATE_NOT_HOME  # STATE_HOME or STATE_NOT_HOME
         self.manufacturer: str | None = None
+        self.manufacturer_id: int | None = None  # Bluetooth SIG company id, for vendor categorisation
         # InPlay IN100 / DFRobot Fermion telemetry (manufacturer data 0x0505).
         self.in100_detected: bool = False
         self.in100_vcc: float | None = None
@@ -288,7 +307,8 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         to manufacturer name and bluetooth address.
         """
         _newname = (
-            self.name_by_user
+            self.name_by_user  # an explicit Home Assistant rename always wins
+            or self.name_subentry  # then a per-device enrolment subentry name
             or self.name_devreg
             or self.name_bt_local_name
             or self.name_bt_serviceinfo
@@ -345,6 +365,33 @@ class BermudaDevice(BermudaScannerDeviceMixin):
     def set_mobility_type(self, mobility_type: str | None) -> None:
         """Set the mobility mode, falling back to the default if invalid."""
         self.mobility_type = mobility_type if mobility_type in MOBILITY_OPTIONS else DEFAULT_MOBILITY_TYPE
+
+    @property
+    def category(self) -> str:
+        """
+        Single ESPresense-style fingerprint for this device.
+
+        Precedence: iBeacon → IRK (resolved private BLE) → known vendor (by company
+        id) → named (has an advertised local name) → random MAC → public MAC. Used to
+        group the discovery list and to track whole classes of device at once.
+        """
+        if self.address_type == ADDR_TYPE_IBEACON:
+            return CATEGORY_IBEACON
+        if self.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
+            return CATEGORY_IRK
+        vendor = VENDOR_CATEGORIES.get(self.manufacturer_id) if self.manufacturer_id is not None else None
+        if vendor is not None:
+            return vendor
+        if self.name_bt_local_name:
+            return CATEGORY_NAMED
+        if self.address_type in (
+            BDADDR_TYPE_RANDOM_RESOLVABLE,
+            BDADDR_TYPE_RANDOM_UNRESOLVABLE,
+            BDADDR_TYPE_RANDOM_STATIC,
+            BDADDR_TYPE_RANDOM_RESERVED,
+        ):
+            return CATEGORY_RANDOM
+        return CATEGORY_PUBLIC
 
     def apply_scanner_selection(self, bermuda_advert: BermudaAdvert | None, *, force_unknown: bool = False):
         """
@@ -431,18 +478,24 @@ class BermudaDevice(BermudaScannerDeviceMixin):
                     "scanner_not_instance", "Scanner device is not a BermudaDevice instance, skipping."
                 )
 
-        # Update whether this device has been seen recently, for device_tracker:
-        if (
-            self.last_seen is not None
-            and monotonic_time_coarse() - self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT)
-            < self.last_seen
-        ):
+        # Update whether this device has been seen recently, for device_tracker.
+        # A "device" enrolment subentry may override the global away timeout per-device.
+        _dc = getattr(self._coordinator, "device_config", None)
+        _dev_cfg = _dc.get(self.address.upper(), {}) if isinstance(_dc, dict) else {}
+        _timeout = _dev_cfg.get(CONF_DEVTRACK_TIMEOUT) or self.options.get(
+            CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT
+        )
+        if self.last_seen is not None and monotonic_time_coarse() - _timeout < self.last_seen:
             self.zone = STATE_HOME
         else:
             self.zone = STATE_NOT_HOME
 
-        if self.address.upper() in self.options.get(CONF_DEVICES, []):
-            # We are a device we track. Flag for set-up:
+        addr = self.address.upper()
+        if addr not in self.options.get(CONF_EXCLUDE_DEVICES, []) and (
+            addr in self.options.get(CONF_DEVICES, []) or self.category in self.options.get(CONF_TRACK_CATEGORIES, [])
+        ):
+            # Tracked either explicitly (configured_devices) or by category
+            # (track_categories), and not on the exclusion denylist. Flag for set-up.
             self.create_sensor = True
 
     def process_advertisement(self, scanner_device: BermudaDevice, advertisementdata: AdvertisementData):
@@ -518,6 +571,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
                 name, generic = self._coordinator.get_manufacturer_from_id(company_code)
                 if name and (self.manufacturer is None or not generic):
                     self.manufacturer = name
+                    self.manufacturer_id = company_code
 
                 if company_code == 0x004C:  # 76 Apple Inc
                     if man_data[:1] == b"\x02":  # iBeacon: Almost always 0x0215, but 0x15 is the length part

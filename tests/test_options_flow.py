@@ -28,10 +28,12 @@ from custom_components.bermuda.const import (
     CONF_ATTENUATION,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
+    CONF_EXCLUDE_DEVICES,
     CONF_MAX_RADIUS,
     CONF_MAX_VELOCITY,
     CONF_REF_POWER,
     CONF_SMOOTHING_SAMPLES,
+    CONF_TRACK_CATEGORIES,
     CONF_UPDATE_INTERVAL,
     DOMAIN,
     NAME,
@@ -246,6 +248,27 @@ async def test_options_selectdevices_submit_writes_devices(hass: HomeAssistant, 
     assert result["type"] == FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     assert setup_bermuda_entry.options.get(CONF_DEVICES) == [addr.upper()]
+
+
+async def test_options_selectdevices_persists_categories_and_excludes(
+    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry
+):
+    """The selectdevices step also persists category tracking and the exclusion list."""
+    coordinator = setup_bermuda_entry.runtime_data.coordinator
+    _inject_device(coordinator, "AA:BB:CC:DD:EE:05")
+
+    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "selectdevices"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"devices": [], "track_categories": ["ibeacon", "named"], "exclude": ["AA:BB:CC:DD:EE:05"]},
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    assert setup_bermuda_entry.options.get(CONF_TRACK_CATEGORIES) == ["ibeacon", "named"]
+    assert setup_bermuda_entry.options.get(CONF_EXCLUDE_DEVICES) == ["AA:BB:CC:DD:EE:05"]
 
 
 def _devices_selector_values(result) -> set[str]:
