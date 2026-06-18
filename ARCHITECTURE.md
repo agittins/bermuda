@@ -56,6 +56,7 @@ dynamically as devices/scanners appear, via the `SIGNAL_DEVICE_NEW` /
 | `config_flow.py` | `BermudaFlowHandler` (config) + registers the options flow and the subentry flows. |
 | `options_flow.py` | `BermudaOptionsFlowHandler` — menu, sectioned global options, device/category tracking, area-entity wizard. |
 | `subentry_flow.py` | Config subentry flows: per-scanner RSSI calibration, and per-device enrolment (name / ref_power / away timeout). |
+| `private_enrol.py` | IRK enrolment helper: validate a pasted IRK and drive the `private_ble_device` config flow (shared by the options step and the `enrol_private_device` service). |
 | `diagnostics.py` | `async_get_config_entry_diagnostics` (redacted dump + manager diagnostics). |
 | `system_health.py` | System Health page info callback (proxy/device counts). |
 | `const.py` | All constants (no logic). `util.py` | Pure helpers (mac formatting, rssi→metres, resolvable-address test). |

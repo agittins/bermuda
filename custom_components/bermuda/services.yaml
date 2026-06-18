@@ -23,6 +23,26 @@ dump_devices:
       selector:
         boolean:
 
+enrol_private_device:
+  name: Enrol a private device
+  description: >-
+    Track a privacy device (iPhone, Apple Watch, …) by its IRK. Hands the key to
+    Home Assistant's Private BLE Device integration, which resolves the rotating
+    MAC; Bermuda then tracks it automatically. The device must be nearby and
+    advertising for the key to be accepted.
+  fields:
+    irk:
+      required: true
+      example: "00112233445566778899aabbccddeeff"
+      selector:
+        text:
+    name:
+      required: false
+      example: "Jan's iPhone"
+      default: ""
+      selector:
+        text:
+
 calibrate_location:
   name: Calibrate micro-location
   description: >-
