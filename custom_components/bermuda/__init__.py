@@ -12,12 +12,14 @@ from typing import TYPE_CHECKING
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentry
+from homeassistant.const import CONF_NAME
 from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
     _LOGGER,
+    CONF_IRK,
     CONF_RSSI_OFFSET,
     CONF_RSSI_OFFSETS,
     CONF_SCANNER,
@@ -28,6 +30,7 @@ from .const import (
 )
 from .coordinator import BermudaDataUpdateCoordinator
 from .intents import async_register_intents
+from .private_enrol import async_enrol_private_device
 from .util import mac_norm
 
 if TYPE_CHECKING:
@@ -56,6 +59,14 @@ SERVICE_DUMP_DEVICES_SCHEMA = vol.Schema(
     }
 )
 
+SERVICE_ENROL_PRIVATE_DEVICE = "enrol_private_device"
+SERVICE_ENROL_PRIVATE_DEVICE_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_IRK): cv.string,
+        vol.Optional(CONF_NAME, default=""): cv.string,
+    }
+)
+
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up Bermuda services."""
@@ -71,12 +82,24 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         coordinator = loaded_entries[0].runtime_data.coordinator
         return await coordinator.service_dump_devices(call)
 
+    async def async_enrol_private(call):
+        """Create a private_ble_device entry from an IRK so Bermuda tracks it."""
+        error = await async_enrol_private_device(hass, call.data[CONF_IRK], call.data.get(CONF_NAME, ""))
+        if error:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key=error)
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_DUMP_DEVICES,
         async_dump_devices,
         SERVICE_DUMP_DEVICES_SCHEMA,
         SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ENROL_PRIVATE_DEVICE,
+        async_enrol_private,
+        SERVICE_ENROL_PRIVATE_DEVICE_SCHEMA,
     )
     return True
 

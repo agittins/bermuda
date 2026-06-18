@@ -215,6 +215,10 @@ CONF_RSSI_OFFSET = "rssi_offset"
 SUBENTRY_TYPE_DEVICE = "device"
 CONF_ADDRESS = "address"
 
+# Private-device (IRK) enrolment: hands an Identity Resolving Key to HA's
+# private_ble_device integration, which Bermuda then tracks automatically.
+CONF_IRK = "irk"
+
 # Area-entity presence overrides (ported/adapted from knoop7/bermuda-intent).
 # HA entities (motion/contact/etc.) whose area, when the entity is "on", competes
 # with BLE at a configurable "virtual distance" (smaller = higher priority).

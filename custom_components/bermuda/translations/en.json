@@ -162,8 +162,20 @@
     }
   },
   "exceptions": {
+    "bluetooth_not_available": {
+      "message": "No Bluetooth adapter or proxy is available to track private devices."
+    },
+    "irk_not_found": {
+      "message": "No device matching that IRK is currently visible. Make sure it is nearby, powered on, and Bluetooth is enabled."
+    },
+    "irk_not_valid": {
+      "message": "That doesn't look like a valid IRK. It must be 16 bytes: 32 hex characters, or base64 ending in '='."
+    },
     "not_loaded": {
       "message": "Bermuda is not loaded. Set up the integration before calling this service."
+    },
+    "unknown": {
+      "message": "Could not enrol the device from that IRK. Check the key and try again."
     }
   },
   "issues": {
@@ -174,10 +186,14 @@
   },
   "options": {
     "error": {
+      "bluetooth_not_available": "No Bluetooth adapter or proxy is available to track private devices.",
       "err_scanner_no_record": "The selected scanner hasn't (yet) seen this device.",
+      "irk_not_found": "No device matching that IRK is currently visible. Make sure it's nearby, powered on, and Bluetooth is enabled.",
+      "irk_not_valid": "That doesn't look like a valid IRK (need 16 bytes: 32 hex characters, or base64 ending in '=').",
       "no_devices": "No bluetooth devices are actively being reported from your scanners. \nYou will need to solve this before Bermuda can be of much help.",
       "no_scanners": "You need to configure some bluetooth scanners before Bermuda will have anything to work with. \nAny one of esphome bluetooth_proxy, Shelly bluetooth proxy or local bluetooth adaptor should get you started.",
-      "some_active": "You have at least some active devices, this is good."
+      "some_active": "You have at least some active devices, this is good.",
+      "unknown": "Could not enrol the device. Check the IRK and try again."
     },
     "step": {
       "area_entities": {
@@ -195,6 +211,18 @@
       "area_entities_distance": {
         "description": "Set a virtual distance (metres) per entity — smaller wins over BLE more easily. Grouped by area:\n\n{area_summary}",
         "title": "Per-entity virtual distance"
+      },
+      "enrol_private": {
+        "data": {
+          "irk": "IRK",
+          "name": "Name (optional)"
+        },
+        "data_description": {
+          "irk": "Paste the key as 32 hex characters, or base64 (ending in '='). An 'irk:' prefix is fine.",
+          "name": "A friendly name for the tracked device. Leave blank to use the device's own name."
+        },
+        "description": "Track an iPhone, Apple Watch or other privacy device by its **IRK** (Identity Resolving Key). Home Assistant resolves its rotating MAC and Bermuda then tracks it automatically.\n\n**Where to find the IRK**\n- **iOS / watchOS** (needs a Mac signed into the same iCloud): open *Keychain Access* → *Local Items* → search `Bluetooth` → pick the record matching the device MAC (Settings › General › About) → *Show password* → copy the **Remote IRK** (base64).\n- **Android** (rooted): in `/data/misc/bluedroid/bt_config.conf` read `LE_LOCAL_KEY_IRK` (reverse the byte order).\n\nThe device must be nearby and advertising right now, otherwise the key is rejected.",
+        "title": "Enrol a private device (IRK)"
       },
       "globalopts": {
         "description": "Tune the global distance model, device-tracking timeouts and RSSI smoothing. These apply to every tracked device.",
@@ -244,8 +272,7 @@
         "description": "Bermuda can currently see:\n- {device_counter_active} active out of {device_counter_devices} bluetooth devices.\n- {scanner_counter_active} active out of {scanner_counter_scanners} bluetooth scanner devices.\n\n{status}",
         "menu_options": {
           "area_entities": "Area presence entities",
-          "calibration1_global": "Calibration · Global distance model",
-          "calibration2_scanners": "Calibration · Per-scanner RSSI offsets",
+          "enrol_private": "Enrol a private device (IRK)",
           "globalopts": "Global options",
           "selectdevices": "Select devices to track"
         },
@@ -320,6 +347,20 @@
         }
       },
       "name": "Dump Devices"
+    },
+    "enrol_private_device": {
+      "description": "Track a privacy device (iPhone, Apple Watch, …) by its IRK. Hands the key to Home Assistant's Private BLE Device integration, which resolves the rotating MAC; Bermuda then tracks it automatically. The device must be nearby and advertising for the key to be accepted.",
+      "fields": {
+        "irk": {
+          "description": "Identity Resolving Key, as 32 hex characters or base64 (ending in '=').",
+          "name": "IRK"
+        },
+        "name": {
+          "description": "Optional friendly name for the tracked device.",
+          "name": "Name"
+        }
+      },
+      "name": "Enrol a private device"
     },
     "get_config": {
       "description": "Return Bermuda's current calibration, tracked devices, scanners and micro-location count.",

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import voluptuous as vol
 from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.config_entries import OptionsFlow
+from homeassistant.const import CONF_NAME
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers.selector import (
     EntitySelector,
@@ -25,6 +26,7 @@ from homeassistant.helpers.selector import (
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
+    TextSelector,
 )
 from homeassistant.helpers.translation import async_get_translations
 
@@ -38,6 +40,7 @@ from .const import (
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
     CONF_EXCLUDE_DEVICES,
+    CONF_IRK,
     CONF_MAX_RADIUS,
     CONF_MAX_VELOCITY,
     CONF_REF_POWER,
@@ -66,6 +69,7 @@ from .const import (
     TRACK_CATEGORIES,
 )
 from .options_text import _DESCRIPTION_TEXTS
+from .private_enrol import async_enrol_private_device
 from .util import mac_redact
 
 if TYPE_CHECKING:
@@ -168,6 +172,7 @@ class BermudaOptionsFlowHandler(OptionsFlow):
             menu_options=[
                 "globalopts",
                 "selectdevices",
+                "enrol_private",
                 "area_entities",
             ],
             description_placeholders=messages,
@@ -300,6 +305,31 @@ class BermudaOptionsFlowHandler(OptionsFlow):
             }
         )
         return self.async_show_form(step_id="selectdevices", data_schema=data_schema)
+
+    async def async_step_enrol_private(self, user_input=None):
+        """
+        Enrol a privacy device (iPhone/Watch) by its IRK.
+
+        Bermuda's proxies can't pair like ESPresense firmware, so we hand the IRK
+        to HA's private_ble_device integration; Bermuda then tracks it on its own.
+        """
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            error = await async_enrol_private_device(self.hass, user_input[CONF_IRK], user_input.get(CONF_NAME, ""))
+            if not error:
+                # Nudge the coordinator so the new private device shows up promptly.
+                with contextlib.suppress(Exception):
+                    await self.coordinator.async_request_refresh()
+                return await self._update_options()
+            errors["base" if error == "bluetooth_not_available" else CONF_IRK] = error
+
+        data_schema = vol.Schema(
+            {
+                vol.Required(CONF_IRK): TextSelector(),
+                vol.Optional(CONF_NAME, default=""): TextSelector(),
+            }
+        )
+        return self.async_show_form(step_id="enrol_private", data_schema=data_schema, errors=errors)
 
     async def async_step_area_entities(self, user_input=None):
         """Select presence entities and the global default virtual distance."""

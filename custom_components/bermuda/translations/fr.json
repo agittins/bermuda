@@ -162,8 +162,20 @@
     }
   },
   "exceptions": {
+    "bluetooth_not_available": {
+      "message": "Aucun adaptateur ni proxy Bluetooth n'est disponible pour suivre des appareils privés."
+    },
+    "irk_not_found": {
+      "message": "Aucun appareil correspondant à cet IRK n'est visible actuellement. Vérifiez qu'il est à proximité, allumé et que le Bluetooth est activé."
+    },
+    "irk_not_valid": {
+      "message": "Cela ne ressemble pas à un IRK valide. Il doit faire 16 octets : 32 caractères hexadécimaux, ou base64 finissant par « = »."
+    },
     "not_loaded": {
       "message": "Bermuda n'est pas chargé. Configurez l'intégration avant d'appeler ce service."
+    },
+    "unknown": {
+      "message": "Impossible d'enrôler l'appareil à partir de cet IRK. Vérifiez la clé et réessayez."
     }
   },
   "issues": {
@@ -174,10 +186,14 @@
   },
   "options": {
     "error": {
+      "bluetooth_not_available": "Aucun adaptateur ni proxy Bluetooth n'est disponible pour suivre des appareils privés.",
       "err_scanner_no_record": "Le scanner sélectionné n'a pas (encore) vu cet appareil.",
+      "irk_not_found": "Aucun appareil correspondant à cet IRK n'est visible actuellement. Vérifiez qu'il est à proximité, allumé et que le Bluetooth est activé.",
+      "irk_not_valid": "Cela ne ressemble pas à un IRK valide (16 octets attendus : 32 caractères hexadécimaux, ou base64 finissant par « = »).",
       "no_devices": "Aucun appareil Bluetooth n'est actuellement signalé par vos scanners. \nVous devrez résoudre ce problème avant que Bermuda puisse être utile.",
       "no_scanners": "Vous devez configurer des scanners Bluetooth avant que Bermuda puisse fonctionner. \nUn proxy Bluetooth ESPHome, un proxy Bluetooth Shelly ou un adaptateur Bluetooth local devrait vous permettre de démarrer.",
-      "some_active": "Vous avez au moins quelques appareils actifs, c'est bien."
+      "some_active": "Vous avez au moins quelques appareils actifs, c'est bien.",
+      "unknown": "Impossible d'enrôler l'appareil. Vérifiez l'IRK et réessayez."
     },
     "step": {
       "area_entities": {
@@ -195,6 +211,18 @@
       "area_entities_distance": {
         "description": "Définissez une distance virtuelle (mètres) par entité — plus petite l'emporte plus facilement sur le BLE. Regroupé par zone :\n\n{area_summary}",
         "title": "Distance virtuelle par entité"
+      },
+      "enrol_private": {
+        "data": {
+          "irk": "IRK",
+          "name": "Nom (facultatif)"
+        },
+        "data_description": {
+          "irk": "Collez la clé en 32 caractères hexadécimaux, ou en base64 (finissant par « = »). Un préfixe « irk: » est accepté.",
+          "name": "Un nom convivial pour l'appareil suivi. Laissez vide pour utiliser le nom de l'appareil."
+        },
+        "description": "Suivez un iPhone, une Apple Watch ou un autre appareil à vie privée via son **IRK** (Identity Resolving Key). Home Assistant résout sa MAC tournante et Bermuda le suit ensuite automatiquement.\n\n**Où trouver l'IRK**\n- **iOS / watchOS** (nécessite un Mac connecté au même iCloud) : ouvrez *Trousseaux d'accès* → *Éléments locaux* → recherchez `Bluetooth` → sélectionnez l'enregistrement correspondant à la MAC de l'appareil (Réglages › Général › Informations) → *Afficher le mot de passe* → copiez le champ **Remote IRK** (base64).\n- **Android** (rooté) : dans `/data/misc/bluedroid/bt_config.conf`, lisez `LE_LOCAL_KEY_IRK` (inversez l'ordre des octets).\n\nL'appareil doit être à proximité et émettre maintenant, sinon la clé est rejetée.",
+        "title": "Enrôler un appareil privé (IRK)"
       },
       "globalopts": {
         "description": "Réglez le modèle de distance global, les délais de suivi et le lissage RSSI. Ces réglages s'appliquent à tous les appareils suivis.",
@@ -244,8 +272,7 @@
         "description": "Bermuda peut actuellement voir :\n- {device_counter_active} actifs sur {device_counter_devices} appareils Bluetooth.\n- {scanner_counter_active} actifs sur {scanner_counter_scanners} scanners Bluetooth.\n\n{status}",
         "menu_options": {
           "area_entities": "Entités de présence par zone",
-          "calibration1_global": "Calibration · Modèle de distance global",
-          "calibration2_scanners": "Calibration · Offsets RSSI par scanner",
+          "enrol_private": "Enrôler un appareil privé (IRK)",
           "globalopts": "Options globales",
           "selectdevices": "Choisir les appareils à suivre"
         },
@@ -320,6 +347,20 @@
         }
       },
       "name": "Exporter les appareils"
+    },
+    "enrol_private_device": {
+      "description": "Suivez un appareil à vie privée (iPhone, Apple Watch, …) via son IRK. Transmet la clé à l'intégration Private BLE Device de Home Assistant, qui résout la MAC tournante ; Bermuda le suit ensuite automatiquement. L'appareil doit être à proximité et émettre pour que la clé soit acceptée.",
+      "fields": {
+        "irk": {
+          "description": "Identity Resolving Key, en 32 caractères hexadécimaux ou base64 (finissant par « = »).",
+          "name": "IRK"
+        },
+        "name": {
+          "description": "Nom convivial facultatif pour l'appareil suivi.",
+          "name": "Nom"
+        }
+      },
+      "name": "Enrôler un appareil privé"
     },
     "get_config": {
       "description": "Renvoie la calibration actuelle de Bermuda, les appareils suivis, les scanners et le nombre de micro-localisations.",
