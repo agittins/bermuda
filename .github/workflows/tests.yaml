@@ -14,10 +14,18 @@ env:
   DEFAULT_PYTHON: "3.14"
   UV_SYSTEM_PYTHON: 1
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   linting:
     runs-on: "ubuntu-latest"
     name: Linting
+    timeout-minutes: 15
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7
@@ -49,6 +57,7 @@ jobs:
   hacs:
     runs-on: "ubuntu-latest"
     name: HACS
+    timeout-minutes: 10
     steps:
       - name: Check out the repository
         uses: "actions/checkout@v7"
@@ -69,6 +78,7 @@ jobs:
   hassfest:
     runs-on: "ubuntu-latest"
     name: Hassfest
+    timeout-minutes: 10
     steps:
       - name: Check out the repository
         uses: "actions/checkout@v7"
@@ -79,6 +89,7 @@ jobs:
   tests:
     runs-on: "ubuntu-latest"
     name: Run tests
+    timeout-minutes: 15
     steps:
       - name: Check out code from GitHub
         uses: "actions/checkout@v7"

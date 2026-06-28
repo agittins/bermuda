@@ -4,6 +4,5 @@
   "homeassistant": "2025.3",
   "render_readme": true,
   "zip_release": true,
-  "filename": "bermuda.zip",
-  "hide_default_branch": true
+  "filename": "bermuda.zip"
 }

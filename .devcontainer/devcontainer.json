@@ -1,0 +1,33 @@
+{
+  "name": "bermuda",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "features": {
+    "ghcr.io/astral-sh/devcontainer-features/uv:latest": {}
+  },
+  "postCreateCommand": "scripts/setup",
+  "forwardPorts": [8123],
+  "portsAttributes": {
+    "8123": { "label": "Home Assistant", "onAutoForward": "notify" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "charliermarsh.ruff",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "github.vscode-pull-request-github",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/home/vscode/.local/ha-venv/bin/python",
+        "ruff.organizeImports": true,
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": { "source.fixAll": "explicit" }
+        }
+      }
+    }
+  },
+  "remoteUser": "vscode"
+}

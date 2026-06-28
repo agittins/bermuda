@@ -1,6 +1,6 @@
 ![Bermuda Logo](img/logo@2x.png)
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=agittins&repository=bermuda&category=Integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=foXaCe&repository=bermuda&category=Integration)
 
 # Bermuda BLE Trilateration
 
@@ -21,8 +21,6 @@
 [![Community Forum][forum-shield]][forum]
 
 [![GitHub Sponsors][sponsorsbadge]][sponsors]
-[![BuyMeCoffee][buymecoffeebadge]][buymecoffee]
-[![Patreon Sponsorship][patreonbadge]][patreon]
 
 
 ## What it does:
@@ -78,13 +76,13 @@ _(Micro-locations and the MCP service/intent API were ported from
 - Some bluetooth BLE devices you want to track. Phones, smart watches, beacon tiles, thermometers etc.
 
 - Bermuda! I strongly recommend installing Bermuda via HACS:
-  [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=agittins&repository=bermuda&category=Integration)
+  [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=foXaCe&repository=bermuda&category=Integration)
 
 ## Documentation and help
 
-[The Wiki](https://github.com/agittins/bermuda/wiki/) is the primary and official source of information for setting up Bermuda.
+[The Wiki](https://github.com/foXaCe/bermuda/wiki/) is the primary and official source of information for setting up Bermuda.
 
-[Discussions](https://github.com/agittins/bermuda/discussions/) contain both official and user-contributed guides, how-tos and general Q&A.
+[Discussions](https://github.com/foXaCe/bermuda/discussions/) contain both official and user-contributed guides, how-tos and general Q&A.
 
 [HA Community Thread for Bermuda](https://community.home-assistant.io/t/bermuda-bluetooth-ble-room-presence-and-tracking-custom-integration/625780/1) contains a *wealth* of information from and for users of Bermuda, and is where many folk first ask for assistance in setting up.
 
@@ -116,7 +114,7 @@ for any person/user.
 
 ## FAQ
 
-See [The FAQ](https://github.com/agittins/bermuda/wiki/FAQ) in the Wiki!
+See [The FAQ](https://github.com/foXaCe/bermuda/wiki/FAQ) in the Wiki!
 
 ## Hacking tips
 
@@ -167,7 +165,7 @@ a fair amount of ESPresense's wheel.
 You can install Bermuda by opening HACS on your Home Assistant instance and searching for "Bermuda".
 Alternatively you can click the button below to be automatically redirected.
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=agittins&repository=bermuda&category=Integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=foXaCe&repository=bermuda&category=Integration)
 
 You should now be able to add the `Bermuda BLE Trilateration` integration. Once you have done that,
 you need to restart Home Assistant, then in `Settings`, `Devices & Services` choose `Add Integration`
@@ -220,17 +218,15 @@ Code template was mainly taken from [@Ludeeus](https://github.com/ludeeus)'s [in
 [black]: https://github.com/psf/black
 [black-shield]: https://img.shields.io/badge/code%20style-black-000000.svg?style=for-the-badge
 
-[buymecoffee]: https://www.buymeacoffee.com/AshleyGittins
-[buymecoffeebadge]: https://img.shields.io/badge/buy%20me%20a%20coffee-Caffeinate-green.svg?style=for-the-badge
 
-[commits-shield]: https://img.shields.io/github/commit-activity/y/agittins/bermuda.svg?style=for-the-badge
-[commits]: https://github.com/agittins/bermuda/commits/main
+[commits-shield]: https://img.shields.io/github/commit-activity/y/foXaCe/bermuda.svg?style=for-the-badge
+[commits]: https://github.com/foXaCe/bermuda/commits/main
 
 [hacs]: https://hacs.xyz
 [hacsbadge]: https://img.shields.io/badge/HACS-Default-green.svg?style=for-the-badge
 
-[haminver]: https://github.com/agittins/bermuda/commits/main/hacs.json
-[haminverbadge]: https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgithub.com%2Fagittins%2Fbermuda%2Fraw%2Fmain%2Fhacs.json&query=%24.homeassistant&style=for-the-badge&logo=homeassistant&logoColor=%2311BDF2&label=Minimum%20HA%20Version
+[haminver]: https://github.com/foXaCe/bermuda/commits/main/hacs.json
+[haminverbadge]: https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgithub.com%2FfoXaCe%2Fbermuda%2Fraw%2Fmain%2Fhacs.json&query=%24.homeassistant&style=for-the-badge&logo=homeassistant&logoColor=%2311BDF2&label=Minimum%20HA%20Version
 
 [discord]: https://discord.gg/Qa5fW2R
 [discord-shield]: https://img.shields.io/discord/330944238910963714.svg?style=for-the-badge
@@ -239,18 +235,16 @@ Code template was mainly taken from [@Ludeeus](https://github.com/ludeeus)'s [in
 [forum-shield]: https://img.shields.io/badge/community-forum-brightgreen.svg?style=for-the-badge
 [forum]: https://community.home-assistant.io/
 
-[license-shield]: https://img.shields.io/github/license/agittins/bermuda.svg?style=for-the-badge
-[maintenance-shield]: https://img.shields.io/badge/maintainer-%40agittins-blue.svg?style=for-the-badge
+[license-shield]: https://img.shields.io/github/license/foXaCe/bermuda.svg?style=for-the-badge
+[maintenance-shield]: https://img.shields.io/badge/maintainer-%40foXaCe-blue.svg?style=for-the-badge
 
-[patreon]: https://patreon.com/AshGittins
-[patreonbadge]: https://img.shields.io/badge/Patreon-Sponsor-green?style=for-the-badge
 
 [pre-commit]: https://github.com/pre-commit/pre-commit
 [pre-commit-shield]: https://img.shields.io/badge/pre--commit-enabled-brightgreen?style=for-the-badge
 
-[sponsorsbadge]: https://img.shields.io/github/sponsors/agittins?style=for-the-badge&label=GitHub%20Sponsors&color=green
-[sponsors]: https://github.com/sponsors/agittins
+[sponsorsbadge]: https://img.shields.io/github/sponsors/foXaCe?style=for-the-badge&label=GitHub%20Sponsors&color=green
+[sponsors]: https://github.com/sponsors/foXaCe
 
-[releases-shield]: https://img.shields.io/github/release/agittins/bermuda.svg?style=for-the-badge
-[releases]: https://github.com/agittins/bermuda/releases
-[user_profile]: https://github.com/agittins
+[releases-shield]: https://img.shields.io/github/release/foXaCe/bermuda.svg?style=for-the-badge
+[releases]: https://github.com/foXaCe/bermuda/releases
+[user_profile]: https://github.com/foXaCe

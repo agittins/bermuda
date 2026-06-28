@@ -1,6 +1,3 @@
-[tool.pylint]
-max-line-length=120
-
 # Adapted from https://github.com/ludeeus/integration_blueprint/blob/main/.ruff.toml
 [tool.ruff]
 target-version = "py312"
@@ -124,3 +121,14 @@ voluptuous = "vol"
 [tool.bandit]
 exclude_dirs = ["tests", "config"]
 skips = ["B101"]  # Skip assert_used check (common in HA integrations)
+
+[tool.pytest.ini_options]
+addopts = "-qq --cov=custom_components.bermuda"
+console_output_style = "count"
+
+[tool.coverage.run]
+branch = false
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 100

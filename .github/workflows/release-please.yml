@@ -1,0 +1,42 @@
+name: Release please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false # never cancel an in-flight release
+
+jobs:
+  release-please:
+    name: Open / maintain Release PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          release-type: simple
+          package-name: bermuda
+          # bump manifest.json + CHANGELOG.md + tag.
+          # const.py VERSION is bumped at tag-time by release.yaml (tag-driven publish).
+          extra-files: |
+            custom_components/bermuda/manifest.json
+          changelog-types: |
+            [
+              {"type":"feat","section":"Added","hidden":false},
+              {"type":"fix","section":"Fixed","hidden":false},
+              {"type":"perf","section":"Changed","hidden":false},
+              {"type":"refactor","section":"Changed","hidden":false},
+              {"type":"docs","section":"Documentation","hidden":false},
+              {"type":"test","section":"Tests","hidden":true},
+              {"type":"build","section":"Build","hidden":true},
+              {"type":"ci","section":"CI","hidden":true},
+              {"type":"chore","section":"Miscellaneous","hidden":true},
+              {"type":"revert","section":"Reverted","hidden":false}
+            ]

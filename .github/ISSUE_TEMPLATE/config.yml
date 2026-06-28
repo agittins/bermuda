@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Bermuda Wiki
+    url: https://github.com/foXaCe/bermuda/wiki
+    about: Setup guides, FAQ and troubleshooting (primary documentation)
+  - name: Home Assistant Community
+    url: https://community.home-assistant.io/
+    about: For general Home Assistant questions, please use the community forum
+  - name: HACS support
+    url: https://hacs.xyz/
+    about: For HACS-related issues

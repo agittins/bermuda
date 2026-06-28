@@ -1,0 +1,83 @@
+name: Bug Report
+description: Report a bug or get help with a Bermuda problem
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report your issue.
+
+        Before opening a new issue, please search existing issues — many common
+        things (e.g. "my device bounces between areas") have been covered already.
+
+        Also check the [Troubleshooting page](https://github.com/foXaCe/bermuda/wiki/Troubleshooting)
+        in the Wiki (it has sub-pages, listed in the right-hand menu).
+
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant version
+      placeholder: e.g. 2026.6.4
+    validations:
+      required: true
+
+  - type: input
+    id: integration-version
+    attributes:
+      label: Bermuda version
+      placeholder: e.g. 0.10.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Installation method
+      options:
+        - HACS
+        - Manual
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: |
+        Paste screenshots of the config dialogs: Settings → Devices & Services →
+        Bermuda → CONFIGURE, then the first diagnostic screen, Global Options and
+        Select Devices panels. You may blur the last 3-4 pairs of each MAC address
+        for privacy, but keep the name and first few digits (manufacturer clue).
+    validations:
+      required: true
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics dump
+      description: |
+        In HA: Settings → Devices & Services → Bermuda → "..." → Download Diagnostics.
+        Attach the resulting JSON file using the paperclip above.
+        If Bermuda has been running for several days, reload it first (three-dots → Reload),
+        wait a few minutes, then try the download.

@@ -6,10 +6,20 @@ on:
       - main
       - master
 
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+concurrency:
+  group: labeler-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   labeler:
     name: Labeler
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7
