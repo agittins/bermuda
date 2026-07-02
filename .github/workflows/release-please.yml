@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to (re)publish the zip asset for (e.g. v0.11.0)"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -18,13 +23,18 @@ jobs:
     name: Open / maintain Release PR
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: github.event_name == 'push'
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           release-type: simple
           package-name: bermuda
           # bump manifest.json + CHANGELOG.md + tag.
-          # const.py VERSION is bumped at tag-time by release.yaml (tag-driven publish).
+          # const.py VERSION is bumped at zip-build time by the job below.
           extra-files: |
             custom_components/bermuda/manifest.json
           changelog-types: |
@@ -40,3 +50,60 @@ jobs:
               {"type":"chore","section":"Miscellaneous","hidden":true},
               {"type":"revert","section":"Reverted","hidden":false}
             ]
+
+  # Tags created by release-please use GITHUB_TOKEN, which never triggers the
+  # tag-driven release.yaml workflow (GitHub anti-recursion). So the zip asset
+  # HACS needs (hacs.json zip_release) must be built and attached here, in the
+  # same run that created the release. release.yaml still covers manually
+  # pushed tags. workflow_dispatch with a tag input allows re-publishing the
+  # asset for an existing release.
+  release-zip:
+    name: Build and attach bermuda.zip
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: release-please
+    if: >-
+      always() &&
+      (needs.release-please.outputs.release_created == 'true' ||
+       (github.event_name == 'workflow_dispatch' && inputs.tag != ''))
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      RELEASE_TAG: ${{ needs.release-please.outputs.tag_name || inputs.tag }}
+      BERMUDA_ROOT_DIR: "${{ github.workspace }}/custom_components/bermuda"
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Set release version number in files
+        shell: bash
+        run: |
+          version="${RELEASE_TAG,,}"
+          version="${version#v}"
+          # update const.py
+          sed -i \
+            "/^VERSION.*=./c\VERSION = \"${version}\"" \
+            "${{ env.BERMUDA_ROOT_DIR }}/const.py"
+          # update manifest.json
+          jq ".version = \"${version}\"" "${{ env.BERMUDA_ROOT_DIR }}/manifest.json" > "${{ env.BERMUDA_ROOT_DIR }}/manifest.json.tmp"
+          mv "${{ env.BERMUDA_ROOT_DIR }}/manifest.json.tmp" "${{ env.BERMUDA_ROOT_DIR }}/manifest.json"
+
+      - name: Zip the integration directory
+        run: |
+          cd "${{ env.BERMUDA_ROOT_DIR }}"
+          zip bermuda.zip -r ./
+
+      - name: 🔏 Sign release package
+        uses: sigstore/gh-action-sigstore-python@v3.4.0
+        with:
+          inputs: "${{ env.BERMUDA_ROOT_DIR }}/bermuda.zip"
+
+      - name: Attach the ZIP to the release
+        uses: softprops/action-gh-release@v3.0.1
+        with:
+          files: ${{ env.BERMUDA_ROOT_DIR }}/bermuda.zip
+          tag_name: ${{ env.RELEASE_TAG }}
+          draft: false
