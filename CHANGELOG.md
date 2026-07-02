@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0](https://github.com/foXaCe/bermuda/compare/v0.10.0...v0.11.0) (2026-07-02)
+
+
+### Features
+
+* integration overhaul — HA 2026.8 readiness, 99.5% coverage, strict typing ([#74](https://github.com/foXaCe/bermuda/issues/74)) ([a909565](https://github.com/foXaCe/bermuda/commit/a9095656c4865952a47d425f91c9702e3f4ccc86))
+
 ## [Unreleased]
 
 ### Changed
