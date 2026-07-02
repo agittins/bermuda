@@ -52,8 +52,8 @@ rules:
     status: exempt
     comment: Local BLE; there are no credentials to re-authenticate.
   test-coverage:
-    status: todo
-    comment: Currently ~93%; the rule asks for >95%.
+    status: done
+    comment: 99.5% (584 tests); enforced by the coverage gate (fail_under=95).
 
   # --- Gold -----------------------------------------------------------------
   devices: done
@@ -90,5 +90,5 @@ rules:
     status: exempt
     comment: No web session; the integration is local BLE only.
   strict-typing:
-    status: todo
-    comment: Several ANN/typing ruff rules are still disabled in pyproject.toml.
+    status: done
+    comment: mypy --strict passes with zero errors ([tool.mypy] in pyproject.toml); ANN ruff rules enabled.

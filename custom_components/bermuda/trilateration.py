@@ -20,7 +20,7 @@ from __future__ import annotations
 import math
 from collections import deque
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from bluetooth_data_tools import monotonic_time_coarse
 
@@ -296,7 +296,7 @@ def _resolve_hysteresis(
     return incumbent, f"HOLD incumbent slow_lane ratio={score_ratio:.2f} disp={max_dispersion:.2f}"
 
 
-def refresh_area_by_min_distance(device: BermudaDevice, options: dict) -> None:
+def refresh_area_by_min_distance(device: BermudaDevice, options: dict[str, Any]) -> None:
     """Resolve a device's area using score-based contenders and mobility-aware hysteresis."""
     nowstamp = monotonic_time_coarse()
     max_radius = options.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS)

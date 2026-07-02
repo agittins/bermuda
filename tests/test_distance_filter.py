@@ -43,6 +43,18 @@ class TestPeakRetreatVelocity:
         # Equal stamps → delta_t 0 on the first pair → peak stays 0.
         assert peak_retreat_velocity([9.0, 1.0], [100.0, 100.0]) == 0
 
+    def test_newest_distance_none_returns_zero(self):
+        # The None-guard covers any of the four newest/adjacent values; here the
+        # newest distance is None.
+        assert peak_retreat_velocity([None, 5.0], [100.0, 99.0]) == 0
+
+    def test_skips_nonpositive_interval_then_finds_deeper_peak(self):
+        # pair(0,1): delta_t=103-102=1, delta_d=10-9=1 -> peak=1.
+        # idx2: old_stamp=105.0 -> delta_t=103-105=-2 <=0 -> skipped (continue).
+        # idx3: old_distance=0.5, old_stamp=100.0 -> delta_t=3, velocity=(10-0.5)/3
+        #       ≈3.1667 > peak(1) -> peak_velocity updated.
+        assert peak_retreat_velocity([10.0, 9.0, 1.0, 0.5], [103.0, 102.0, 105.0, 100.0]) == pytest.approx(9.5 / 3)
+
 
 class TestMinimumHuggingAverage:
     """minimum_hugging_average hugs the closest recent reading."""

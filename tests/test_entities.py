@@ -704,6 +704,76 @@ def test_entity_device_info_name_propagates():
 
 
 # --------------------------------------------------------------------------- #
+# BermudaEntity._handle_coordinator_update                                     #
+# --------------------------------------------------------------------------- #
+# Note: unlike most CoordinatorEntity properties, `device_entry` is declared on
+# the base `Entity` class as a plain class attribute (`device_entry: DeviceEntry
+# | None = None`), not a property. So `object.__new__`-built entities can just
+# have `ent.device_entry` assigned directly like any other instance attribute --
+# no PropertyMock/patch.object needed to stand in for a registry lookup.
+
+
+def test_handle_coordinator_update_devreg_init_sets_name_by_user():
+    """First run (devreg_init_done False) pulls name_by_user from the device_entry."""
+    ent = _make_entity(BermudaEntity)
+    ent.devreg_init_done = False
+    ent.device_entry = SimpleNamespace(id="dev-1", name_by_user="Registry User Name")
+    ent._device = SimpleNamespace(name_by_user=None, name="Same Name")
+    ent._lastname = "Same Name"
+    ent.dr = MagicMock()
+    ent.async_write_ha_state = MagicMock()
+
+    ent._handle_coordinator_update()
+
+    assert ent._device.name_by_user == "Registry User Name"
+    assert ent.devreg_init_done is True
+    # Name didn't change, so the registry must not be touched.
+    ent.dr.async_update_device.assert_not_called()
+    ent.async_write_ha_state.assert_called_once()
+
+
+def test_handle_coordinator_update_name_change_updates_device_registry():
+    """A real name change (and an already-initialised devreg) pushes to the device registry."""
+    ent = _make_entity(BermudaEntity)
+    ent.devreg_init_done = True  # already done -> first branch is skipped
+    ent.device_entry = SimpleNamespace(id="dev-1", name_by_user="whatever")
+    ent._device = SimpleNamespace(name_by_user="existing", name="New Name")
+    ent._lastname = "Old Name"
+    ent.dr = MagicMock()
+    ent.async_write_ha_state = MagicMock()
+
+    ent._handle_coordinator_update()
+
+    # devreg_init_done branch was skipped, so name_by_user is untouched.
+    assert ent._device.name_by_user == "existing"
+    assert ent._lastname == "New Name"
+    ent.dr.async_update_device.assert_called_once_with("dev-1", name="New Name")
+    ent.async_write_ha_state.assert_called_once()
+
+
+def test_handle_coordinator_update_no_device_entry_skips_registry_write():
+    """With no device_entry, neither guarded branch touches the registry, but state is still written."""
+    ent = _make_entity(BermudaEntity)
+    ent.devreg_init_done = False
+    ent.device_entry = None
+    ent._device = SimpleNamespace(name_by_user=None, name="New Name")
+    ent._lastname = "Old Name"
+    ent.dr = MagicMock()
+    ent.async_write_ha_state = MagicMock()
+
+    ent._handle_coordinator_update()
+
+    # device_entry falsy -> devreg_init_done guard body never runs.
+    assert ent.devreg_init_done is False
+    assert ent._device.name_by_user is None
+    # Name change is still tracked locally...
+    assert ent._lastname == "New Name"
+    # ...but never pushed to the registry without a device_entry.
+    ent.dr.async_update_device.assert_not_called()
+    ent.async_write_ha_state.assert_called_once()
+
+
+# --------------------------------------------------------------------------- #
 # BermudaSensorScannerRange.available                                          #
 # --------------------------------------------------------------------------- #
 

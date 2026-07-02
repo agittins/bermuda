@@ -19,24 +19,20 @@ from .subentry_flow import BermudaCalibrationSubentryFlow, BermudaDeviceSubentry
 _GITHUB_URL = "https://github.com/foXaCe/bermuda"
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
     from homeassistant.config_entries import ConfigFlowResult
-
-
-# from homeassistant import data_entry_flow
-
-# from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 
 class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for bermuda."""
 
     VERSION = 2  # v2: per-scanner RSSI offsets moved from options into subentries
-    # CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
     def __init__(self) -> None:
         """Initialize."""
-        self._errors = {}
+        self._errors: dict[str, str] = {}
 
     async def async_step_bluetooth(self, discovery_info: BluetoothServiceInfoBleak) -> ConfigFlowResult:
         """
@@ -49,12 +45,14 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="single_instance_allowed")
 
         # Create a unique ID so that we don't get multiple discoveries appearing.
+        # reload_on_update=False: reloading is owned by the entry's update listener,
+        # combining both is deprecated since HA 2026.6 (error from 2026.12).
         await self.async_set_unique_id(DOMAIN)
-        self._abort_if_unique_id_configured()
+        self._abort_if_unique_id_configured(reload_on_update=False)
 
         return self.async_show_form(step_id="user", description_placeholders={"name": NAME, "github_url": _GITHUB_URL})
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """
         Handle a flow initialized by the user.
 
@@ -72,27 +70,17 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):  # noqa: ARG004
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:  # noqa: ARG004
         return BermudaOptionsFlowHandler()
 
     @classmethod
     @callback
     def async_get_supported_subentry_types(
         cls,
-        config_entry,  # noqa: ARG003
+        config_entry: config_entries.ConfigEntry,  # noqa: ARG003
     ) -> dict[str, type[config_entries.ConfigSubentryFlow]]:
         """Per-scanner calibration and per-device enrolment are managed as config subentries."""
         return {
             SUBENTRY_TYPE_CALIBRATION: BermudaCalibrationSubentryFlow,
             SUBENTRY_TYPE_DEVICE: BermudaDeviceSubentryFlow,
         }
-
-    # async def _show_config_form(self, user_input):  # pylint: disable=unused-argument
-    #     """Show the configuration form to edit location data."""
-    #     return self.async_show_form(
-    #         step_id="user",
-    #         data_schema=vol.Schema(
-    #             {vol.Required(CONF_USERNAME): str, vol.Required(CONF_PASSWORD): str}
-    #         ),
-    #         errors=self._errors,
-    #     )

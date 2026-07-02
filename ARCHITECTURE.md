@@ -8,7 +8,7 @@ area estimates via RSSI smoothing and a closest-scanner trilateration heuristic.
 
 - **Integration type:** `device` · **IoT class:** `calculated` · single config entry
   (`unique_id == DOMAIN`).
-- **Platforms:** `sensor`, `device_tracker`, `number`.
+- **Platforms:** `sensor`, `device_tracker`, `number`, `select`.
 
 ## Data flow
 
@@ -40,7 +40,11 @@ dynamically as devices/scanners appear, via the `SIGNAL_DEVICE_NEW` /
 | File | Role |
 |---|---|
 | `__init__.py` | Setup/unload of the config entry, `dump_devices` service, device-removal. |
-| `coordinator.py` | The update orchestrator: advert ingest, scanner & metadevice management, registry-change handling, pruning, redaction, the dump service. |
+| `coordinator.py` | The update orchestrator: advert ingest, registry-change handling, redaction, the dump service. Composed with the three mixins below. |
+| `coordinator_scanners.py` | Coordinator mixin: HA scanner roster sync + the `scanner_without_area` repair issue. |
+| `coordinator_metadevices.py` | Coordinator mixin: iBeacon / Private-BLE metadevice management. |
+| `pruning.py` | Stale-device purge (quota + per-address-type TTLs), called from the update cycle. |
+| `redaction.py` | MAC/IRK/name redaction engine shared by diagnostics and `dump_devices`. |
 | `bermuda_device.py` | `BermudaDevice` — internal state for one tracked device or scanner (address typing, names, area/floor, beacon ids, the ESPresense-style `category` fingerprint, InPlay IN100 `0x0505` telemetry decode). |
 | `bermuda_advert.py` | `BermudaAdvert` — one (device, scanner) relationship; advert history + `calculate_data()`. |
 | `distance_filter.py` | **Pure** smoothing maths (velocity/anti-teleport filter, minimum-hugging average, MAD). |
@@ -53,6 +57,8 @@ dynamically as devices/scanners appear, via the `SIGNAL_DEVICE_NEW` /
 | `bermuda_irk.py` | IRK / resolvable-private-address resolution for Private BLE devices. |
 | `entity.py` | `BermudaEntity` / `BermudaGlobalEntity` bases (unique_id, device_info, rate-limiting). |
 | `sensor.py` · `number.py` · `device_tracker.py` · `select.py` | Entity platforms (`select.py` = per-device mobility mode). |
+| `sensor_entities.py` · `sensor_global.py` | Sensor entity classes: 13 per-device classes, 4 global counters. |
+| `options_text.py` | Inline en/fr UI text for the options flow (dynamic markdown outside HA's translation schema). |
 | `config_flow.py` | `BermudaFlowHandler` (config) + registers the options flow and the subentry flows. |
 | `options_flow.py` | `BermudaOptionsFlowHandler` — menu, sectioned global options, device/category tracking, area-entity wizard. |
 | `subentry_flow.py` | Config subentry flows: per-scanner RSSI calibration, and per-device enrolment (name / ref_power / away timeout). |
@@ -89,7 +95,9 @@ pinned to the ESPHome/Shelly **wifi MAC** (not the BLE MAC). iBeacon ids are
 
 ## Testing
 
-Run with the project virtualenv: `.venv/bin/python -m pytest tests/`. Coverage is
-configured in `setup.cfg`. The `tests/test_*_characterization.py` files capture the
+Run with the project virtualenv: `.venv/bin/python -m pytest tests/`. Pytest and
+coverage are configured in `pyproject.toml` (single source — do not add a
+`pytest.ini`, it would silently override that section); the coverage gate enforces
+≥ 95 %. The `tests/test_*_characterization.py` files capture the
 current behaviour of the experience-tuned BLE algorithms so they can be refactored
 safely; `tests/test_unique_id_regression.py` guards entity identity.

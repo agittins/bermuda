@@ -45,7 +45,14 @@ from .location_fingerprints import Fingerprint, FingerprintMatcher, FingerprintS
 from .util import mac_norm
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse
+
+    # Imported directly (not as the `ar`/`dr`-aliased modules) so these type-only
+    # names don't shadow the `ar`/`dr` attributes declared below.
+    from homeassistant.helpers.area_registry import AreaRegistry
+    from homeassistant.helpers.device_registry import DeviceRegistry
 
     from . import BermudaConfigEntry
     from .bermuda_device import BermudaDevice
@@ -54,6 +61,21 @@ if TYPE_CHECKING:
 
 class BermudaMicrolocationMixin:
     """Micro-location fingerprinting + MCP-friendly services, mixed into the coordinator."""
+
+    if TYPE_CHECKING:
+        # Attributes/methods provided by BermudaDataUpdateCoordinator and its other
+        # mixins; this mixin is always combined with them (see coordinator.py). Declared
+        # here only so mypy can see them; nothing here runs at import time.
+        hass: HomeAssistant
+        ar: AreaRegistry
+        dr: DeviceRegistry
+        config_entry: BermudaConfigEntry
+        devices: dict[str, BermudaDevice]
+
+        @property
+        def scanner_list(self) -> set[str]: ...
+        def resolve_area_name(self, area_id: str) -> str | None: ...
+        def get_active_scanner_summary(self) -> list[dict[str, Any]]: ...
 
     def _microloc_init(self, hass: HomeAssistant, entry: BermudaConfigEntry) -> None:
         """Set up the fingerprint store/matcher, kick off a background load, and register services."""
@@ -129,6 +151,9 @@ class BermudaMicrolocationMixin:
                 device.micro_location_name = None
                 device.micro_location_confidence = None
         else:
+            # winner_id is only ever set (above) from result.id when result is not
+            # None, so this is unreachable; make that explicit for the type checker.
+            assert result is not None  # noqa: S101
             if device.micro_location_id != winner_id:
                 _LOGGER.debug("Device %s now at micro-location '%s'", device.name, result.name)
             device.micro_location_id = result.id
@@ -142,7 +167,7 @@ class BermudaMicrolocationMixin:
         """Register the micro-location and config-helper services (removed on unload)."""
         opt = SupportsResponse.OPTIONAL
         text = cv.string
-        services: list[tuple] = [
+        services: list[tuple[str, Any, vol.Schema, SupportsResponse]] = [
             (
                 "calibrate_location",
                 self.service_calibrate_location,
@@ -244,7 +269,7 @@ class BermudaMicrolocationMixin:
 
     # --- calibration core (shared by service + intent) ----------------------
 
-    def calibrate_location(self, device: BermudaDevice, name: str, area_id: str | None = None) -> dict:
+    def calibrate_location(self, device: BermudaDevice, name: str, area_id: str | None = None) -> dict[str, Any]:
         """
         Snapshot ``device``'s current fingerprint and save it as a named spot.
 
@@ -307,9 +332,9 @@ class BermudaMicrolocationMixin:
 
     def _fingerprint_summary(
         self, fingerprint: Fingerprint, device: BermudaDevice | None = None, *, replaced: bool = False
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Build a JSON-friendly summary of a saved spot."""
-        scanners = {}
+        scanners: dict[str, float] = {}
         for scanner_addr, distance in sorted(fingerprint.vector.items(), key=lambda item: item[1]):
             scanner_device = self.devices.get(scanner_addr)
             scanners[scanner_device.name if scanner_device else scanner_addr] = round(distance, 2)
@@ -333,13 +358,13 @@ class BermudaMicrolocationMixin:
             )
         return summary
 
-    def _device_location(self, device: BermudaDevice) -> dict:
+    def _device_location(self, device: BermudaDevice) -> dict[str, Any]:
         """Build a 'where is this device' answer: area + micro-location + scores."""
         candidates = self.fingerprints.list(device.address)
         result = None
         if candidates:
             result = self.fingerprint_matcher.match(self.build_live_fingerprint(device), candidates)
-        out: dict = {
+        out: dict[str, Any] = {
             "device": device.name,
             "device_address": device.address,
             "area_name": device.area_name,
@@ -355,7 +380,7 @@ class BermudaMicrolocationMixin:
             out["scores"] = [{"name": name, "score": round(score, 2)} for (_fid, name, score) in result.scores]
         return out
 
-    def _update_options(self, **changes) -> None:
+    def _update_options(self, **changes: list[str] | dict[str, float] | float) -> None:
         """Persist option changes to the config entry (triggers a reload)."""
         new_options = dict(self.config_entry.options)
         new_options.update(changes)
@@ -386,7 +411,7 @@ class BermudaMicrolocationMixin:
             self._fingerprint_summary(fingerprint, self.devices.get(fingerprint.device_address))
             for fingerprint in self.fingerprints.list(device_address)
         ]
-        return {"count": len(locations), "locations": locations}
+        return cast("ServiceResponse", {"count": len(locations), "locations": locations})
 
     async def service_remove_location(self, call: ServiceCall) -> ServiceResponse:
         """Delete a device's saved micro-location by name."""
@@ -444,7 +469,7 @@ class BermudaMicrolocationMixin:
 
     async def service_set_global_calibration(self, call: ServiceCall) -> ServiceResponse:
         """Set the global ref_power and/or attenuation calibration values."""
-        changes: dict = {}
+        changes: dict[str, float] = {}
         if "ref_power" in call.data:
             changes[CONF_REF_POWER] = call.data["ref_power"]
         if "attenuation" in call.data:
@@ -470,20 +495,23 @@ class BermudaMicrolocationMixin:
     async def service_get_config(self, call: ServiceCall) -> ServiceResponse:
         """Return the current Bermuda configuration, for MCP introspection."""
         opts = self.config_entry.options
-        tracked = []
+        tracked: list[dict[str, Any]] = []
         for address in opts.get(CONF_DEVICES, []):
             device = self.devices.get(mac_norm(address))
             tracked.append({"name": device.name if device else None, "address": address})
-        return {
-            "global": {
-                CONF_REF_POWER: opts.get(CONF_REF_POWER, DEFAULT_REF_POWER),
-                CONF_ATTENUATION: opts.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
-                CONF_MAX_RADIUS: opts.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS),
-                CONF_MAX_VELOCITY: opts.get(CONF_MAX_VELOCITY, DEFAULT_MAX_VELOCITY),
-                CONF_SMOOTHING_SAMPLES: opts.get(CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES),
+        return cast(
+            "ServiceResponse",
+            {
+                "global": {
+                    CONF_REF_POWER: opts.get(CONF_REF_POWER, DEFAULT_REF_POWER),
+                    CONF_ATTENUATION: opts.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
+                    CONF_MAX_RADIUS: opts.get(CONF_MAX_RADIUS, DEFAULT_MAX_RADIUS),
+                    CONF_MAX_VELOCITY: opts.get(CONF_MAX_VELOCITY, DEFAULT_MAX_VELOCITY),
+                    CONF_SMOOTHING_SAMPLES: opts.get(CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES),
+                },
+                "scanner_offsets": dict(opts.get(CONF_RSSI_OFFSETS, {})),
+                "tracked_devices": tracked,
+                "scanners": list(self.get_active_scanner_summary()),
+                "micro_location_count": len(self.fingerprints.list()),
             },
-            "scanner_offsets": dict(opts.get(CONF_RSSI_OFFSETS, {})),
-            "tracked_devices": tracked,
-            "scanners": list(self.get_active_scanner_summary()),
-            "micro_location_count": len(self.fingerprints.list()),
-        }
+        )

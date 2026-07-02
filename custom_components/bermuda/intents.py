@@ -12,7 +12,7 @@ services, so behaviour stays consistent between the two surfaces.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import voluptuous as vol
 from homeassistant.core import HomeAssistant, callback
@@ -35,7 +35,7 @@ def _get_coordinator(hass: HomeAssistant) -> BermudaDataUpdateCoordinator | None
     for entry in hass.config_entries.async_entries(DOMAIN):
         data = getattr(entry, "runtime_data", None)
         if data is not None:
-            return data.coordinator
+            return cast("BermudaDataUpdateCoordinator", data.coordinator)
     return None
 
 

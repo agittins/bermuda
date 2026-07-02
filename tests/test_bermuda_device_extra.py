@@ -12,11 +12,13 @@ strings (they are frozen elsewhere).
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from custom_components.bermuda.bermuda_advert import BermudaAdvert
 from custom_components.bermuda.bermuda_device import BermudaDevice
 from custom_components.bermuda.const import (
     ADDR_TYPE_IBEACON,
@@ -27,10 +29,13 @@ from custom_components.bermuda.const import (
     BDADDR_TYPE_RANDOM_RESOLVABLE,
     BDADDR_TYPE_RANDOM_STATIC,
     BDADDR_TYPE_RANDOM_UNRESOLVABLE,
+    DEFAULT_MOBILITY_TYPE,
     ICON_DEFAULT_AREA,
     METADEVICE_IBEACON_DEVICE,
     METADEVICE_PRIVATE_BLE_DEVICE,
     METADEVICE_TYPE_IBEACON_SOURCE,
+    MOBILITY_MOVING,
+    MOBILITY_STATIONARY,
 )
 
 
@@ -44,7 +49,6 @@ def make_coordinator():
     """
     coordinator = MagicMock()
     coordinator.options = {}
-    coordinator.hass_version_min_2025_4 = True
     coordinator.irk_manager = MagicMock()
     coordinator.get_manufacturer_from_id.return_value = (None, None)
     return coordinator
@@ -441,3 +445,251 @@ def test_resolve_device_entries_bt_and_mac_match(mock_coordinator):
     assert dev.entry_id == "bt-id"
     # The device name reflects the user-supplied BT name.
     assert dev.name == "My BT Name"
+
+
+# ---------------------------------------------------------------------------
+# async_handle_pble_callback
+# ---------------------------------------------------------------------------
+
+
+def _make_irk_device(mock_coordinator) -> BermudaDevice:
+    """Build a real IRK metadevice (needed so self.address is hex, for bytes.fromhex)."""
+    irk_hex = "0123456789abcdef0123456789abcdef"
+    with patch(
+        "custom_components.bermuda.bermuda_device.pble_coordinator.async_get_coordinator",
+        return_value=MagicMock(),
+    ):
+        return BermudaDevice(address=irk_hex, coordinator=mock_coordinator)
+
+
+def test_async_handle_pble_callback_inserts_new_address(mock_coordinator):
+    """A new source MAC is inserted at index 0 and registered with irk_manager."""
+    dev = _make_irk_device(mock_coordinator)
+    dev.metadevice_sources = []
+
+    service_info = SimpleNamespace(address="AA:BB:CC:DD:EE:F0")
+    dev.async_handle_pble_callback(service_info, change=MagicMock())
+
+    assert dev.metadevice_sources == ["aa:bb:cc:dd:ee:f0"]
+    mock_coordinator.irk_manager.add_macirk.assert_called_once_with("aa:bb:cc:dd:ee:f0", bytes.fromhex(dev.address))
+
+
+def test_async_handle_pble_callback_skips_existing_address(mock_coordinator):
+    """An address already present in metadevice_sources is not re-inserted or re-registered."""
+    dev = _make_irk_device(mock_coordinator)
+    dev.metadevice_sources = ["aa:bb:cc:dd:ee:f0"]
+    mock_coordinator.irk_manager.add_macirk.reset_mock()
+
+    service_info = SimpleNamespace(address="AA:BB:CC:DD:EE:F0")
+    dev.async_handle_pble_callback(service_info, change=MagicMock())
+
+    assert dev.metadevice_sources == ["aa:bb:cc:dd:ee:f0"]
+    mock_coordinator.irk_manager.add_macirk.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# set_ref_power
+# ---------------------------------------------------------------------------
+
+
+def test_set_ref_power_changes_and_selects_nearest_advert(mock_coordinator):
+    """Changing ref_power propagates to every advert and selects the nearest as winner."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    dev.ref_power = 0
+    far_advert = SimpleNamespace(set_ref_power=MagicMock(return_value=10.0))
+    near_advert = SimpleNamespace(set_ref_power=MagicMock(return_value=2.0))
+    dev.adverts = {("a", "far"): far_advert, ("a", "near"): near_advert}
+    dev.apply_scanner_selection = MagicMock()
+
+    with patch("custom_components.bermuda.bermuda_device.monotonic_time_coarse", return_value=999.5):
+        dev.set_ref_power(-65)
+
+    assert dev.ref_power == -65
+    far_advert.set_ref_power.assert_called_once_with(-65)
+    near_advert.set_ref_power.assert_called_once_with(-65)
+    dev.apply_scanner_selection.assert_called_once_with(near_advert)
+    assert dev.ref_power_changed == 999.5
+
+
+def test_set_ref_power_same_value_is_noop(mock_coordinator):
+    """Calling set_ref_power with the current value does nothing."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    dev.ref_power = -65
+    dev.ref_power_changed = 0
+    dev.apply_scanner_selection = MagicMock()
+
+    dev.set_ref_power(-65)
+
+    dev.apply_scanner_selection.assert_not_called()
+    assert dev.ref_power_changed == 0
+
+
+# ---------------------------------------------------------------------------
+# get_mobility_type
+# ---------------------------------------------------------------------------
+
+
+def test_get_mobility_type_valid_value_returned_as_is(mock_coordinator):
+    """A valid MOBILITY_OPTIONS member is returned unchanged (no MOVING fallback)."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    dev.mobility_type = MOBILITY_STATIONARY
+    assert dev.get_mobility_type() == MOBILITY_STATIONARY
+
+
+def test_get_mobility_type_invalid_value_falls_back_to_moving(mock_coordinator):
+    """An invalid/corrupted mobility_type falls back to MOBILITY_MOVING."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    dev.mobility_type = "not-a-real-mode"
+    assert dev.get_mobility_type() == MOBILITY_MOVING
+
+
+def test_set_mobility_type_valid_and_invalid(mock_coordinator):
+    """set_mobility_type accepts valid options and falls back to the default otherwise."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    dev.set_mobility_type(MOBILITY_STATIONARY)
+    assert dev.mobility_type == MOBILITY_STATIONARY
+    dev.set_mobility_type("bogus")
+    assert dev.mobility_type == DEFAULT_MOBILITY_TYPE
+
+
+# ---------------------------------------------------------------------------
+# apply_scanner_selection - area-change debug log
+# ---------------------------------------------------------------------------
+
+
+def test_apply_scanner_selection_logs_area_change_when_create_sensor(mock_coordinator, caplog):
+    """When create_sensor is True and the area actually changes, a debug log fires."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    dev.create_sensor = True
+    dev.area_name = "Old Area"
+    area = SimpleNamespace(name="Lounge", icon="mdi:sofa", floor_id=None)
+    dev.ar = MagicMock()
+    dev.ar.async_get_area.return_value = area
+    advert = SimpleNamespace(rssi_distance=3.5, area_id="area-1", rssi=-60)
+
+    with caplog.at_level(logging.DEBUG):
+        dev.apply_scanner_selection(advert)
+
+    assert dev.area_name == "Lounge"
+    assert "was in" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# apply_area_override
+# ---------------------------------------------------------------------------
+
+
+def test_apply_area_override_sets_distance_and_clears_advert(mock_coordinator):
+    """apply_area_override forces the area/distance and clears any winning advert."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    area = SimpleNamespace(name="Garage", icon="mdi:garage", floor_id=None)
+    dev.ar = MagicMock()
+    dev.ar.async_get_area.return_value = area
+    dev.area_advert = MagicMock()
+
+    dev.apply_area_override("area-1", 4.2)
+
+    assert dev.area_distance == 4.2
+    assert dev.area_rssi == 0
+    assert dev.area_advert is None
+    assert dev.area_id == "area-1"
+    assert dev.area_name == "Garage"
+
+
+# ---------------------------------------------------------------------------
+# calculate_data - per-advert loop
+# ---------------------------------------------------------------------------
+
+
+def test_calculate_data_calls_calculate_on_real_advert_instances(mock_coordinator):
+    """Each BermudaAdvert-typed entry in .adverts gets calculate_data() called on it."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    good_advert = MagicMock(spec=BermudaAdvert)
+    dev.adverts = {("a", "good"): good_advert}
+
+    dev.calculate_data()
+
+    good_advert.calculate_data.assert_called_once()
+
+
+def test_calculate_data_tolerates_malformed_advert_entry(mock_coordinator):
+    """A malformed (non-BermudaAdvert) entry, per issue #355, is skipped without raising."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    dev.adverts = {("a", "bad"): {}}  # someone had an empty dict instead of a scanner object
+
+    dev.calculate_data()  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# process_advertisement
+# ---------------------------------------------------------------------------
+
+
+def test_process_advertisement_metadevice_guard_returns_early(mock_coordinator):
+    """A device with metadevice_sources that isn't itself a scanner ignores the advert."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    dev.metadevice_sources = ["some:mac"]
+    assert dev._is_scanner is False
+    scanner = SimpleNamespace(address="11:22:33:44:55:66")
+    advertisementdata = MagicMock()
+
+    dev.process_advertisement(scanner, advertisementdata)
+
+    assert dev.adverts == {}
+
+
+def test_process_advertisement_updates_existing_advert(mock_coordinator):
+    """A second advert for the same (device, scanner) pair updates in place, not recreated."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    scanner = BermudaDevice(address="11:22:33:44:55:66", coordinator=mock_coordinator)
+    advertisementdata = MagicMock()
+
+    dev.process_advertisement(scanner, advertisementdata)
+    first_advert = dev.adverts[(dev.address, scanner.address)]
+
+    with patch.object(BermudaAdvert, "update_advertisement") as mock_update:
+        dev.process_advertisement(scanner, advertisementdata)
+
+    second_advert = dev.adverts[(dev.address, scanner.address)]
+    assert second_advert is first_advert
+    mock_update.assert_called_once_with(advertisementdata, scanner)
+
+
+# ---------------------------------------------------------------------------
+# process_manufacturer_data - short service uuid form
+# ---------------------------------------------------------------------------
+
+
+def test_process_manufacturer_data_short_service_uuid_used_as_is(mock_coordinator):
+    """A service uuid string shorter than 8 chars is passed through unsliced."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    mock_coordinator.get_manufacturer_from_id.return_value = (None, None)
+    advert = SimpleNamespace(service_uuids=["ABCD"], manufacturer_data=[])
+    dev.process_manufacturer_data(advert)
+    mock_coordinator.get_manufacturer_from_id.assert_called_with("ABCD")
+
+
+# ---------------------------------------------------------------------------
+# to_dict
+# ---------------------------------------------------------------------------
+
+
+def test_to_dict_hascanner_uses_repr(mock_coordinator):
+    """The _hascanner value is represented via repr() rather than serialised directly."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    dev._hascanner = SimpleNamespace(source="x")
+    out = dev.to_dict()
+    assert out["_hascanner"] == repr(dev._hascanner)
+
+
+def test_to_dict_serialises_adverts(mock_coordinator):
+    """Adverts are serialised into a dict keyed by device__scanner, using advert.to_dict()."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    advert = SimpleNamespace(
+        device_address="aa:bb:cc:dd:ee:ff",
+        scanner_address="11:22:33:44:55:66",
+        to_dict=MagicMock(return_value={"rssi": -60}),
+    )
+    dev.adverts = {("aa:bb:cc:dd:ee:ff", "11:22:33:44:55:66"): advert}
+    out = dev.to_dict()
+    assert out["adverts"] == {"aa:bb:cc:dd:ee:ff__11:22:33:44:55:66": {"rssi": -60}}

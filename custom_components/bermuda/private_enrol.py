@@ -72,4 +72,7 @@ async def async_enrol_private_device(hass: HomeAssistant, irk: str, name: str = 
         return ""
 
     # The flow re-showed its form: surface the first field error (irk_not_found…).
-    return next(iter(result.get("errors", {}).values()), "unknown")
+    # ``errors`` may be present but explicitly None, so `.get(..., {})` alone won't
+    # narrow it — fall back explicitly.
+    errors = result.get("errors") or {}
+    return next(iter(errors.values()), "unknown")

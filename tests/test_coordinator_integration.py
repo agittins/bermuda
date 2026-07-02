@@ -11,12 +11,16 @@ They deliberately avoid the territory of:
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
+import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.bermuda.bermuda_device import BermudaDevice
+from custom_components.bermuda.const import CONF_DEVICES, SIGNAL_DEVICE_IN100_NEW, SIGNAL_DEVICE_NEW
 from custom_components.bermuda.coordinator import BermudaDataUpdateCoordinator
 
 
@@ -222,3 +226,117 @@ async def test_handle_devreg_changes_remove_matches_scanner(hass: HomeAssistant,
     coordinator.handle_devreg_changes(ev)
 
     assert coordinator._scanner_init_pending is True
+
+
+async def test_update_cycle_seeds_configured_devices(hass: HomeAssistant, setup_bermuda_entry) -> None:
+    """Devices listed in CONF_DEVICES get created even if never seen on the air."""
+    coordinator = _get_coordinator(setup_bermuda_entry)
+    coordinator._waitingfor_load_manufacturer_ids = False
+    coordinator.update_in_progress = False
+    coordinator.options[CONF_DEVICES] = ["AA:BB:CC:DD:EE:FF"]
+
+    await coordinator._async_update_data_internal()
+
+    assert "aa:bb:cc:dd:ee:ff" in coordinator.devices
+
+
+async def test_update_cycle_fires_signal_device_new_for_new_sensor_device(
+    hass: HomeAssistant, setup_bermuda_entry
+) -> None:
+    """A tracked device that hasn't finished entity creation fires SIGNAL_DEVICE_NEW."""
+    coordinator = _get_coordinator(setup_bermuda_entry)
+    coordinator._waitingfor_load_manufacturer_ids = False
+    coordinator.update_in_progress = False
+
+    device = coordinator._get_or_create_device("BB:BB:BB:BB:BB:BB")
+    device.create_sensor = True
+
+    with patch("custom_components.bermuda.coordinator.async_dispatcher_send") as mock_send:
+        await coordinator._async_update_data_internal()
+
+    new_calls = [call for call in mock_send.call_args_list if call.args[1] == SIGNAL_DEVICE_NEW]
+    assert any(call.args[2] == device.address for call in new_calls)
+
+
+async def test_update_cycle_fires_signal_device_in100_new_when_detected(
+    hass: HomeAssistant, setup_bermuda_entry
+) -> None:
+    """A tracked device that started broadcasting IN100 telemetry fires SIGNAL_DEVICE_IN100_NEW."""
+    coordinator = _get_coordinator(setup_bermuda_entry)
+    coordinator._waitingfor_load_manufacturer_ids = False
+    coordinator.update_in_progress = False
+
+    device = coordinator._get_or_create_device("CC:CC:CC:CC:CC:CC")
+    device.create_sensor = True
+    device.in100_detected = True
+    assert device.create_in100_done is False  # sanity: real default, not yet flagged done
+
+    with patch("custom_components.bermuda.coordinator.async_dispatcher_send") as mock_send:
+        await coordinator._async_update_data_internal()
+
+    in100_calls = [call for call in mock_send.call_args_list if call.args[1] == SIGNAL_DEVICE_IN100_NEW]
+    assert any(call.args[2] == device.address for call in in100_calls)
+
+
+async def test_update_cycle_marks_failure_and_reraises_on_gather_error(
+    hass: HomeAssistant, setup_bermuda_entry
+) -> None:
+    """An exception during the update body still clears update_in_progress and re-raises."""
+    coordinator = _get_coordinator(setup_bermuda_entry)
+    coordinator._waitingfor_load_manufacturer_ids = False
+    coordinator.update_in_progress = False
+
+    with (
+        patch.object(coordinator, "_async_gather_advert_data", side_effect=RuntimeError("boom")),
+        pytest.raises(RuntimeError, match="boom"),
+    ):
+        await coordinator._async_update_data_internal()
+
+    assert coordinator.last_update_success is False
+    assert coordinator.update_in_progress is False  # finally block still ran
+
+
+async def test_update_cycle_logs_error_when_very_slow(
+    hass: HomeAssistant, setup_bermuda_entry, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A cycle taking >2s logs an ERROR about the event loop being starved.
+
+    Only the ``time`` name inside coordinator.py is swapped out (not the real,
+    process-wide ``time`` module) so asyncio's own clock -- used internally on
+    every loop iteration -- is unaffected; patching ``time.monotonic`` globally
+    starves the event loop's scheduler and corrupts unrelated background tasks.
+    """
+    coordinator = _get_coordinator(setup_bermuda_entry)
+    coordinator._waitingfor_load_manufacturer_ids = False
+    coordinator.update_in_progress = False
+
+    fake_time = SimpleNamespace(monotonic=MagicMock(side_effect=[0.0, 3.0]))
+    with (
+        patch("custom_components.bermuda.coordinator.time", fake_time),
+        caplog.at_level(logging.ERROR, logger="custom_components.bermuda"),
+    ):
+        await coordinator._async_update_data_internal()
+
+    assert "Update cycle took" in caplog.text
+
+
+async def test_update_cycle_logs_warning_when_moderately_slow(
+    hass: HomeAssistant, setup_bermuda_entry, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A cycle taking between 0.5s and 2s logs a WARNING instead of an ERROR.
+
+    See test_update_cycle_logs_error_when_very_slow for why only the module-local
+    ``time`` name is swapped instead of the real ``time.monotonic`` globally.
+    """
+    coordinator = _get_coordinator(setup_bermuda_entry)
+    coordinator._waitingfor_load_manufacturer_ids = False
+    coordinator.update_in_progress = False
+
+    fake_time = SimpleNamespace(monotonic=MagicMock(side_effect=[0.0, 1.0]))
+    with (
+        patch("custom_components.bermuda.coordinator.time", fake_time),
+        caplog.at_level(logging.WARNING, logger="custom_components.bermuda"),
+    ):
+        await coordinator._async_update_data_internal()
+
+    assert "Update cycle took" in caplog.text

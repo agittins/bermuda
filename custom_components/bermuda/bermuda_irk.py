@@ -4,19 +4,18 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from math import floor
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from bleak.backends.device import BLEDevice
 from bluetooth_data_tools import get_cipher_for_irk, monotonic_time_coarse, resolve_private_address
 from habluetooth import BluetoothServiceInfoBleak
 from homeassistant.components.bluetooth import BluetoothChange
-from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
 
 from .const import _LOGGER, DOMAIN, PRUNE_TIME_KNOWN_IRK, IrkTypes
 from .util import address_is_resolvable
 
 if TYPE_CHECKING:
-    from cryptography.hazmat.primitives.ciphers import Cipher
+    from cryptography.hazmat.primitives.ciphers import Cipher, modes
     from homeassistant.components.bluetooth import BluetoothCallback
 
 type Cancellable = Callable[[], None]
@@ -39,13 +38,13 @@ class BermudaIrkManager:
     """
 
     def __init__(self) -> None:
-        self._irks: dict[bytes, Cipher] = {}
+        self._irks: dict[bytes, Cipher[modes.ECB]] = {}
         self._macs: dict[str, ResolvableMAC] = {}
         self._irk_callbacks: dict[bytes, list[BluetoothCallback]] = {}
 
     def add_irk(self, irk: bytes) -> list[str]:
         """Adds an IRK to the internal list. Returns matching MACs, if any."""
-        macs = []
+        macs: list[str] = []
         if irk not in self._irks:
             # Save new irk and cipher
             self._irks[irk] = cipher = get_cipher_for_irk(irk)
@@ -63,7 +62,7 @@ class BermudaIrkManager:
             _LOGGER.debug("New IRK %s... matches %d of %d existing MACs", irk.hex()[:4], len(macs), len(self._macs))
         return macs
 
-    def known_macs(self, resolved=True) -> dict[str, ResolvableMAC]:
+    def known_macs(self, *, resolved: bool = True) -> dict[str, ResolvableMAC]:
         """
         Returns a list of ResolvableMAC tuples.
 
@@ -75,7 +74,7 @@ class BermudaIrkManager:
         # otherwise, all of 'em
         return self._macs.copy()
 
-    def async_prune(self):
+    def async_prune(self) -> None:
         """
         Check for expired MACs and expunge them.
 
@@ -133,11 +132,12 @@ class BermudaIrkManager:
             return self._update_saved_mac(address, IrkTypes.NO_KNOWN_IRK_MATCH.value)
         return self._update_saved_mac(address, IrkTypes.NOT_RESOLVABLE_ADDRESS.value)
 
-    def _validate_mac_irk(self, address: str, irk: bytes, cipher: Cipher | None) -> bytes:
+    def _validate_mac_irk(self, address: str, irk: bytes, cipher: Cipher[modes.ECB] | None) -> bytes | None:
         """
         Checks address against a given IRK.
 
-        Returns the matching IRK on success, or an IrkType
+        Returns the matching IRK on success, an IrkType, or None if no cipher
+        could be obtained/prepared for the given IRK (should not happen).
         """
         if not cipher:
             cipher = self._irks.get(irk, get_cipher_for_irk(irk))
@@ -178,7 +178,7 @@ class BermudaIrkManager:
             self._macs[address] = ResolvableMAC(address, macirk.expires, irk)
         return irk
 
-    def fire_callbacks(self, irk, mac) -> None:
+    def fire_callbacks(self, irk: bytes, mac: str) -> None:
         """
         Fire all callbacks for the given irk advising it of the MAC.
 
@@ -186,16 +186,8 @@ class BermudaIrkManager:
         so that we can fake the PrivateBleDevice callbacks for an easy win.
         """
         # Create bare-shell classes to satisfy the callback signature
-        # bleak 1.0.0 (HA 2025.8) removes rssi param from BLEDevice.__init__()
-        # bleak 1.0.1 restores kwargs but not rssi
-        # When HA_MINVER >= 2025.8, the else branch can be removed.
-
-        # HA version when BLEDevice went from 4+ params to 3 (bleak 1.0.0, 1.0.1)
-        if MAJOR_VERSION > 2025 or (MAJOR_VERSION == 2025 and MINOR_VERSION >= 8):
-            bledevice = BLEDevice(mac, "", None)  # type: ignore
-        else:
-            # Include the rssi if we are on an older release.
-            bledevice = BLEDevice(mac, "", None, 0)  # type: ignore
+        # (bleak >= 1.0, i.e. HA >= 2025.8: BLEDevice takes 3 params, no rssi)
+        bledevice = BLEDevice(mac, "", None)
         service_info = BluetoothServiceInfoBleak("", mac, 0, {}, {}, [], DOMAIN, bledevice, None, False, False, 0)
 
         if callbacks := self._irk_callbacks.get(irk):
@@ -230,7 +222,7 @@ class BermudaIrkManager:
 
         return _unsubscribe
 
-    def async_diagnostics_no_redactions(self):
+    def async_diagnostics_no_redactions(self) -> dict[str, Any]:
         """
         Return diagnostic info (MAC addresses still need washing by redact_data).
 

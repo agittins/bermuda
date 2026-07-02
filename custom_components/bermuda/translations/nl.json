@@ -5,43 +5,331 @@
     },
     "step": {
       "user": {
-        "description": "Als je hulp nodig hebt met de configuratie, kijk dan op onze [GitHub pagina](https://github.com/foXaCe/bermuda)",
+        "description": "Als je hulp nodig hebt met de configuratie, kijk dan op onze [GitHub pagina]({github_url})",
         "title": "Bermuda BLE Trilateration"
       }
     }
   },
+  "config_subentries": {
+    "calibration": {
+      "abort": {
+        "no_scanners": "Elke bekende scanner heeft al een kalibratieoffset."
+      },
+      "entry_type": "Scannerkalibratie",
+      "initiate_flow": {
+        "reconfigure": "Scanneroffset bewerken",
+        "user": "Scanneroffset toevoegen"
+      },
+      "step": {
+        "reconfigure": {
+          "data": {
+            "rssi_offset": "RSSI-offset (dB)"
+          },
+          "data_description": {
+            "rssi_offset": "Wordt bij de RSSI van deze scanner opgeteld voordat de afstand wordt berekend."
+          },
+          "description": "Pas de dB-offset voor {scanner} aan.",
+          "title": "RSSI-offset bewerken"
+        },
+        "user": {
+          "data": {
+            "rssi_offset": "RSSI-offset (dB)",
+            "scanner": "Scanner"
+          },
+          "data_description": {
+            "rssi_offset": "Wordt bij de RSSI van deze scanner opgeteld voordat de afstand wordt berekend. Positief = wordt beschouwd als sterker/dichterbij.",
+            "scanner": "De Bluetooth-proxy om te kalibreren."
+          },
+          "description": "Voeg een dB-offset toe voor een scanner, zodat de metingen overeenkomen met de andere scanners.",
+          "title": "RSSI-offset per scanner"
+        }
+      }
+    },
+    "device": {
+      "abort": {
+        "no_devices": "Elk ontdekt apparaat is al geregistreerd."
+      },
+      "entry_type": "Gevolgd apparaat",
+      "initiate_flow": {
+        "reconfigure": "Apparaat bewerken",
+        "user": "Apparaat registreren"
+      },
+      "step": {
+        "reconfigure": {
+          "data": {
+            "devtracker_nothome_timeout": "Time-out afwezig (s)",
+            "name": "Naam (optioneel)",
+            "ref_power": "Referentievermogen (rssi @ 1 m)"
+          },
+          "data_description": {
+            "devtracker_nothome_timeout": "Seconden zonder meting voordat dit apparaat als Afwezig wordt beschouwd.",
+            "name": "Overschrijft de uitgezonden naam (een hernoeming in Home Assistant heeft nog steeds voorrang).",
+            "ref_power": "Rssi per apparaat op 1 m. Overschrijft de algemene waarde bij het opstarten."
+          },
+          "description": "Pas de registratie voor {device} aan.",
+          "title": "Apparaat bewerken"
+        },
+        "user": {
+          "data": {
+            "address": "Apparaat",
+            "devtracker_nothome_timeout": "Time-out afwezig (s)",
+            "name": "Naam (optioneel)",
+            "ref_power": "Referentievermogen (rssi @ 1 m)"
+          },
+          "data_description": {
+            "devtracker_nothome_timeout": "Seconden zonder meting voordat dit apparaat als Afwezig wordt beschouwd.",
+            "name": "Overschrijft de uitgezonden naam (een hernoeming in Home Assistant heeft nog steeds voorrang).",
+            "ref_power": "Rssi per apparaat op 1 m. Overschrijft de algemene waarde bij het opstarten."
+          },
+          "description": "Volg een apparaat met een eigen naam, referentievermogen en time-out voor afwezigheid.",
+          "title": "Apparaat registreren"
+        }
+      }
+    }
+  },
   "entity": {
+    "device_tracker": {
+      "bermuda_tracker": {
+        "name": "Bermuda-tracker"
+      }
+    },
+    "number": {
+      "ref_power": {
+        "name": "Referentievermogen op 1 m (0 voor standaard)"
+      }
+    },
+    "select": {
+      "mobility_type": {
+        "name": "Mobiliteitstype",
+        "state": {
+          "moving": "In beweging",
+          "stationary": "Stilstaand"
+        }
+      }
+    },
     "sensor": {
+      "active_proxy_count": {
+        "name": "Aantal actieve proxy's"
+      },
       "area": {
         "name": "Ruimte"
       },
+      "area_last_seen": {
+        "name": "Laatst geziene ruimte"
+      },
+      "area_switch_diagnostic": {
+        "name": "Diagnose ruimtewisseling"
+      },
       "distance": {
         "name": "Afstand"
+      },
+      "distance_to_scanner": {
+        "name": "Afstand tot {scanner_name}"
+      },
+      "floor": {
+        "name": "Verdieping"
+      },
+      "in100_adc_voltage": {
+        "name": "IN100 ADC-spanning"
+      },
+      "in100_temperature": {
+        "name": "IN100-temperatuur"
+      },
+      "in100_vcc": {
+        "name": "IN100-voedingsspanning"
+      },
+      "micro_location": {
+        "name": "Micro-locatie"
+      },
+      "nearest_rssi": {
+        "name": "Dichtstbijzijnde RSSI"
+      },
+      "nearest_scanner": {
+        "name": "Dichtstbijzijnde scanner"
+      },
+      "total_device_count": {
+        "name": "Totaal aantal apparaten"
+      },
+      "total_proxy_count": {
+        "name": "Totaal aantal proxy's"
+      },
+      "unfiltered_distance_to_scanner": {
+        "name": "Ongefilterde afstand tot {scanner_name}"
+      },
+      "visible_device_count": {
+        "name": "Aantal zichtbare apparaten"
       }
+    }
+  },
+  "exceptions": {
+    "bluetooth_not_available": {
+      "message": "Er is geen Bluetooth-adapter of -proxy beschikbaar om privéapparaten te volgen."
+    },
+    "irk_not_found": {
+      "message": "Er is momenteel geen apparaat zichtbaar dat overeenkomt met deze IRK. Zorg ervoor dat het in de buurt is, is ingeschakeld en dat Bluetooth actief is."
+    },
+    "irk_not_valid": {
+      "message": "Dit lijkt geen geldige IRK te zijn. Deze moet 16 bytes zijn: 32 hexadecimale tekens, of base64 eindigend op '='."
+    },
+    "not_loaded": {
+      "message": "Bermuda is niet geladen. Stel de integratie in voordat je deze service aanroept."
+    },
+    "unknown": {
+      "message": "Het apparaat kon niet worden geregistreerd op basis van die IRK. Controleer de sleutel en probeer het opnieuw."
+    }
+  },
+  "issues": {
+    "scanner_without_area": {
+      "description": "Bermuda vereist dat alle Bluetooth-proxy's een geldige ruimte toegewezen hebben gekregen om correct te werken. Wijs een ruimte toe door de apparaatpagina van elke proxy te bezoeken (via `Apparaten en services`) en klik op het potloodicoon rechtsboven om een ruimte toe te wijzen. De volgende proxy's hebben geen ruimte toegewezen:\n\n{scannerlist}",
+      "title": "Sommige Bluetooth-proxy's hebben geen RUIMTE"
     }
   },
   "options": {
     "error": {
+      "bluetooth_not_available": "Er is geen Bluetooth-adapter of -proxy beschikbaar om privéapparaten te volgen.",
+      "err_scanner_no_record": "De geselecteerde scanner heeft dit apparaat (nog) niet gezien.",
+      "irk_not_found": "Er is momenteel geen apparaat zichtbaar dat overeenkomt met deze IRK. Zorg ervoor dat het in de buurt is, is ingeschakeld en dat Bluetooth actief is.",
+      "irk_not_valid": "Dit lijkt geen geldige IRK te zijn (16 bytes vereist: 32 hexadecimale tekens, of base64 eindigend op '=').",
       "no_devices": "Er worden geen bluetooth-apparaten actief gemeld door uw scanners. \nDit moet eerst opgelost worden voordat Bermuda ergens mee kan helpen.",
       "no_scanners": "Je moet enkele Bluetooth-scanners configureren voordat Bermuda iets heeft om mee te werken. \nMet ESPhome bluetooth_proxy, Shelly bluetooth proxy of een lokale bluetooth adapter kun je aan de slag.",
-      "some_active": "Er zijn ten minste enkele actieve apparaten, dat is goed."
+      "some_active": "Er zijn ten minste enkele actieve apparaten, dat is goed.",
+      "unknown": "Het apparaat kon niet worden geregistreerd. Controleer de IRK en probeer het opnieuw."
     },
     "step": {
+      "area_entities": {
+        "data": {
+          "area_entities": "Aanwezigheidsentiteiten",
+          "area_entity_distance": "Standaard virtuele afstand (m)"
+        },
+        "data_description": {
+          "area_entities": "Entiteiten waarvan de ruimte wordt gebruikt terwijl ze actief zijn.",
+          "area_entity_distance": "Afstand waarmee de geactiveerde ruimte concurreert; kleiner wint van meer BLE-metingen. Standaard 0,1 m."
+        },
+        "description": "Kies Home Assistant-entiteiten (beweging, aanwezigheid, contact, ...) waarvan de ruimte de BLE-detectie moet versterken of overschrijven. Wanneer een entiteit actief is, concurreert de ruimte ervan met BLE op een 'virtuele afstand' (kleiner = sterkere override).",
+        "title": "Aanwezigheidsentiteiten per ruimte"
+      },
+      "area_entities_distance": {
+        "description": "Stel een virtuele afstand (meters) per entiteit in — kleiner wint gemakkelijker van BLE. Gegroepeerd per ruimte:\n\n{area_summary}",
+        "title": "Virtuele afstand per entiteit"
+      },
+      "enrol_private": {
+        "data": {
+          "irk": "IRK",
+          "name": "Naam (optioneel)"
+        },
+        "data_description": {
+          "irk": "Plak de sleutel als 32 hexadecimale tekens, of base64 (eindigend op '='). Een 'irk:'-voorvoegsel is toegestaan.",
+          "name": "Een herkenbare naam voor het gevolgde apparaat. Laat leeg om de eigen naam van het apparaat te gebruiken."
+        },
+        "description": "Volg een iPhone, Apple Watch of ander privacyapparaat via de **IRK** (Identity Resolving Key). Home Assistant herleidt het roterende MAC-adres, waarna Bermuda het automatisch volgt.\n\n**Waar vind je de IRK**\n- **iOS / watchOS** (vereist een Mac aangemeld bij dezelfde iCloud): open *Sleutelhangertoegang* → *Lokale items* → zoek naar `Bluetooth` → kies de vermelding die overeenkomt met het MAC-adres van het apparaat (Instellingen › Algemeen › Info) → *Toon wachtwoord* → kopieer de **Remote IRK** (base64).\n- **Android** (geroot): lees `LE_LOCAL_KEY_IRK` in `/data/misc/bluedroid/bt_config.conf` (keer de bytevolgorde om).\n\nHet apparaat moet nu in de buurt zijn en actief zenden, anders wordt de sleutel geweigerd.",
+        "title": "Privéapparaat registreren (IRK)"
+      },
       "globalopts": {
+        "description": "Stel het algemene afstandsmodel, de time-outs voor apparaatvolging en de RSSI-afvlakking in. Dit geldt voor elk gevolgd apparaat.",
+        "sections": {
+          "distance_model": {
+            "data": {
+              "attenuation": "Verzwakking - Omgevingsverzwakkingsfactor voor afstandsberekening/kalibratie.",
+              "max_area_radius": "Maximale straal in meters voor eenvoudige RUIMTE-detectie",
+              "ref_power": "Referentievermogen - Standaard rssi op 1 meter afstand, voor afstandskalibratie."
+            },
+            "data_description": {
+              "attenuation": "Pas na het instellen van ref_power op 1 meter de verzwakking aan zodat andere afstanden min of meer correct worden weergegeven.",
+              "max_area_radius": "In de eenvoudige `AREA`-functie wordt een apparaat gemarkeerd als zich bevindend in de RUIMTE van zijn dichtstbijzijnde ontvanger, als het zich binnen deze straal bevindt. Als je deze klein instelt, gaan apparaten tussen ontvangers naar `onbekend`, maar als deze groot is, verschijnen apparaten altijd in hun dichtstbijzijnde ruimte.",
+              "ref_power": "Plaats je meest gebruikte baken op 1 meter (3,28') afstand van je meest gebruikte proxy/scanner. Pas ref_power aan totdat de afstandssensor een laagste (niet gemiddelde) afstand van 1 meter aangeeft."
+            },
+            "description": "Referentievermogen, verzwakking en maximale straal — de relatie tussen RSSI en afstand.",
+            "name": "Afstandsmodel"
+          },
+          "smoothing": {
+            "data": {
+              "max_velocity": "Maximale snelheid in meters per seconde - negeer metingen die een snellere verwijdering impliceren dan deze limiet. 3 m/s (10 km/u) is een goede waarde.",
+              "smoothing_samples": "Afvlakkingsmonsters - hoeveel monsters te gebruiken voor het afvlakken van afstandsmetingen."
+            },
+            "data_description": {
+              "max_velocity": "Als een meting inhoudt dat een apparaat sneller wegbeweegt dan dit, negeren we die meting. Mensen lopen normaal met 1,4 m/s; met een schaar in de hand bewegen ze met 3 m/s.",
+              "smoothing_samples": "Hoeveel monsters worden gemiddeld voor de afstandsafvlakking. Grotere getallen zorgen voor een langzamere toename van de afstand. Afnemende afstanden worden niet beïnvloed. 10 of 20 lijkt goed te werken."
+            },
+            "description": "Aantal monsters en snelheidslimiet die de afstandsmetingen stabiliseren.",
+            "name": "RSSI-afvlakking"
+          },
+          "tracking": {
+            "data": {
+              "devtracker_nothome_timeout": "Devtracker time-out in seconden om een apparaat als `Afwezig` te beschouwen.",
+              "update_interval": "Updateinterval - Hoe vaak (in seconden) de sensormetingen worden bijgewerkt."
+            },
+            "data_description": {
+              "devtracker_nothome_timeout": "Hoe snel device_tracker-entiteiten als `not_home` worden gemarkeerd nadat we geen advertenties meer zien. 30 tot 300 seconden is waarschijnlijk een goede waarde.",
+              "update_interval": "Afnemende afstanden worden nog steeds meteen bijgewerkt, maar toenemende afstanden worden hierdoor beperkt om de groei van je database te verminderen."
+            },
+            "description": "Hoe lang het duurt voordat een apparaat als Afwezig wordt gerapporteerd, en hoe vaak sensoren verversen.",
+            "name": "Apparaatvolging"
+          }
+        },
         "title": "Globale instellingen"
       },
       "init": {
         "description": "Bermuda kan op dit moment het volgende zien:\n- {device_counter_active}, van de {device_counter_devices}, actieve Bluetooth-apparaten.\n- {scanner_counter_active}, van de {scanner_counter_scanners}, actieve Bluetooth-scanners.\n\n{status}",
+        "menu_options": {
+          "area_entities": "Aanwezigheidsentiteiten per ruimte",
+          "enrol_private": "Privéapparaat registreren (IRK)",
+          "globalopts": "Algemene opties",
+          "selectdevices": "Apparaten selecteren om te volgen"
+        },
         "title": "Bermuda configureren"
       },
       "selectdevices": {
-        "data": {},
+        "data": {
+          "devices": "Apparaten om te volgen",
+          "exclude": "Deze uitsluiten",
+          "track_categories": "Volledige categorieën volgen"
+        },
+        "data_description": {
+          "devices": "Kies de BLE-apparaten die Bermuda moet volgen. Typ om te zoeken. iBeacons en willekeurige MAC-adressen zijn gelabeld; apparaten die je volgt maar die momenteel niet worden gezien, worden weergegeven als (saved).",
+          "exclude": "Volg deze nooit, zelfs niet als ze overeenkomen met een gevolgde categorie.",
+          "track_categories": "Volg automatisch elk apparaat dat overeenkomt met een geselecteerde categorie (bijv. alle iBeacons of alle benoemde apparaten)."
+        },
         "description": "Kies welke apparaten moeten worden gevolgd. Als er geen apparaten hieronder verschijnen, ziet Bermuda geen gegevens van Bluetooth-scanners. Zorg ervoor dat je een esphome ble_proxy-apparaat, Shelly-apparaten met Bluetooth-proxy geconfigureerd of een lokale Bluetooth-adapter hebt.",
         "title": "Selecteer apparaten"
       }
     }
   },
+  "selector": {
+    "track_category": {
+      "options": {
+        "amazfit": "Amazfit / Mi",
+        "apple": "Apple",
+        "garmin": "Garmin",
+        "google": "Google",
+        "ibeacon": "iBeacons",
+        "irk": "Privéapparaten (IRK)",
+        "microsoft": "Microsoft",
+        "named": "Benoemde apparaten",
+        "public": "Openbaar MAC-adres",
+        "random": "Willekeurig MAC-adres",
+        "samsung": "Samsung"
+      }
+    }
+  },
   "services": {
+    "calibrate_location": {
+      "description": "Leg de huidige plek van een gevolgd apparaat vast als een benoemde micro-locatie (bijv. 'Sleutelhaak'), door een momentopname van de RF-vingerafdruk te maken vanaf elke proxy die het kan horen. Opnieuw uitvoeren met hetzelfde apparaat en dezelfde naam herkalibreert die plek.",
+      "fields": {
+        "area": {
+          "description": "Optionele Home Assistant-ruimte om aan deze plek te koppelen. Standaard de huidige ruimte van het apparaat.",
+          "name": "Ruimte"
+        },
+        "device": {
+          "description": "Het te kalibreren gevolgde apparaat/object. Een apparaatnaam, MAC/UUID, of Home Assistant-apparaat-ID.",
+          "name": "Apparaat"
+        },
+        "name": {
+          "description": "De naam voor deze plek, bijv. 'Sleutelhaak' of 'Bijzettafella'.",
+          "name": "Locatienaam"
+        }
+      },
+      "name": "Micro-locatie kalibreren"
+    },
     "dump_devices": {
       "description": "Haal de interne gegevensstructuur op, optioneel beperkt tot de opgegeven adressen. Bevat de RSSI en andere informatie van elke scanner",
       "fields": {
@@ -59,6 +347,124 @@
         }
       },
       "name": "Dump Devices"
+    },
+    "enrol_private_device": {
+      "description": "Volg een privacyapparaat (iPhone, Apple Watch, …) via de IRK ervan. Geeft de sleutel door aan de Private BLE Device-integratie van Home Assistant, die het roterende MAC-adres herleidt; Bermuda volgt het apparaat vervolgens automatisch. Het apparaat moet in de buurt zijn en zenden om de sleutel te laten accepteren.",
+      "fields": {
+        "irk": {
+          "description": "Identity Resolving Key, als 32 hexadecimale tekens of base64 (eindigend op '=').",
+          "name": "IRK"
+        },
+        "name": {
+          "description": "Optionele herkenbare naam voor het gevolgde apparaat.",
+          "name": "Naam"
+        }
+      },
+      "name": "Privéapparaat registreren"
+    },
+    "get_config": {
+      "description": "Retourneert de huidige kalibratie, gevolgde apparaten, scanners en het aantal micro-locaties van Bermuda.",
+      "name": "Configuratie ophalen"
+    },
+    "list_locations": {
+      "description": "Toont opgeslagen micro-locaties, optioneel gefilterd op één apparaat.",
+      "fields": {
+        "device": {
+          "description": "Optioneel apparaat om op te filteren. Laat leeg om alle opgeslagen plekken weer te geven.",
+          "name": "Apparaat"
+        }
+      },
+      "name": "Micro-locaties weergeven"
+    },
+    "remove_location": {
+      "description": "Verwijder een opgeslagen micro-locatie van een apparaat op naam.",
+      "fields": {
+        "device": {
+          "description": "Het apparaat waartoe de plek behoort.",
+          "name": "Apparaat"
+        },
+        "name": {
+          "description": "De naam van de te verwijderen plek.",
+          "name": "Locatienaam"
+        }
+      },
+      "name": "Micro-locatie verwijderen"
+    },
+    "rename_location": {
+      "description": "Hernoem een opgeslagen micro-locatie van een apparaat.",
+      "fields": {
+        "device": {
+          "description": "Het apparaat waartoe de plek behoort.",
+          "name": "Apparaat"
+        },
+        "name": {
+          "description": "De huidige naam van de plek.",
+          "name": "Huidige naam"
+        },
+        "new_name": {
+          "description": "De nieuwe naam voor de plek.",
+          "name": "Nieuwe naam"
+        }
+      },
+      "name": "Micro-locatie hernoemen"
+    },
+    "set_global_calibration": {
+      "description": "Stel het algemene referentievermogen en/of de verzwakking in die worden gebruikt voor afstandsschattingen.",
+      "fields": {
+        "attenuation": {
+          "description": "Omgevingsverzwakkingsfactor die wordt gebruikt voorbij 1 meter.",
+          "name": "Verzwakking"
+        },
+        "ref_power": {
+          "description": "RSSI (dBm) gemeten op 1 meter. Negatiever betekent kortere geschatte afstanden.",
+          "name": "Referentievermogen"
+        }
+      },
+      "name": "Algemene kalibratie instellen"
+    },
+    "set_scanner_offset": {
+      "description": "Stel een RSSI-offset per scanner in (de kalibratiestap per proxy, als service).",
+      "fields": {
+        "rssi_offset": {
+          "description": "Offset toegevoegd aan de RSSI van deze scanner. Negatief vergroot de afstand, positief verkleint deze.",
+          "name": "RSSI-offset"
+        },
+        "scanner": {
+          "description": "De aan te passen scanner/proxy. Een scannernaam of -adres.",
+          "name": "Scanner"
+        }
+      },
+      "name": "RSSI-offset van scanner instellen"
+    },
+    "track_device": {
+      "description": "Voeg een Bluetooth-apparaat toe aan de gevolgde apparaten van Bermuda (maakt de bijbehorende sensoren aan).",
+      "fields": {
+        "device": {
+          "description": "Het te volgen apparaat. Een apparaatnaam, MAC/UUID, of Home Assistant-apparaat-ID.",
+          "name": "Apparaat"
+        }
+      },
+      "name": "Apparaat volgen"
+    },
+    "untrack_device": {
+      "description": "Verwijder een apparaat uit de gevolgde apparaten van Bermuda.",
+      "fields": {
+        "device": {
+          "description": "Het apparaat om niet meer te volgen.",
+          "name": "Apparaat"
+        }
+      },
+      "name": "Apparaat niet meer volgen"
+    },
+    "where_is": {
+      "description": "Rapporteer de huidige ruimte en overeenkomende micro-locatie van een apparaat, met betrouwbaarheid.",
+      "fields": {
+        "device": {
+          "description": "Het te lokaliseren apparaat/object. Een apparaatnaam, MAC/UUID, of Home Assistant-apparaat-ID.",
+          "name": "Apparaat"
+        }
+      },
+      "name": "Waar bevindt zich"
     }
   }
 }

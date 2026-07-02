@@ -8,13 +8,14 @@ https://github.com/foXaCe/bermuda
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from types import MappingProxyType
+from typing import TYPE_CHECKING, cast
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import SupportsResponse
-from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
@@ -35,8 +36,9 @@ from .util import mac_norm
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse
     from homeassistant.helpers.device_registry import DeviceEntry
+    from homeassistant.helpers.typing import ConfigType
 
 type BermudaConfigEntry = ConfigEntry[BermudaData]
 
@@ -68,10 +70,10 @@ SERVICE_ENROL_PRIVATE_DEVICE_SCHEMA = vol.Schema(
 )
 
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up Bermuda services."""
 
-    async def async_dump_devices(call):
+    async def async_dump_devices(call: ServiceCall) -> ServiceResponse:
         """Return a dump of beacon advertisements by receiver."""
         loaded_entries = [
             entry for entry in hass.config_entries.async_entries(DOMAIN) if entry.state is ConfigEntryState.LOADED
@@ -79,10 +81,11 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         if not loaded_entries:
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="not_loaded")
 
-        coordinator = loaded_entries[0].runtime_data.coordinator
-        return await coordinator.service_dump_devices(call)
+        # async_entries() returns bare ConfigEntry (generic Any); narrow to ours.
+        entry = cast("BermudaConfigEntry", loaded_entries[0])
+        return await entry.runtime_data.coordinator.service_dump_devices(call)
 
-    async def async_enrol_private(call):
+    async def async_enrol_private(call: ServiceCall) -> None:
         """Create a private_ble_device entry from an IRK so Bermuda tracks it."""
         error = await async_enrol_private_device(hass, call.data[CONF_IRK], call.data.get(CONF_NAME, ""))
         if error:
@@ -114,14 +117,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> b
     coordinator = BermudaDataUpdateCoordinator(hass, entry)
     entry.runtime_data = BermudaData(coordinator)
 
-    try:
-        await coordinator.async_refresh()
-    except Exception as err:
-        _LOGGER.exception("Error during coordinator refresh")
-        raise ConfigEntryNotReady from err
-    if not coordinator.last_update_success:
-        _LOGGER.debug("Coordinator last update failed, raising ConfigEntryNotReady")
-        raise ConfigEntryNotReady
+    await coordinator.async_config_entry_first_refresh()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -152,7 +148,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: BermudaConfigEn
             hass.config_entries.async_add_subentry(
                 config_entry,
                 ConfigSubentry(
-                    data={CONF_SCANNER: scanner, CONF_RSSI_OFFSET: offset},
+                    data=MappingProxyType({CONF_SCANNER: scanner, CONF_RSSI_OFFSET: offset}),
                     subentry_type=SUBENTRY_TYPE_CALIBRATION,
                     title=scanner,
                     unique_id=scanner,

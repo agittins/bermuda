@@ -14,7 +14,6 @@ def mock_coordinator():
     """Fixture for mocking BermudaDataUpdateCoordinator."""
     coordinator = MagicMock()
     coordinator.options = {}
-    coordinator.hass_version_min_2025_4 = True
     return coordinator
 
 

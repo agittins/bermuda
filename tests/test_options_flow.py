@@ -10,9 +10,12 @@ filter-only refresh).
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import area_registry as ar
@@ -29,6 +32,7 @@ from custom_components.bermuda.const import (
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
     CONF_EXCLUDE_DEVICES,
+    CONF_IRK,
     CONF_MAX_RADIUS,
     CONF_MAX_VELOCITY,
     CONF_REF_POWER,
@@ -38,6 +42,8 @@ from custom_components.bermuda.const import (
     DOMAIN,
     NAME,
 )
+from custom_components.bermuda.options_flow import BermudaOptionsFlowHandler
+from custom_components.bermuda.options_text import _DESCRIPTION_TEXTS
 
 from .const import MOCK_CONFIG, MOCK_OPTIONS_GLOBALS
 
@@ -339,3 +345,136 @@ async def test_options_area_entities_empty_skips_distance_step(
     assert result["type"] == FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     assert setup_bermuda_entry.options.get(CONF_AREA_ENTITIES) == []
+
+
+# --------------------------------------------------------------------------- #
+# BermudaOptionsFlowHandler._get_options_translation                          #
+# --------------------------------------------------------------------------- #
+
+
+def _flow_for(hass: HomeAssistant, entry: MockConfigEntry) -> BermudaOptionsFlowHandler:
+    """Build a flow handler wired to a real hass/config_entry, bypassing the flow manager."""
+    flow = BermudaOptionsFlowHandler()
+    flow.hass = hass
+    flow.handler = entry.entry_id
+    return flow
+
+
+async def test_get_options_translation_kwargs_without_placeholder_is_unchanged(
+    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry
+):
+    """Passing kwargs to a description_text with no placeholders leaves it unchanged."""
+    flow = _flow_for(hass, setup_bermuda_entry)
+    plain = await flow._get_options_translation("description_text.scanner_table_title")  # noqa: SLF001
+    formatted = await flow._get_options_translation(  # noqa: SLF001
+        "description_text.scanner_table_title", unused="whatever"
+    )
+    assert formatted == plain == "Status of scanners:"
+
+
+async def test_get_options_translation_formats_matching_placeholder(
+    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry, monkeypatch: pytest.MonkeyPatch
+):
+    """A kwarg matching a ``{placeholder}`` in the text is substituted in."""
+    monkeypatch.setitem(_DESCRIPTION_TEXTS["en"], "greeting_test", "Hello {name}!")
+    flow = _flow_for(hass, setup_bermuda_entry)
+    text = await flow._get_options_translation("description_text.greeting_test", name="World")  # noqa: SLF001
+    assert text == "Hello World!"
+
+
+async def test_get_options_translation_suppresses_format_errors(
+    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry, monkeypatch: pytest.MonkeyPatch
+):
+    """A kwarg that doesn't satisfy the text's placeholder raises internally but is suppressed."""
+    monkeypatch.setitem(_DESCRIPTION_TEXTS["en"], "greeting_test", "Hello {missing}!")
+    flow = _flow_for(hass, setup_bermuda_entry)
+    text = await flow._get_options_translation("description_text.greeting_test", name="World")  # noqa: SLF001
+    # KeyError from the unmatched placeholder is swallowed, leaving the text untouched.
+    assert text == "Hello {missing}!"
+
+
+# --------------------------------------------------------------------------- #
+# Options flow: enrol_private                                                 #
+# --------------------------------------------------------------------------- #
+
+
+async def test_options_enrol_private_shows_form_with_expected_schema(
+    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry
+):
+    """The enrol_private step (first render) shows the IRK/name form."""
+    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "enrol_private"}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "enrol_private"
+    schema = result["data_schema"].schema
+    schema_keys = {str(k.schema): k for k in schema}
+    assert {CONF_IRK, CONF_NAME} <= set(schema_keys)
+    assert schema_keys[CONF_IRK].__class__.__name__ == "Required"
+    assert schema_keys[CONF_NAME].__class__.__name__ == "Optional"
+
+
+async def test_options_enrol_private_success_creates_entry(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
+    """A successful enrolment refreshes the coordinator and persists options."""
+    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "enrol_private"}
+    )
+    assert result["step_id"] == "enrol_private"
+
+    with patch(
+        "custom_components.bermuda.options_flow.async_enrol_private_device",
+        AsyncMock(return_value=""),
+    ) as mock_enrol:
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={CONF_IRK: "0123456789abcdef0123456789abcdef", CONF_NAME: "My Phone"},
+        )
+    mock_enrol.assert_awaited_once()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+
+async def test_options_enrol_private_irk_error_reshows_form(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
+    """An invalid-IRK error re-shows the form with the error keyed under CONF_IRK."""
+    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "enrol_private"}
+    )
+
+    with patch(
+        "custom_components.bermuda.options_flow.async_enrol_private_device",
+        AsyncMock(return_value="irk_not_valid"),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={CONF_IRK: "not-a-valid-irk", CONF_NAME: ""},
+        )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "enrol_private"
+    assert result["errors"] == {CONF_IRK: "irk_not_valid"}
+
+
+async def test_options_enrol_private_bluetooth_unavailable_error_is_base(
+    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry
+):
+    """A bluetooth-not-available error is keyed under 'base' instead of CONF_IRK."""
+    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "enrol_private"}
+    )
+
+    with patch(
+        "custom_components.bermuda.options_flow.async_enrol_private_device",
+        AsyncMock(return_value="bluetooth_not_available"),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={CONF_IRK: "0123456789abcdef0123456789abcdef", CONF_NAME: ""},
+        )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "enrol_private"
+    assert result["errors"] == {"base": "bluetooth_not_available"}

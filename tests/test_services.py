@@ -486,3 +486,252 @@ async def test_area_sensor_exposes_microlocation(hass, setup_bermuda_entry):
     attrs = area_sensor.extra_state_attributes
     assert attrs["micro_location"] == "Key hook"
     assert attrs["micro_location_confidence"] == 0.9
+
+
+# ---------------------------------------------------------------------------
+# additional coverage: build_live_fingerprint / _refresh_microlocations edges,
+# _resolve_device / _resolve_area_id branches, calibrate edge cases, and the
+# remaining track/untrack/remove/rename/get_config branches.
+# ---------------------------------------------------------------------------
+
+
+async def test_build_live_fingerprint_skips_none_distance(hass, setup_bermuda_entry):
+    """A scanner whose advert currently has no rssi_distance is excluded from the live vector."""
+    coordinator, keys, s1, s2 = await _setup_keys_in_kitchen(hass, setup_bermuda_entry)
+    advert1 = keys.get_scanner(s1.address)
+    advert1.rssi_distance = None
+
+    live = coordinator.build_live_fingerprint(keys)
+
+    assert s1.address not in live
+    assert s2.address in live
+
+
+async def test_refresh_microlocations_noop_when_store_not_loaded(hass, setup_bermuda_entry):
+    """While the fingerprint store hasn't finished loading, the refresh is a pure no-op."""
+    coordinator, keys, _s1, _s2 = await _setup_keys_in_kitchen(hass, setup_bermuda_entry)
+    coordinator.fingerprints.loaded = False
+    coordinator.build_live_fingerprint = MagicMock()
+
+    coordinator._refresh_microlocations()  # noqa: SLF001
+
+    coordinator.build_live_fingerprint.assert_not_called()
+
+
+async def test_refresh_microlocations_applies_none_when_no_saved_fingerprints(hass, setup_bermuda_entry):
+    """A tracked device with zero saved spots is explicitly resolved to 'no match'."""
+    coordinator, keys, _s1, _s2 = await _setup_keys_in_kitchen(hass, setup_bermuda_entry)
+    assert coordinator.fingerprints.list(keys.address) == []
+    spy = MagicMock(wraps=coordinator._apply_microloc_result)
+    coordinator._apply_microloc_result = spy
+
+    coordinator._refresh_microlocations()  # noqa: SLF001
+
+    spy.assert_called_once_with(keys, None)
+    assert keys.micro_location_id is None
+
+
+async def test_resolve_device_empty_string_returns_none(hass, setup_bermuda_entry):
+    """_resolve_device("") short-circuits to None rather than matching anything."""
+    coordinator = _coordinator(setup_bermuda_entry)
+    assert coordinator._resolve_device("") is None  # noqa: SLF001
+
+
+async def test_resolve_device_by_registry_identifiers(hass, setup_bermuda_entry):
+    """A device-registry entry resolved purely via (DOMAIN, address) identifiers, no connections."""
+    coordinator, keys, _s1, _s2 = await _setup_keys_in_kitchen(hass, setup_bermuda_entry)
+    devreg = dr.async_get(hass)
+    reg_device = devreg.async_get_or_create(
+        config_entry_id=setup_bermuda_entry.entry_id,
+        identifiers={(DOMAIN, keys.address)},
+    )
+    device = coordinator._resolve_device(reg_device.id)  # noqa: SLF001
+    assert device is keys
+
+
+async def test_service_calibrate_location_blank_name_raises(hass, setup_bermuda_entry):
+    """calibrate_location rejects a blank (whitespace-only, after strip) name."""
+    coordinator, keys, _s1, _s2 = await _setup_keys_in_kitchen(hass, setup_bermuda_entry)
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "calibrate_location",
+            {"device": "Keys", "name": "   "},
+            blocking=True,
+            return_response=True,
+        )
+
+
+async def test_calibrate_with_area_id_instead_of_name(hass, setup_bermuda_entry):
+    """Passing an actual area id (not a name) to calibrate_location is accepted as-is."""
+    coordinator, keys, _s1, _s2 = await _setup_keys_in_kitchen(hass, setup_bermuda_entry)
+    area_reg = ar.async_get(hass)
+    den = area_reg.async_get_or_create("Den")
+
+    resp = await hass.services.async_call(
+        DOMAIN,
+        "calibrate_location",
+        {"device": "Keys", "name": "Beanbag", "area": den.id},
+        blocking=True,
+        return_response=True,
+    )
+    assert resp["area_id"] == den.id
+    assert resp["area_name"] == "Den"
+
+
+async def test_calibrate_falls_back_to_live_distance_and_skips_dataless_scanner(hass, setup_bermuda_entry):
+    """No smoothed history but a live rssi_distance still counts; no history AND no live reading is skipped."""
+    coordinator, keys, s1, _s2 = await _setup_keys_in_kitchen(hass, setup_bermuda_entry)
+
+    s3 = _make_scanner(coordinator, "33:33:33:33:33:33", "Kitchen Rear", "kitchen")
+    advert3 = _set_distance(keys, s3, 2.5)
+    advert3.hist_distance_by_interval = []  # no smoothed history yet...
+    advert3.rssi_distance = 2.5  # ...but a live reading is available (the fallback branch)
+
+    s4 = _make_scanner(coordinator, "44:44:44:44:44:44", "Kitchen Loft", "kitchen")
+    advert4 = _set_distance(keys, s4, 9.9)
+    advert4.hist_distance_by_interval = []
+    advert4.rssi_distance = None  # neither history nor a live reading -> silently skipped
+
+    summary = coordinator.calibrate_location(keys, "Pantry")
+
+    assert s1.name in summary["scanners"]
+    assert s3.name in summary["scanners"]  # fell back to rssi_distance
+    assert s4.name not in summary["scanners"]  # no data at all, excluded
+
+
+async def test_recalibrate_same_name_preserves_id_and_flags_replaced(hass, setup_bermuda_entry):
+    """Re-calibrating the same device+name keeps the fingerprint's id/created and marks 'replaced'."""
+    coordinator, keys, s1, s2 = await _setup_keys_in_kitchen(hass, setup_bermuda_entry)
+
+    first = coordinator.calibrate_location(keys, "Key hook")
+    assert first["replaced"] is False
+
+    _set_distance(keys, s1, 3.0)
+    _set_distance(keys, s2, 3.0)
+    second = coordinator.calibrate_location(keys, "Key hook")
+
+    assert second["id"] == first["id"]
+    assert second["replaced"] is True
+
+
+async def test_service_remove_location_unknown_name_raises(hass, setup_bermuda_entry):
+    coordinator, keys, _s1, _s2 = await _setup_keys_in_kitchen(hass, setup_bermuda_entry)
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "remove_location", {"device": "Keys", "name": "Nowhere"}, blocking=True, return_response=True
+        )
+
+
+async def test_service_remove_location_clears_active_microlocation(hass, setup_bermuda_entry):
+    """Removing the spot a device is currently sitting at clears its micro_location_* fields."""
+    coordinator, keys, _s1, _s2 = await _setup_keys_in_kitchen(hass, setup_bermuda_entry)
+    coordinator.calibrate_location(keys, "Key hook")
+    for _ in range(MICROLOC_HYSTERESIS_CYCLES):
+        coordinator._refresh_microlocations()  # noqa: SLF001
+    assert keys.micro_location_id is not None
+
+    await hass.services.async_call(
+        DOMAIN, "remove_location", {"device": "Keys", "name": "Key hook"}, blocking=True, return_response=True
+    )
+
+    assert keys.micro_location_id is None
+    assert keys.micro_location_name is None
+    assert keys.micro_location_confidence is None
+
+
+async def test_service_rename_location_blank_new_name_raises(hass, setup_bermuda_entry):
+    coordinator, keys, _s1, _s2 = await _setup_keys_in_kitchen(hass, setup_bermuda_entry)
+    coordinator.calibrate_location(keys, "Key hook")
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "rename_location",
+            {"device": "Keys", "name": "Key hook", "new_name": "   "},
+            blocking=True,
+            return_response=True,
+        )
+
+
+async def test_service_rename_location_unknown_name_raises(hass, setup_bermuda_entry):
+    coordinator, keys, _s1, _s2 = await _setup_keys_in_kitchen(hass, setup_bermuda_entry)
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "rename_location",
+            {"device": "Keys", "name": "Nope", "new_name": "New"},
+            blocking=True,
+            return_response=True,
+        )
+
+
+async def test_service_rename_location_updates_active_microlocation_name(hass, setup_bermuda_entry):
+    """Renaming the spot a device is currently sitting at also updates its live micro_location_name."""
+    coordinator, keys, _s1, _s2 = await _setup_keys_in_kitchen(hass, setup_bermuda_entry)
+    coordinator.calibrate_location(keys, "Key hook")
+    for _ in range(MICROLOC_HYSTERESIS_CYCLES):
+        coordinator._refresh_microlocations()  # noqa: SLF001
+    assert keys.micro_location_name == "Key hook"
+
+    await hass.services.async_call(
+        DOMAIN,
+        "rename_location",
+        {"device": "Keys", "name": "Key hook", "new_name": "Coat hook"},
+        blocking=True,
+        return_response=True,
+    )
+
+    assert keys.micro_location_name == "Coat hook"
+
+
+async def test_service_track_device_second_call_reports_already_tracked(hass, setup_bermuda_entry):
+    coordinator = _coordinator(setup_bermuda_entry)
+    await coordinator.fingerprints.async_load()
+    _make_tracked_device(coordinator, "ec:00:00:00:00:04", "Widget2")
+
+    first = await hass.services.async_call(
+        DOMAIN, "track_device", {"device": "Widget2"}, blocking=True, return_response=True
+    )
+    assert first["already"] is False
+
+    # Persisting options reloads the entry; re-fetch the fresh coordinator and re-register the
+    # device before the second call (mirrors test_service_track_untrack_updates_options).
+    await hass.async_block_till_done()
+    coordinator = _coordinator(setup_bermuda_entry)
+    await coordinator.fingerprints.async_load()
+    _make_tracked_device(coordinator, "ec:00:00:00:00:04", "Widget2")
+
+    second = await hass.services.async_call(
+        DOMAIN, "track_device", {"device": "Widget2"}, blocking=True, return_response=True
+    )
+    assert second["already"] is True
+
+
+async def test_service_untrack_device_when_never_tracked(hass, setup_bermuda_entry):
+    coordinator = _coordinator(setup_bermuda_entry)
+    await coordinator.fingerprints.async_load()
+    _make_tracked_device(coordinator, "ec:00:00:00:00:05", "Widget3")
+
+    resp = await hass.services.async_call(
+        DOMAIN, "untrack_device", {"device": "Widget3"}, blocking=True, return_response=True
+    )
+
+    assert resp["already"] is True
+    assert resp["tracked"] is False
+
+
+async def test_service_get_config_lists_tracked_devices(hass, setup_bermuda_entry):
+    """get_config's tracked_devices list is populated once CONF_DEVICES is non-empty."""
+    coordinator = _coordinator(setup_bermuda_entry)
+    await coordinator.fingerprints.async_load()
+    _make_tracked_device(coordinator, "ec:00:00:00:00:06", "Widget4")
+
+    await hass.services.async_call(DOMAIN, "track_device", {"device": "Widget4"}, blocking=True, return_response=True)
+    await hass.async_block_till_done()
+    coordinator = _coordinator(setup_bermuda_entry)
+    await coordinator.fingerprints.async_load()
+    _make_tracked_device(coordinator, "ec:00:00:00:00:06", "Widget4")
+
+    cfg = await hass.services.async_call(DOMAIN, "get_config", {}, blocking=True, return_response=True)
+
+    assert cfg["tracked_devices"] == [{"name": "Widget4", "address": "EC:00:00:00:00:06"}]

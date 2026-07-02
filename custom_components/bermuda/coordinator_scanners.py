@@ -23,26 +23,42 @@ from .const import (
 from .util import mac_norm
 
 if TYPE_CHECKING:
+    from habluetooth import BaseHaScanner
+    from homeassistant.core import HomeAssistant
+
     from .bermuda_device import BermudaDevice
 
 
 class BermudaScannerMixin:
     """Scanner roster discovery, rebuild, purge and area-repair, mixed into the coordinator."""
 
+    if TYPE_CHECKING:
+        # Attributes/methods provided by BermudaDataUpdateCoordinator, the concrete
+        # class this mixin is always combined into (see coordinator.py:__init__).
+        # Declared here only so mypy can see them; nothing here runs at import time.
+        hass: HomeAssistant
+        devices: dict[str, BermudaDevice]
+        _hascanners: set[BaseHaScanner]
+        _scanner_list: set[str]
+        _scanners: set[BermudaDevice]
+        _scanners_without_areas: list[str] | None
+
+        def _get_or_create_device(self, address: str) -> BermudaDevice: ...
+
     @property
-    def scanner_list(self):
+    def scanner_list(self) -> set[str]:
         return self._scanner_list
 
     @property
     def get_scanners(self) -> set[BermudaDevice]:
         return self._scanners
 
-    def scanner_list_add(self, scanner_device: BermudaDevice):
+    def scanner_list_add(self, scanner_device: BermudaDevice) -> None:
         self._scanner_list.add(scanner_device.address)
         self._scanners.add(scanner_device)
         async_dispatcher_send(self.hass, SIGNAL_SCANNERS_CHANGED)
 
-    def scanner_list_del(self, scanner_device: BermudaDevice):
+    def scanner_list_del(self, scanner_device: BermudaDevice) -> None:
         # discard() (not remove()) so demoting a device that was never in the set
         # — e.g. one whose is_scanner flag desynced — can't raise KeyError and abort
         # the whole scanner rebuild mid-loop.
@@ -50,7 +66,7 @@ class BermudaScannerMixin:
         self._scanners.discard(scanner_device)
         async_dispatcher_send(self.hass, SIGNAL_SCANNERS_CHANGED)
 
-    def _refresh_scanners(self, force=False):
+    def _refresh_scanners(self, *, force: bool = False) -> None:
         """
         Reconcile Bermuda's scanner roster with HA's, rebuilding when it has changed.
 
@@ -60,7 +76,7 @@ class BermudaScannerMixin:
         """
         self._rebuild_scanner_list(force=force)
 
-    def _rebuild_scanner_list(self, force=False):
+    def _rebuild_scanner_list(self, *, force: bool = False) -> None:
         """
         Rebuild Bermuda's internal list of scanners.
 
@@ -97,7 +113,7 @@ class BermudaScannerMixin:
                 _scanners_without_areas.append(f"{bermuda_scanner.name} [{bermuda_scanner.address}]")
         self._async_manage_repair_scanners_without_areas(_scanners_without_areas)
 
-    def _async_purge_removed_scanners(self):
+    def _async_purge_removed_scanners(self) -> None:
         """Demotes any devices that are no longer scanners based on new self.hascanners."""
         _scanners = [device.address for device in self.devices.values() if device.is_scanner]
         for ha_scanner in self._hascanners:
@@ -110,7 +126,7 @@ class BermudaScannerMixin:
             _LOGGER.info("Demoting ex-scanner %s", self.devices[address].name)
             self.devices[address].async_as_scanner_nolonger()
 
-    def _async_manage_repair_scanners_without_areas(self, scannerlist: list[str]):
+    def _async_manage_repair_scanners_without_areas(self, scannerlist: list[str]) -> None:
         """
         Raise a repair for any scanners that lack an area assignment.
 

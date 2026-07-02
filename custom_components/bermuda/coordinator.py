@@ -11,8 +11,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.components import bluetooth
-from homeassistant.const import MAJOR_VERSION as HA_VERSION_MAJ
-from homeassistant.const import MINOR_VERSION as HA_VERSION_MIN
 from homeassistant.core import (
     Event,
     HomeAssistant,
@@ -127,14 +125,9 @@ class BermudaDataUpdateCoordinator(
         entry: BermudaConfigEntry,
     ) -> None:
         """Initialize."""
-        self.platforms = []
-        self.config_entry = entry
+        self.platforms: list[str] = []
 
         self.sensor_interval = entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
-
-        # set some version flags
-        # when habasescanner.discovered_device_timestamps became a public method.
-        self.hass_version_min_2025_4 = HA_VERSION_MAJ > 2025 or (HA_VERSION_MAJ == 2025 and HA_VERSION_MIN >= 4)
 
         # ##### Redaction Data ###
         #
@@ -154,12 +147,13 @@ class BermudaDataUpdateCoordinator(
         self.stamp_last_update_started: float = 0
         self.stamp_last_prune: float = 0  # When we last pruned device list
 
-        self.member_uuids = {}
-        self.company_uuids = {}
+        self.member_uuids: dict[int, str] = {}
+        self.company_uuids: dict[int, str] = {}
 
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=DOMAIN,
             update_interval=timedelta(seconds=UPDATE_INTERVAL),
             request_refresh_debouncer=Debouncer(
@@ -169,6 +163,10 @@ class BermudaDataUpdateCoordinator(
                 immediate=False,
             ),
         )
+        # DataUpdateCoordinator types config_entry as ConfigEntry | None (it can fall
+        # back to a ContextVar), but Bermuda always constructs this coordinator with an
+        # explicit entry (see async_setup_entry), so narrow it here for every call site.
+        self.config_entry: BermudaConfigEntry = entry
 
         self._waitingfor_load_manufacturer_ids = True
         entry.async_create_background_task(
@@ -208,9 +206,6 @@ class BermudaDataUpdateCoordinator(
             monotonic_time_coarse() + SAVEOUT_COOLDOWN
         )  # Stamp for save-out requests
 
-        # AJG 2025-04-23 Disabling, see the commented method below for notes.
-        # self.config_entry.async_on_unload(self.hass.bus.async_listen(EVENT_STATE_CHANGED, self.handle_state_changes))
-
         # First time around we freshen the restored scanner info by
         # forcing a scan of the captured info.
         self._scanner_init_pending = True
@@ -227,7 +222,7 @@ class BermudaDataUpdateCoordinator(
             self.hass.bus.async_listen(EVENT_DEVICE_REGISTRY_UPDATED, self.handle_devreg_changes)
         )
 
-        self.options = {}
+        self.options: dict[str, Any] = {}
 
         # Initialize with defaults for backward compatibility with older config entries
         self.options[CONF_ATTENUATION] = DEFAULT_ATTENUATION
@@ -270,28 +265,26 @@ class BermudaDataUpdateCoordinator(
         # keyed by upper-case address. Applied to each device as it is created, and
         # read for the per-device away timeout. The subentry is the source of truth;
         # the ref_power number entity remains for live, in-session tweaks.
-        self.device_config: dict[str, dict] = {
+        self.device_config: dict[str, dict[str, Any]] = {
             se.data[CONF_ADDRESS].upper(): dict(se.data)
             for se in getattr(entry, "subentries", {}).values()
             if se.subentry_type == SUBENTRY_TYPE_DEVICE and se.data.get(CONF_ADDRESS)
         }
 
         self.devices: dict[str, BermudaDevice] = {}
-        # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
 
         # Micro-location (sub-area RF fingerprinting) + the MCP-friendly services.
         self._microloc_init(hass, entry)
 
         # Register for newly discovered / changed BLE devices
-        if self.config_entry is not None:
-            self.config_entry.async_on_unload(
-                bluetooth.async_register_callback(
-                    self.hass,
-                    self.async_handle_advert,
-                    bluetooth.BluetoothCallbackMatcher(connectable=False),
-                    bluetooth.BluetoothScanningMode.ACTIVE,
-                )
+        self.config_entry.async_on_unload(
+            bluetooth.async_register_callback(
+                self.hass,
+                self.async_handle_advert,
+                bluetooth.BluetoothCallbackMatcher(connectable=False),
+                bluetooth.BluetoothScanningMode.ACTIVE,
             )
+        )
 
     def init_floors(self) -> bool:
         """Check if the system has floors configured, and enable sensors."""
@@ -325,7 +318,7 @@ class BermudaDataUpdateCoordinator(
         """Map a Bluetooth UUID to a (name, is_generic) pair (see manufacturers module)."""
         return lookup_manufacturer(uuid, self.member_uuids, self.company_uuids)
 
-    async def async_load_manufacturer_ids(self):
+    async def async_load_manufacturer_ids(self) -> None:
         """Load Bluetooth SIG manufacturer name mappings (see manufacturers module)."""
         try:
             self.member_uuids, self.company_uuids = await load_manufacturer_ids(self.hass)
@@ -333,7 +326,7 @@ class BermudaDataUpdateCoordinator(
             self._waitingfor_load_manufacturer_ids = False
 
     @callback
-    def handle_devreg_changes(self, ev: Event[EventDeviceRegistryUpdatedData]):
+    def handle_devreg_changes(self, ev: Event[EventDeviceRegistryUpdatedData]) -> None:
         """
         Update our scanner list if the device registry is changed.
 
@@ -445,7 +438,7 @@ class BermudaDataUpdateCoordinator(
                 self.hass, self._async_update_data_internal(), "bermuda_advert_triggered_update"
             )
 
-    def _check_all_platforms_created(self, address):
+    def _check_all_platforms_created(self, address: str) -> None:
         """Checks if all platforms have finished loading a device's entities."""
         dev = self._get_device(address)
         if dev is not None:
@@ -459,7 +452,7 @@ class BermudaDataUpdateCoordinator(
             ):
                 dev.create_all_done = True
 
-    def sensor_created(self, address):
+    def sensor_created(self, address: str) -> None:
         """Allows sensor platform to report back that sensors have been set up."""
         dev = self._get_device(address)
         if dev is not None:
@@ -468,7 +461,7 @@ class BermudaDataUpdateCoordinator(
             _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
         self._check_all_platforms_created(address)
 
-    def device_tracker_created(self, address):
+    def device_tracker_created(self, address: str) -> None:
         """Allows device_tracker platform to report back that sensors have been set up."""
         dev = self._get_device(address)
         if dev is not None:
@@ -477,21 +470,21 @@ class BermudaDataUpdateCoordinator(
             _LOGGER.warning("Very odd, we got device_tracker_created for non-tracked device")
         self._check_all_platforms_created(address)
 
-    def number_created(self, address):
+    def number_created(self, address: str) -> None:
         """Receives report from number platform that sensors have been set up."""
         dev = self._get_device(address)
         if dev is not None:
             dev.create_number_done = True
         self._check_all_platforms_created(address)
 
-    def select_created(self, address):
+    def select_created(self, address: str) -> None:
         """Receives report from the select platform that entities have been set up."""
         dev = self._get_device(address)
         if dev is not None:
             dev.create_select_done = True
         self._check_all_platforms_created(address)
 
-    def in100_sensors_created(self, address):
+    def in100_sensors_created(self, address: str) -> None:
         """
         Receives report from the sensor platform that IN100 telemetry sensors are set up.
 
@@ -515,7 +508,7 @@ class BermudaDataUpdateCoordinator(
                 fresh_count += 1
         return fresh_count
 
-    def count_active_scanners(self, max_age=10) -> int:
+    def count_active_scanners(self, max_age: float = 10) -> int:
         """Returns count of scanners that have recently sent updates."""
         stamp = monotonic_time_coarse() - max_age  # seconds
         fresh_count = 0
@@ -524,7 +517,7 @@ class BermudaDataUpdateCoordinator(
                 fresh_count += 1
         return fresh_count
 
-    def get_active_scanner_summary(self) -> list[dict]:
+    def get_active_scanner_summary(self) -> list[dict[str, Any]]:
         """
         Returns a list of dicts suitable for seeing which scanners
         are configured in the system and how long it has been since
@@ -559,11 +552,11 @@ class BermudaDataUpdateCoordinator(
             self.devices[mac] = device = BermudaDevice(mac, self)
             return device
 
-    async def _async_update_data(self):
+    async def _async_update_data(self) -> None:
         """Implementation of DataUpdateCoordinator update_data function."""
         await self._async_update_data_internal()
 
-    async def _async_update_data_internal(self):
+    async def _async_update_data_internal(self) -> bool:
         """
         The primary update loop that processes almost all data in Bermuda.
 
@@ -696,7 +689,7 @@ class BermudaDataUpdateCoordinator(
 
         return result_gather_adverts
 
-    def _async_gather_advert_data(self):
+    def _async_gather_advert_data(self) -> bool:
         """Perform the gathering of backend Bluetooth Data and updating scanners and devices."""
         # Initialise ha_scanners if we haven't already
         if self._scanner_init_pending:
@@ -741,20 +734,20 @@ class BermudaDataUpdateCoordinator(
         # end of for ha_scanner loop
         return True
 
-    def prune_devices(self, force_pruning=False):
+    def prune_devices(self, *, force_pruning: bool = False) -> None:
         """Remove stale devices to keep the device dict bounded (see pruning module)."""
         _prune_devices(self, force_pruning=force_pruning)
 
-    def dt_mono_to_datetime(self, stamp) -> datetime:
+    def dt_mono_to_datetime(self, stamp: float) -> datetime:
         """Given a monotonic timestamp, convert to datetime object."""
         age = monotonic_time_coarse() - stamp
         return now() - timedelta(seconds=age)
 
-    def dt_mono_to_age(self, stamp) -> str:
+    def dt_mono_to_age(self, stamp: float) -> str:
         """Convert monotonic timestamp to age (eg: "6 seconds ago")."""
         return get_age(self.dt_mono_to_datetime(stamp))
 
-    def resolve_area_name(self, area_id) -> str | None:
+    def resolve_area_name(self, area_id: str) -> str | None:
         """
         Given an area_id, return the current area name.
 
@@ -766,7 +759,7 @@ class BermudaDataUpdateCoordinator(
             return getattr(areas, "name", "invalid_area")
         return None
 
-    def _refresh_areas_by_min_distance(self):
+    def _refresh_areas_by_min_distance(self) -> None:
         """Set area for ALL devices based on closest beacon."""
         for device in self.devices.values():
             if (
@@ -776,11 +769,11 @@ class BermudaDataUpdateCoordinator(
             ):
                 self._refresh_area_by_min_distance(device)
 
-    def _refresh_area_by_min_distance(self, device: BermudaDevice):
+    def _refresh_area_by_min_distance(self, device: BermudaDevice) -> None:
         """Set a device's closest scanner/area (see the trilateration module)."""
         refresh_area_by_min_distance(device, self.options)
 
-    def _apply_area_entity_overrides(self):
+    def _apply_area_entity_overrides(self) -> None:
         """
         Override a device's area when a triggered presence entity wins on virtual distance.
 
@@ -807,21 +800,23 @@ class BermudaDataUpdateCoordinator(
             current_distance = device.area_distance
             current_area_id = device.area_id
 
-            best_area_id: str | None = None
-            best_distance: float | None = None
+            # Kept as a single Optional pair (rather than two separately-Optional
+            # variables) so the "we have a winner" narrowing below covers both at once.
+            best: tuple[str, float] | None = None
             for area_id, (_area_name, virtual_dist) in triggered_areas.items():
                 if current_area_id == area_id:
                     # Already here via BLE: the entity only "wins" if it is virtually closer.
                     if current_distance is not None and current_distance <= virtual_dist:
                         continue
-                    best_area_id, best_distance = area_id, virtual_dist
+                    best = (area_id, virtual_dist)
                     break
                 if (current_distance is None or virtual_dist < current_distance) and (
-                    best_area_id is None or virtual_dist < best_distance
+                    best is None or virtual_dist < best[1]
                 ):
-                    best_area_id, best_distance = area_id, virtual_dist
+                    best = (area_id, virtual_dist)
 
-            if best_area_id is not None:
+            if best is not None:
+                best_area_id, best_distance = best
                 old_area = device.area_name
                 device.apply_area_override(best_area_id, best_distance)
                 if old_area != device.area_name:
@@ -836,7 +831,7 @@ class BermudaDataUpdateCoordinator(
 
     async def service_dump_devices(self, call: ServiceCall) -> ServiceResponse:
         """Return a dump of beacon advertisements by receiver."""
-        out = {}
+        out: dict[str, Any] = {}
         addresses_input = call.data.get("addresses", "")
         redact = call.data.get("redact", False)
         configured_devices = call.data.get("configured_devices", False)
@@ -863,7 +858,7 @@ class BermudaDataUpdateCoordinator(
 
         if redact:
             _stamp_redact = monotonic_time_coarse()
-            out = cast("ServiceResponse", self.redact_data(out))
+            out = cast("dict[str, Any]", self.redact_data(out))
             _stamp_redact_elapsed = monotonic_time_coarse() - _stamp_redact
             if _stamp_redact_elapsed > 3:  # It should be fast now.
                 _LOGGER.warning("Dump devices redaction took %.2f seconds", _stamp_redact_elapsed)
@@ -871,12 +866,12 @@ class BermudaDataUpdateCoordinator(
                 _LOGGER.debug("Dump devices redaction took %.2f seconds", _stamp_redact_elapsed)
         return out
 
-    def redaction_list_update(self):
+    def redaction_list_update(self) -> None:
         """Freshen the MAC redaction substitution table (see redaction module)."""
         update_redaction_list(self.redactions, self.scanner_list, self.options.get(CONF_DEVICES, []), self.devices)
         self.stamp_redactions_expiry = monotonic_time_coarse() + PRUNE_TIME_REDACTIONS
 
-    def redact_data(self, data, first_recursion=True):
+    def redact_data(self, data: Any, *, first_recursion: bool = True) -> Any:
         """Recursively redact MAC addresses from a data structure (see redaction module)."""
         if first_recursion:
             # On the outer call, refresh the substitution table so new addresses

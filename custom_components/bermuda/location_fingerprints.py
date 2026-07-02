@@ -248,7 +248,7 @@ class FingerprintStore:
         from homeassistant.helpers.storage import Store  # noqa: PLC0415 (lazy by design)
 
         self.hass = hass
-        self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+        self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._items: dict[str, Fingerprint] = {}
         self._by_device: dict[str, list[str]] = {}
         self.loaded = False

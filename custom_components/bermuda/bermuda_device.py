@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import binascii
 import re
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any
 
 from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.components.private_ble_device import coordinator as pble_coordinator
@@ -100,7 +100,11 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         self.name_bt_local_name: str | None = None  # From service_info.advertisement.local_name
         self.name_devreg: str | None = None  # From device registry, for other integrations like scanners, pble devices
         self.name_by_user: str | None = None  # Any user-defined (in the HA UI) name discovered for a device.
-        self.address: Final[str] = _address
+        # Not annotated Final: BermudaScannerDeviceMixin (a base class, mixed in below)
+        # also declares this attribute, and mypy disallows a subclass narrowing an
+        # inherited attribute to Final. Runtime behaviour is unaffected either way, as
+        # CPython does not enforce `Final`.
+        self.address: str = _address
         self.address_ble_mac: str = _address
         self.address_wifi_mac: str | None = None
         # We use a weakref to avoid any possible GC issues (only likely if we add a __del__ method, but *shrug*)
@@ -157,7 +161,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         self.floor_id: str | None = None
         self.floor_name: str | None = None
         self.floor_icon: str = ICON_DEFAULT_FLOOR
-        self.floor_level: str | None = None
+        self.floor_level: int | None = None  # matches FloorEntry.level (int | None); was mistyped as str | None
 
         self.zone: str = STATE_NOT_HOME  # STATE_HOME or STATE_NOT_HOME
         self.manufacturer: str | None = None
@@ -174,7 +178,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         self._is_scanner: bool = False
         self._is_remote_scanner: bool | None = None
         self.stamps: dict[str, float] = {}
-        self.metadevice_type: set = set()
+        self.metadevice_type: set[str] = set()
         self.metadevice_sources: list[str] = []  # list of MAC addresses that have/should match this beacon
         self.beacon_unique_id: str | None = None  # combined uuid_major_minor for *really* unique id
         self.beacon_uuid: str | None = None
@@ -198,7 +202,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         ] = {}  # str will be a scanner address OR a deviceaddress__scanneraddress
         self._async_process_address_type()
 
-    def _async_process_address_type(self):
+    def _async_process_address_type(self) -> None:
         """
         Identify the address type (MAC, IRK, iBeacon etc) and perform any setup.
 
@@ -299,7 +303,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
             # be fine because our irk_manager will only fire another callback if the mac is new.
             self._coordinator.irk_manager.add_macirk(address, bytes.fromhex(self.address))
 
-    def make_name(self):
+    def make_name(self) -> str:
         """
         Refreshes self.name, sets and returns it, based on naming preferences.
 
@@ -328,7 +332,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
 
         return self.name
 
-    def set_ref_power(self, new_ref_power: float):
+    def set_ref_power(self, new_ref_power: float) -> None:
         """
         Set a new reference power for this device and immediately apply
         an interim distance calculation.
@@ -339,7 +343,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         if new_ref_power != self.ref_power:
             # it's actually changed, proceed...
             self.ref_power = new_ref_power
-            nearest_distance = 9999  # running tally to find closest scanner
+            nearest_distance: float = 9999  # running tally to find closest scanner
             nearest_scanner = None
             for advert in self.adverts.values():
                 rawdist = advert.set_ref_power(new_ref_power)
@@ -393,7 +397,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
             return CATEGORY_RANDOM
         return CATEGORY_PUBLIC
 
-    def apply_scanner_selection(self, bermuda_advert: BermudaAdvert | None, *, force_unknown: bool = False):
+    def apply_scanner_selection(self, bermuda_advert: BermudaAdvert | None, *, force_unknown: bool = False) -> None:
         """
         Given a BermudaAdvert entry, apply the distance and area attributes
         from it to this device.
@@ -439,7 +443,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         self.area_rssi = 0
         self.area_advert = None
 
-    def get_scanner(self, scanner_address) -> BermudaAdvert | None:
+    def get_scanner(self, scanner_address: str) -> BermudaAdvert | None:
         """
         Given a scanner address, return the most recent BermudaDeviceScanner (advert) that matches.
 
@@ -460,7 +464,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
 
         return _found_scanner
 
-    def calculate_data(self):
+    def calculate_data(self) -> None:
         """
         Call after doing update_scanner() calls so that distances
         etc can be freshly smoothed and filtered.
@@ -498,7 +502,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
             # (track_categories), and not on the exclusion denylist. Flag for set-up.
             self.create_sensor = True
 
-    def process_advertisement(self, scanner_device: BermudaDevice, advertisementdata: AdvertisementData):
+    def process_advertisement(self, scanner_device: BermudaDevice, advertisementdata: AdvertisementData) -> None:
         """
         Add/Update a scanner/advert entry pair on this device, indicating a received advertisement.
 
@@ -541,7 +545,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         if device_advert.stamp is not None and self.last_seen < device_advert.stamp:
             self.last_seen = device_advert.stamp
 
-    def process_manufacturer_data(self, advert: BermudaAdvert):
+    def process_manufacturer_data(self, advert: BermudaAdvert) -> None:
         """Parse manufacturer data for maker name and iBeacon etc."""
         # Only override existing manufacturer name if it's "better"
 
@@ -653,9 +657,9 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         if applied_fallback_name:
             self.make_name()
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         """Convert class to serialisable dict for dump_devices."""
-        out = {}
+        out: dict[str, Any] = {}
         for var, val in vars(self).items():
             if val is None:
                 # Catch the Nones first, as otherwise they might match some other objects below if

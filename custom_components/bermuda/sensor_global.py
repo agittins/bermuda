@@ -29,7 +29,7 @@ class BermudaTotalProxyCount(BermudaGlobalSensor):
     _attr_translation_key = "total_proxy_count"
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         """
         "Uniquely identify this sensor so that it gets stored in the entity_registry,
         and can be maintained / renamed etc by the user.
@@ -50,7 +50,7 @@ class BermudaActiveProxyCount(BermudaGlobalSensor):
     _attr_translation_key = "active_proxy_count"
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         """
         "Uniquely identify this sensor so that it gets stored in the entity_registry,
         and can be maintained / renamed etc by the user.
@@ -95,7 +95,7 @@ class BermudaTotalDeviceCount(BermudaGlobalSensor):
     _attr_translation_key = "total_device_count"
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         """
         "Uniquely identify this sensor so that it gets stored in the entity_registry,
         and can be maintained / renamed etc by the user.
@@ -116,7 +116,7 @@ class BermudaVisibleDeviceCount(BermudaGlobalSensor):
     _attr_translation_key = "visible_device_count"
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         """
         "Uniquely identify this sensor so that it gets stored in the entity_registry,
         and can be maintained / renamed etc by the user.

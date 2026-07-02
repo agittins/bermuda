@@ -6,7 +6,7 @@ from functools import lru_cache
 
 
 @lru_cache(64)
-def mac_math_offset(mac, offset=0) -> str | None:
+def mac_math_offset(mac: str | None, offset: int = 0) -> str | None:
     """
     Perform addition/subtraction on a MAC address.
 
@@ -98,7 +98,7 @@ def address_is_resolvable(address: str) -> bool:
 
 
 @lru_cache(1024)
-def rssi_to_metres(rssi, ref_power=None, attenuation=None):
+def rssi_to_metres(rssi: float, ref_power: float | None = None, attenuation: float | None = None) -> float | None:
     """
     Convert instant rssi value to a distance in metres.
 

@@ -114,7 +114,7 @@ async def async_setup_entry(
         # tell the co-ord we've done it.
         coordinator.sensor_created(address)
 
-    def create_scanner_entities():
+    def create_scanner_entities() -> None:
         # These are per-proxy entities on each device, and scanners may come and
         # go over time. So we maintain a matrix of which ones we have already
         # spun-up so we don't duplicate any.

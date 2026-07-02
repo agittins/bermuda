@@ -12,7 +12,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from bluetooth_data_tools import monotonic_time_coarse
 
 from custom_components.bermuda.const import CONF_MAX_RADIUS, MOBILITY_MOVING
 from custom_components.bermuda.trilateration import (
@@ -22,7 +21,11 @@ from custom_components.bermuda.trilateration import (
     refresh_area_by_min_distance,
 )
 
-NOW = monotonic_time_coarse()
+# Synthetic clock base. Must be a large constant, NOT monotonic_time_coarse():
+# that clock counts from machine boot, so on a freshly-booted CI runner
+# "NOW - 100" can go negative and break the 0-means-unset sentinel fields
+# (ambiguous_since / unknown_since / challenger_since).
+NOW = 1_000_000.0
 
 
 @pytest.fixture(autouse=True)

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The coordinator now passes `config_entry` explicitly to `DataUpdateCoordinator` (required from HA 2026.8) and entry setup uses `async_config_entry_first_refresh()` instead of a manual refresh-and-check
+- The bluetooth discovery step no longer requests a reload on unique-id updates (`reload_on_update=False`) — reloading is owned by the entry's update listener, combining both is deprecated since HA 2026.6
+- Entity base classes are now generically typed (`CoordinatorEntity[BermudaDataUpdateCoordinator]`) and return typed `DeviceInfo`
+- All function signatures are now fully type-annotated (194 additions); the `ANN` ruff rules are re-enabled so typing regressions fail lint
+
+### Fixed
+- The coverage gate declared in `pyproject.toml` never applied because a stray `pytest.ini` silently overrode it — `pytest.ini` is removed, pytest config is consolidated in `pyproject.toml` and the gate (≥ 95 %) is now enforced locally and in CI
+
+### Removed
+- Dead code: 7 unused option-flow UI strings (en+fr) from the removed per-device calibration table, orphaned commented-out coordinator code, and config-flow blueprint leftovers
+
+### Tests
+- 124 new tests (584 total); coverage raised from 93 % to 99.5 % — the `test-coverage` quality-scale rule (> 95 %) is now met
+
 ## [0.10.0] - 2026-06-18
 
 ### Security

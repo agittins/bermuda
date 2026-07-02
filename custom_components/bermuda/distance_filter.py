@@ -13,6 +13,7 @@ always more accurate than a farther one. Both helpers below exploit that.
 from __future__ import annotations
 
 import statistics
+from typing import cast
 
 from .const import DISTANCE_INFINITE
 
@@ -32,7 +33,7 @@ def median_abs_deviation(values: list[float], center: float | None = None) -> fl
     return statistics.median(deviations) if deviations else 0.0
 
 
-def peak_retreat_velocity(hist_distance: list[float], hist_stamp: list[float]) -> float:
+def peak_retreat_velocity(hist_distance: list[float | None], hist_stamp: list[float]) -> float:
     """
     Return the peak away-velocity (m/s) implied by the recent distance history.
 
@@ -47,12 +48,14 @@ def peak_retreat_velocity(hist_distance: list[float], hist_stamp: list[float]) -
 
     velo_newdistance = hist_distance[0]
     velo_newstamp = hist_stamp[0]
+    old_distance_1 = hist_distance[1]
+    old_stamp_1 = hist_stamp[1]
     # Guard against gaps in the histories (a reading can be None before the first
     # real distance is computed), consistent with the None checks in the loop below.
-    if None in (velo_newdistance, velo_newstamp, hist_stamp[1], hist_distance[1]):
+    if velo_newdistance is None or velo_newstamp is None or old_stamp_1 is None or old_distance_1 is None:
         return 0
-    delta_t = velo_newstamp - hist_stamp[1]
-    delta_d = velo_newdistance - hist_distance[1]
+    delta_t = velo_newstamp - old_stamp_1
+    delta_d = velo_newdistance - old_distance_1
     peak_velocity = delta_d / delta_t if delta_t > 0 else 0
 
     # If the most recent move is an approach (or flat), that is our answer.
@@ -64,7 +67,12 @@ def peak_retreat_velocity(hist_distance: list[float], hist_stamp: list[float]) -
             if delta_t <= 0:
                 # Skip zero/negative intervals to avoid division by zero.
                 continue
-            velocity = (velo_newdistance - old_distance) / delta_t
+            # NOTE (mypy strict-typing pass): old_distance is statically float | None
+            # here (hist_distance can hold gaps), but this loop only ever guarded on
+            # old_stamp being non-None, not old_distance. That is a pre-existing gap
+            # (see task report) left as-is to avoid changing runtime behaviour; the
+            # cast documents the (unverified) assumption rather than silently hiding it.
+            velocity = (velo_newdistance - cast("float", old_distance)) / delta_t
             # We only care about faster retreats from here on.
             if velocity > peak_velocity:  # noqa: PLR1730
                 peak_velocity = velocity

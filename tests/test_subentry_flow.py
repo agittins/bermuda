@@ -100,6 +100,49 @@ async def test_subentry_aborts_when_no_scanners(hass: HomeAssistant, setup_bermu
     assert result["reason"] == "no_scanners"
 
 
+async def test_subentry_calibration_reconfigure_updates_offset(
+    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry
+):
+    """Reconfiguring a calibration subentry pre-fills the existing offset and updates it."""
+    coordinator = setup_bermuda_entry.runtime_data.coordinator
+    scanner = coordinator._get_or_create_device("AA:BB:CC:DD:EE:F1")
+    scanner.name_by_user = "Hallway proxy"
+    scanner.make_name()
+    coordinator._scanners.add(scanner)
+    addr = scanner.address
+
+    result = await hass.config_entries.subentries.async_init(
+        (setup_bermuda_entry.entry_id, SUBENTRY_TYPE_CALIBRATION), context={"source": "user"}
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {CONF_SCANNER: addr, CONF_RSSI_OFFSET: 2.0}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    subentry = next(
+        se
+        for se in setup_bermuda_entry.subentries.values()
+        if se.subentry_type == SUBENTRY_TYPE_CALIBRATION and se.data[CONF_SCANNER] == addr
+    )
+
+    result = await hass.config_entries.subentries.async_init(
+        (setup_bermuda_entry.entry_id, SUBENTRY_TYPE_CALIBRATION),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    default_offset = next(key.default() for key in result["data_schema"].schema if key == CONF_RSSI_OFFSET)
+    assert default_offset == 2.0
+
+    result = await hass.config_entries.subentries.async_configure(result["flow_id"], {CONF_RSSI_OFFSET: 7.5})
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+
+    assert _calibration_offsets(setup_bermuda_entry) == {addr: 7.5}
+
+
 # --------------------------------------------------------------------------- #
 # Per-device enrolment subentry
 # --------------------------------------------------------------------------- #
@@ -127,6 +170,63 @@ async def test_device_subentry_add_and_coordinator_config(hass: HomeAssistant, s
     assert subs[0].data[CONF_NAME] == "Jan's keys"
     # The entry reloads; the fresh coordinator mirrors the per-device config.
     assert setup_bermuda_entry.runtime_data.coordinator.device_config[addr][CONF_REF_POWER] == -62.0
+
+
+async def test_device_subentry_aborts_when_no_devices(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
+    """With no enrollable devices, the add flow aborts cleanly."""
+    result = await hass.config_entries.subentries.async_init(
+        (setup_bermuda_entry.entry_id, SUBENTRY_TYPE_DEVICE), context={"source": "user"}
+    )
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "no_devices"
+
+
+async def test_device_subentry_reconfigure_updates_fields(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
+    """Reconfiguring a device subentry pre-fills existing values and updates them."""
+    coordinator = setup_bermuda_entry.runtime_data.coordinator
+    dev = coordinator._get_or_create_device("AA:BB:CC:DD:EE:A1")
+    addr = dev.address.upper()
+
+    result = await hass.config_entries.subentries.async_init(
+        (setup_bermuda_entry.entry_id, SUBENTRY_TYPE_DEVICE), context={"source": "user"}
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {CONF_ADDRESS: addr, CONF_NAME: "Old Name", CONF_REF_POWER: -60.0, CONF_DEVTRACK_TIMEOUT: 60},
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    subentry = next(
+        se
+        for se in setup_bermuda_entry.subentries.values()
+        if se.subentry_type == SUBENTRY_TYPE_DEVICE and se.data[CONF_ADDRESS] == addr
+    )
+
+    result = await hass.config_entries.subentries.async_init(
+        (setup_bermuda_entry.entry_id, SUBENTRY_TYPE_DEVICE),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    defaults = {key: key.default() for key in result["data_schema"].schema}
+    assert defaults[CONF_NAME] == "Old Name"
+    assert defaults[CONF_REF_POWER] == -60.0
+    assert defaults[CONF_DEVTRACK_TIMEOUT] == 60
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {CONF_NAME: "New Name", CONF_REF_POWER: -70.0, CONF_DEVTRACK_TIMEOUT: 120},
+    )
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+
+    subs = [se for se in setup_bermuda_entry.subentries.values() if se.subentry_type == SUBENTRY_TYPE_DEVICE]
+    assert len(subs) == 1
+    assert subs[0].data[CONF_NAME] == "New Name"
+    assert subs[0].title == "New Name"
+    assert setup_bermuda_entry.runtime_data.coordinator.device_config[addr][CONF_REF_POWER] == -70.0
 
 
 def test_device_config_applies_ref_power_and_name():
