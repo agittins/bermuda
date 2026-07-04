@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.device_tracker.config_entry import BaseTrackerEntity
-from homeassistant.components.device_tracker.const import SourceType
-from homeassistant.const import STATE_HOME
+from homeassistant.components.device_tracker import TrackerEntity
+from homeassistant.components.device_tracker.const import (
+    DeviceTrackerEntityCapabilityAttribute,
+    SourceType,
+    TrackingType,
+)
+from homeassistant.const import STATE_HOME, STATE_NOT_HOME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
@@ -64,12 +68,17 @@ async def async_setup_entry(
     # await coordinator.async_config_entry_first_refresh()
 
 
-class BermudaDeviceTracker(BermudaEntity, BaseTrackerEntity):
+class BermudaDeviceTracker(BermudaEntity, TrackerEntity):
     """A trackable Bermuda Device."""
 
     _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_name = "Bermuda Tracker"
+    _attr_source_type = SourceType.BLUETOOTH_LE
+    _attr_capability_attributes = { DeviceTrackerEntityCapabilityAttribute.TRACKING_TYPE: TrackingType.CONNECTION }
+    # don't define location_accuracy. It's tempting to use max_radius or the current
+    # distance, but it could be misleading in larger home zones where a gps might be
+    # more accurate than simply choosing the centre of the zone.
 
     @property
     def unique_id(self):
@@ -89,6 +98,11 @@ class BermudaDeviceTracker(BermudaEntity, BaseTrackerEntity):
     def state(self) -> str:
         """Return the state of the device."""
         return self._device.zone
+
+    @property
+    def in_zones(self) -> list[str] | None:
+        """Preserve zone_id if we later support non-home zones."""
+        return [] if self._device.zone == STATE_NOT_HOME else [self._device.zone]
 
     @property
     def source_type(self) -> SourceType:
