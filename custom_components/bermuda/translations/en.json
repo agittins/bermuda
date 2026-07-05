@@ -284,10 +284,12 @@
       },
       "scan": {
         "data": {
-          "add": "Devices to start tracking"
+          "add": "Devices to start tracking",
+          "refresh": "Refresh the list"
         },
         "data_description": {
-          "add": "Only devices that are not already tracked are listed, strongest signal (dBm) first."
+          "add": "Only devices that are not already tracked are listed, strongest signal (dBm) first.",
+          "refresh": "Tick this and submit to re-scan without saving — the device list refreshes."
         },
         "description": "{count} nearby device(s) not yet tracked, strongest signal first. Tick the ones to track — they are added to your tracked devices.",
         "title": "Scan for new devices"

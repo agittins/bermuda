@@ -712,6 +712,7 @@ def _nearby_device(**overrides):
         "area_name": "Kitchen",
         "area_advert": SimpleNamespace(name="proxy1"),
         "create_sensor": False,
+        "tracker_type": None,
     }
     base.update(overrides)
     return SimpleNamespace(**base)

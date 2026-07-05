@@ -284,10 +284,12 @@
       },
       "scan": {
         "data": {
-          "add": "Appareils à suivre"
+          "add": "Appareils à suivre",
+          "refresh": "Rafraîchir la liste"
         },
         "data_description": {
-          "add": "Seuls les appareils pas encore suivis sont listés, du signal le plus fort (dBm) au plus faible."
+          "add": "Seuls les appareils pas encore suivis sont listés, du signal le plus fort (dBm) au plus faible.",
+          "refresh": "Cochez et validez pour re-scanner sans rien enregistrer — la liste se met à jour."
         },
         "description": "{count} appareil(s) détecté(s) et pas encore suivi(s), du signal le plus fort au plus faible. Cochez ceux à suivre — ils sont ajoutés à vos appareils suivis.",
         "title": "Scanner les nouveaux appareils"

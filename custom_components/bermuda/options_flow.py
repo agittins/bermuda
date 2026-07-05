@@ -18,6 +18,7 @@ from homeassistant.config_entries import OptionsFlow
 from homeassistant.const import CONF_NAME
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
     NumberSelector,
@@ -190,7 +191,8 @@ class BermudaOptionsFlowHandler(OptionsFlow):
         appends whatever you tick to the tracked list (it never removes anything).
         """
         coordinator = self.config_entry.runtime_data.coordinator
-        if user_input is not None:
+        if user_input is not None and not user_input.get("refresh", False):
+            # "refresh" ticked -> fall through and re-render with a fresh scan.
             chosen = [a.upper() for a in user_input.get("add", [])]
             if chosen:
                 current = [a.upper() for a in self.options.get(CONF_DEVICES, []) if isinstance(a, str)]
@@ -212,14 +214,21 @@ class BermudaOptionsFlowHandler(OptionsFlow):
                 continue
             rssi = device.area_rssi
             manuf = f" · {device.manufacturer}" if device.manufacturer else ""
+            tracker = f"[{device.tracker_type}] " if device.tracker_type else ""
             signal = f"{rssi:.0f}dBm" if rssi is not None else "—"
-            label = f"{signal} · {device.name}{manuf} · {addr}"
+            label = f"{tracker}{signal} · {device.name}{manuf} · {addr}"
             ranked.append((rssi if rssi is not None else -9999.0, SelectOptionDict(value=addr, label=label)))
 
         ranked.sort(key=lambda r: r[0], reverse=True)  # strongest signal first
         options_list = [opt for _, opt in ranked]
         add_selector = SelectSelector(SelectSelectorConfig(options=options_list, multiple=True, sort=False))
-        data_schema = vol.Schema({vol.Optional("add", default=[]): add_selector})
+        data_schema = vol.Schema(
+            {
+                vol.Optional("add", default=[]): add_selector,
+                # Tick + submit to re-scan without saving (the list refreshes live).
+                vol.Optional("refresh", default=False): BooleanSelector(),
+            }
+        )
         return self.async_show_form(
             step_id="scan",
             data_schema=data_schema,

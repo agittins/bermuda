@@ -62,6 +62,7 @@ from .const import (
     MOBILITY_OPTIONS,
     VENDOR_CATEGORIES,
 )
+from .trackers import identify_tracker, short_uuid
 from .util import mac_norm
 
 if TYPE_CHECKING:
@@ -166,6 +167,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         self.zone: str = STATE_NOT_HOME  # STATE_HOME or STATE_NOT_HOME
         self.manufacturer: str | None = None
         self.manufacturer_id: int | None = None  # Bluetooth SIG company id, for vendor categorisation
+        self.tracker_type: str | None = None  # recognised item-tracker brand/network, if any
         # InPlay IN100 / DFRobot Fermion telemetry (manufacturer data 0x0505).
         self.in100_detected: bool = False
         self.in100_vcc: float | None = None
@@ -544,6 +546,20 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         # Let's see if we should update our last_seen based on this...
         if device_advert.stamp is not None and self.last_seen < device_advert.stamp:
             self.last_seen = device_advert.stamp
+
+    def identify_tracker_type(self, advert: BermudaAdvert) -> None:
+        """
+        Best-effort recognition of a known item-tracker from the advert signature.
+
+        Sets ``self.tracker_type`` (AirTag, Tile, Samsung SmartTag, Google Find My,
+        ...) the first time a signature matches; see ``trackers.identify_tracker``.
+        """
+        manufacturer_data = advert.manufacturer_data[0] if advert.manufacturer_data else {}
+        service_data = {short_uuid(k): v for k, v in advert.service_data[0].items()} if advert.service_data else {}
+        service_uuids = {short_uuid(u) for u in advert.service_uuids}
+        result = identify_tracker(manufacturer_data, service_uuids, service_data, self.name_bt_local_name)
+        if result is not None:
+            self.tracker_type = result
 
     def process_manufacturer_data(self, advert: BermudaAdvert) -> None:
         """Parse manufacturer data for maker name and iBeacon etc."""

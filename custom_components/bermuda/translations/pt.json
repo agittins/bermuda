@@ -284,10 +284,12 @@
       },
       "scan": {
         "data": {
-          "add": "Dispositivos a seguir"
+          "add": "Dispositivos a seguir",
+          "refresh": "Atualizar a lista"
         },
         "data_description": {
-          "add": "Apenas dispositivos ainda não seguidos, sinal mais forte (dBm) primeiro."
+          "add": "Apenas dispositivos ainda não seguidos, sinal mais forte (dBm) primeiro.",
+          "refresh": "Marque e submeta para procurar de novo sem guardar — a lista é atualizada."
         },
         "description": "{count} dispositivo(s) próximo(s) ainda não seguido(s), sinal mais forte primeiro. Marque os que quer seguir — são adicionados aos seus dispositivos seguidos.",
         "title": "Procurar novos dispositivos"

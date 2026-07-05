@@ -35,6 +35,7 @@ def mock_parent_device():
     device.name_bt_local_name = None
     device.name = "tracked device"
     device.create_sensor = False
+    device.tracker_type = None  # instance attr; spec mock needs it set explicitly
     return device
 
 

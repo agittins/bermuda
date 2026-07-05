@@ -284,10 +284,12 @@
       },
       "scan": {
         "data": {
-          "add": "Enheter å spore"
+          "add": "Enheter å spore",
+          "refresh": "Oppdater listen"
         },
         "data_description": {
-          "add": "Bare enheter som ikke allerede spores, sterkest signal (dBm) først."
+          "add": "Bare enheter som ikke allerede spores, sterkest signal (dBm) først.",
+          "refresh": "Kryss av og send inn for å søke på nytt uten å lagre — listen oppdateres."
         },
         "description": "{count} enhet(er) i nærheten som ennå ikke spores, sterkest signal først. Kryss av dem du vil spore — de legges til i de sporede enhetene dine.",
         "title": "Søk etter nye enheter"

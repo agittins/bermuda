@@ -19,6 +19,7 @@ def mock_parent_device():
     device.ref_power = -59
     device.name_bt_local_name = None
     device.name = "mock parent name"
+    device.tracker_type = None  # instance attr; spec mock needs it set explicitly
     return device
 
 

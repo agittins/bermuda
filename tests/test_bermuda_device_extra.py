@@ -693,3 +693,43 @@ def test_to_dict_serialises_adverts(mock_coordinator):
     dev.adverts = {("aa:bb:cc:dd:ee:ff", "11:22:33:44:55:66"): advert}
     out = dev.to_dict()
     assert out["adverts"] == {"aa:bb:cc:dd:ee:ff__11:22:33:44:55:66": {"rssi": -60}}
+
+
+# --------------------------------------------------------------------------- #
+# identify_tracker_type: advert signature -> device.tracker_type              #
+# --------------------------------------------------------------------------- #
+
+
+def _advert(*, manufacturer_data=None, service_data=None, service_uuids=None):
+    """A minimal advert stand-in for identify_tracker_type."""
+    return SimpleNamespace(
+        manufacturer_data=[manufacturer_data] if manufacturer_data is not None else [],
+        service_data=[service_data] if service_data is not None else [],
+        service_uuids=service_uuids or [],
+    )
+
+
+def test_identify_tracker_type_airtag_from_manufacturer_data(mock_coordinator):
+    """An Apple Find My frame with the AirTag status byte sets tracker_type."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    dev.name_bt_local_name = None
+    # type 0x12, length 25, status byte with bits 2-3 == 0b01 (AirTag), + key bytes.
+    payload = bytes([0x12, 0x19, 0b0100]) + bytes(24)
+    dev.identify_tracker_type(_advert(manufacturer_data={0x004C: payload}))
+    assert dev.tracker_type == "Apple AirTag"
+
+
+def test_identify_tracker_type_tile_from_service_uuid(mock_coordinator):
+    """A Tile service UUID (and no manufacturer data) sets tracker_type."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    dev.name_bt_local_name = None
+    dev.identify_tracker_type(_advert(service_uuids=["0000feed-0000-1000-8000-00805f9b34fb"]))
+    assert dev.tracker_type == "Tile"
+
+
+def test_identify_tracker_type_leaves_none_for_plain_device(mock_coordinator):
+    """A non-tracker advert leaves tracker_type as None."""
+    dev = BermudaDevice(address="aa:bb:cc:dd:ee:ff", coordinator=mock_coordinator)
+    dev.name_bt_local_name = None
+    dev.identify_tracker_type(_advert(manufacturer_data={0x00E0: b"\x01\x02"}))
+    assert dev.tracker_type is None

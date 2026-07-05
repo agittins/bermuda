@@ -166,6 +166,7 @@ class BermudaNearbyDevices(BermudaGlobalSensor):
                     "address": device.address.upper(),
                     "name": device.name,
                     "manufacturer": device.manufacturer,
+                    "tracker": device.tracker_type,
                     "category": device.category,
                     "rssi": round(device.area_rssi) if device.area_rssi is not None else None,
                     "distance": round(device.area_distance, 1) if device.area_distance is not None else None,

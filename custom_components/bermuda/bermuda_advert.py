@@ -251,6 +251,11 @@ class BermudaAdvert:
                 _want_name_update = True
                 del self.service_uuids[HIST_KEEP_COUNT:]
 
+        # Recognise known item-trackers (AirTag, Tile, SmartTag...) by signature.
+        # Cheap and idempotent; only attempted until a match is found.
+        if self._device.tracker_type is None:
+            self._device.identify_tracker_type(self)
+
         if _want_name_update:
             self._device.make_name()
 

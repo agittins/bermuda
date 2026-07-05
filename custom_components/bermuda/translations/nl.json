@@ -284,10 +284,12 @@
       },
       "scan": {
         "data": {
-          "add": "Apparaten om te volgen"
+          "add": "Apparaten om te volgen",
+          "refresh": "Lijst vernieuwen"
         },
         "data_description": {
-          "add": "Alleen apparaten die nog niet worden gevolgd, sterkste signaal (dBm) eerst."
+          "add": "Alleen apparaten die nog niet worden gevolgd, sterkste signaal (dBm) eerst.",
+          "refresh": "Vink dit aan en verzend om opnieuw te scannen zonder op te slaan — de lijst wordt vernieuwd."
         },
         "description": "{count} apparaat/apparaten in de buurt die nog niet worden gevolgd, sterkste signaal eerst. Vink aan welke u wilt volgen — ze worden toegevoegd aan uw gevolgde apparaten.",
         "title": "Scan naar nieuwe apparaten"

@@ -375,6 +375,25 @@ async def test_options_scan_appends_without_dropping_existing(
     assert setup_bermuda_entry.options.get(CONF_DEVICES) == [existing, new.address.upper()]
 
 
+async def test_options_scan_refresh_re_renders_without_saving(
+    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry
+):
+    """Submitting with 'refresh' ticked re-renders the scan form and saves nothing."""
+    coordinator = setup_bermuda_entry.runtime_data.coordinator
+    fresh = _inject_device(coordinator, "AA:BB:CC:DD:EE:30")
+
+    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"next_step_id": "scan"})
+    # Refresh: even with a device ticked, nothing is saved and we stay on the form.
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"add": [fresh.address.upper()], "refresh": True}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "scan"
+    assert fresh.address.upper() in _scan_selector_values(result)
+    assert setup_bermuda_entry.options.get(CONF_DEVICES, []) == []
+
+
 async def test_options_area_entities_two_step_flow(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
     """The area-entities wizard collects entities then per-entity virtual distances."""
     kitchen = ar.async_get(hass).async_create("Kitchen")
