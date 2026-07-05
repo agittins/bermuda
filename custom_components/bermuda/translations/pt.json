@@ -1,117 +1,486 @@
 {
   "config": {
+    "abort": {
+      "single_instance_allowed": "Apenas uma única instância é permitida."
+    },
     "step": {
       "user": {
-        "title": "Bermuda BLE Trilateration",
-        "description": "Se precisar de ajuda com a configuração, consulte a nossa [página no GitHub](https://github.com/agittins/bermuda)",
-        "data": {
-          "username": "Nome de utilizador",
-          "password": "Palavra-passe"
+        "description": "Se precisar de ajuda com a configuração, consulte a nossa [página no GitHub]({github_url})",
+        "title": "Bermuda BLE Trilateration"
+      }
+    }
+  },
+  "config_subentries": {
+    "calibration": {
+      "abort": {
+        "no_scanners": "Todos os scanners conhecidos já têm um desvio de calibração."
+      },
+      "entry_type": "Calibração de scanner",
+      "initiate_flow": {
+        "reconfigure": "Editar desvio do scanner",
+        "user": "Adicionar desvio de scanner"
+      },
+      "step": {
+        "reconfigure": {
+          "data": {
+            "rssi_offset": "Desvio de RSSI (dB)"
+          },
+          "data_description": {
+            "rssi_offset": "Adicionado ao RSSI deste scanner antes de a distância ser calculada."
+          },
+          "description": "Ajuste o desvio em dB para {scanner}.",
+          "title": "Editar desvio de RSSI"
+        },
+        "user": {
+          "data": {
+            "rssi_offset": "Desvio de RSSI (dB)",
+            "scanner": "Scanner"
+          },
+          "data_description": {
+            "rssi_offset": "Adicionado ao RSSI deste scanner antes de a distância ser calculada. Positivo = tratado como mais forte/próximo.",
+            "scanner": "O proxy Bluetooth a calibrar."
+          },
+          "description": "Adicione um desvio em dB para um scanner, para que as suas leituras fiquem alinhadas com as restantes.",
+          "title": "Desvio de RSSI por scanner"
         }
       }
     },
-    "error": {
-      "auth": "Nome de utilizador/palavra-passe incorretos."
-    },
-    "abort": {
-      "single_instance_allowed": "Apenas uma única instância é permitida."
-    }
-  },
-  "options": {
-    "error": {
-      "some_active": "Tem pelo menos alguns dispositivos ativos, isso é bom.",
-      "no_scanners": "Precisa de configurar alguns scanners Bluetooth antes de o Bermuda poder funcionar. Pode começar com dispositivos como esphome bluetooth_proxy, Shelly bluetooth proxy ou um adaptador Bluetooth local.",
-      "no_devices": "Nenhum dispositivo Bluetooth está a ser reportado ativamente pelos seus scanners. Resolva esta questão antes de o Bermuda ser útil."
-    },
-    "step": {
-      "init": {
-        "title": "Configurar o Bermuda",
-        "description": "Atualmente, o Bermuda consegue ver:\n- {device_counter_active} de {device_counter_devices} dispositivos Bluetooth ativos.\n- {scanner_counter_active} de {scanner_counter_scanners} scanners Bluetooth ativos.\n\n{status}"
+    "device": {
+      "abort": {
+        "no_devices": "Todos os dispositivos descobertos já estão registados."
       },
-      "globalopts": {
-        "title": "Definições globais",
-        "data": {
-          "max_area_radius": "Raio máximo em metros para deteção simples de ÁREA",
-          "max_velocity": "Velocidade máxima em metros por segundo - ignorar leituras que indiquem movimento mais rápido que este limite (3m/s ou 10km/h é uma boa configuração).",
-          "devtracker_nothome_timeout": "Timeout do Devtracker em segundos para considerar um dispositivo como `Fora de Casa`.",
-          "update_interval": "Intervalo de atualização - frequência (em segundos) das atualizações dos sensores.",
-          "smoothing_samples": "Amostras de suavização - número de amostras usadas para suavizar as leituras de distância.",
-          "attenuation": "Atenuação - fator de atenuação do ambiente para cálculo/calibração de distância.",
-          "ref_power": "Potência de referência - RSSI padrão a 1 metro de distância, para calibração de distância.",
-          "configured_devices": "Dispositivos configurados - selecione os dispositivos ou beacons Bluetooth a monitorizar com sensores."
+      "entry_type": "Dispositivo monitorizado",
+      "initiate_flow": {
+        "reconfigure": "Editar dispositivo",
+        "user": "Registar dispositivo"
+      },
+      "step": {
+        "reconfigure": {
+          "data": {
+            "devtracker_nothome_timeout": "Tempo limite de ausência (s)",
+            "name": "Nome (opcional)",
+            "ref_power": "Potência de referência (rssi @ 1 m)"
+          },
+          "data_description": {
+            "devtracker_nothome_timeout": "Segundos sem leitura antes de este dispositivo ser considerado Ausente.",
+            "name": "Substitui o nome anunciado (uma alteração de nome no Home Assistant continua a prevalecer).",
+            "ref_power": "Rssi por dispositivo a 1 m. Substitui o valor global no arranque."
+          },
+          "description": "Ajuste o registo de {device}.",
+          "title": "Editar dispositivo"
         },
-        "data_description": {
-          "max_area_radius": "Na funcionalidade simples `ÁREA`, um dispositivo será marcado como estando na ÁREA do recetor mais próximo, se estiver dentro deste raio. Se definir um valor pequeno, os dispositivos podem ficar como `desconhecido` entre recetores; valores grandes sempre os mostrarão na ÁREA mais próxima.",
-          "max_velocity": "Se uma leitura indicar que um dispositivo se move mais rápido do que este limite, essa leitura será ignorada. Humanos normalmente caminham a 1.4m/s; com objetos rápidos, movem-se até 3m/s.",
-          "devtracker_nothome_timeout": "Tempo necessário para marcar entidades como `fora de casa` após cessarem anúncios Bluetooth. 30 a 300 segundos é recomendado.",
-          "update_interval": "Distâncias que encurtam ainda serão atualizadas imediatamente, mas distâncias que aumentam serão limitadas por este intervalo para reduzir o crescimento da base de dados.",
-          "smoothing_samples": "Quantas amostras usar para suavizar leituras de distância. Valores maiores tornam os aumentos de distância mais lentos. Reduções de distância não são afetadas.",
-          "attenuation": "Após definir ref_power a 1 metro, ajuste a atenuação para que outras distâncias sejam lidas corretamente.",
-          "ref_power": "Coloque o beacon mais comum a 1 metro do scanner mais usado e ajuste ref_power até que o sensor de distância mostre 1 metro."
-        }
-      },
-      "selectdevices": {
-        "title": "Selecionar dispositivos",
-        "description": "Escolha quais dispositivos deseja monitorizar. Se nenhum dispositivo aparecer abaixo, o Bermuda não está a receber dados de scanners Bluetooth. Certifique-se de que possui um dispositivo esphome ble_proxy, dispositivos Shelly configurados como proxy Bluetooth ou um adaptador Bluetooth local."
-      },
-      "calibration1_global": {
-        "title": "Calibração 1: Global",
-        "description": "Este passo é para estabelecer algumas predefinições globais para cálculos de distância.\n\n{details}\n{summary}\nExpanda para instruções!{summary_end}\n\nNos passos seguintes, pode definir substituições por dispositivo, por isso faz sentido escolher o hardware mais comum como 'par de referência' para este passo. Por exemplo, se a maioria dos seus scanners for ESPHome num modelo específico, escolha um desses como scanner de referência.\n\n- Escolha um dispositivo e um scanner abaixo para usar como 'par de referência'\n- Coloque fisicamente o dispositivo escolhido a 1m (um metro) do scanner escolhido. Certifique-se de que têm linha de visão clara e evite colocá-los próximos a seres vivos que possam interferir com o sinal.\n- Clique em 'ENVIAR' e anote os valores RSSI na tabela que aparecerá abaixo. Pode clicar em 'ENVIAR' novamente a qualquer momento para atualizar os valores.\n- Assim que tiver um sinal estável, insira esse valor no campo `ref_power` e clique em 'ENVIAR'.\n- Agora, mova o dispositivo para uma distância maior e meça essa distância com uma fita métrica.\n- Experimente diferentes valores para `attenuation` e clique em 'ENVIAR' até que as medições estimadas concordem com a distância física.\n- Quando estiver satisfeito com a calibração, marque 'Salvar e Fechar' e clique em 'ENVIAR'.\n{details_end}\n{suffix}",
-        "data": {
-          "configured_devices": "Dispositivo",
-          "configured_scanners": "Scanner",
-          "save_and_close": "Salvar e Fechar",
-          "attenuation": "Atenuação",
-          "ref_power": "Potência de Referência"
-        },
-        "data_description": {
-          "save_and_close": "Depois de estar satisfeito com a calibração, marque esta opção e clique em Enviar. As alterações serão salvas e pode prosseguir para o próximo passo de calibração. Deixe desmarcado enquanto ajusta e testa as configurações.",
-          "attenuation": "Após ajustar as definições acima para leituras de 1m, mova o dispositivo para mais longe e ajuste a atenuação até que a distância calculada corresponda à distância física.",
-          "ref_power": "Para calibrar esta definição, coloque o dispositivo a 1 metro do scanner e ajuste o valor até que as figuras acima reflitam essa distância de 1m."
-        }
-      },
-      "calibration2_scanners": {
-        "title": "Calibração 2: Compensações por Scanner",
-        "description": "Este passo é opcional, mas útil se os seus scanners tiverem sensibilidades ou desempenhos de antena diferentes. Ajuste a compensação RSSI para cada scanner até que a distância calculada para o dispositivo selecionado esteja correta.",
-        "data": {
-          "configured_devices": "Dispositivo",
-          "save_and_close": "Salvar e Fechar",
-          "scanner_info": "Compensações por Scanner"
-        },
-        "data_description": {
-          "scanner_info": "Deixe a zero para aceitar o padrão global, ou insira um número para ajustar o RSSI reportado por esse scanner. Ajuste até que a distância estimada corresponda à distância real."
+        "user": {
+          "data": {
+            "address": "Dispositivo",
+            "devtracker_nothome_timeout": "Tempo limite de ausência (s)",
+            "name": "Nome (opcional)",
+            "ref_power": "Potência de referência (rssi @ 1 m)"
+          },
+          "data_description": {
+            "devtracker_nothome_timeout": "Segundos sem leitura antes de este dispositivo ser considerado Ausente.",
+            "name": "Substitui o nome anunciado (uma alteração de nome no Home Assistant continua a prevalecer).",
+            "ref_power": "Rssi por dispositivo a 1 m. Substitui o valor global no arranque."
+          },
+          "description": "Monitorize um dispositivo com o seu próprio nome, potência de referência e tempo limite de ausência.",
+          "title": "Registar dispositivo"
         }
       }
     }
   },
   "entity": {
+    "device_tracker": {
+      "bermuda_tracker": {
+        "name": "Localizador Bermuda"
+      }
+    },
+    "number": {
+      "ref_power": {
+        "name": "Potência de referência a 1 m (0 para predefinição)"
+      }
+    },
+    "select": {
+      "mobility_type": {
+        "name": "Tipo de mobilidade",
+        "state": {
+          "moving": "Em movimento",
+          "stationary": "Parado"
+        }
+      }
+    },
     "sensor": {
-      "distance": {
-        "name": "Distância"
+      "active_proxy_count": {
+        "name": "Número de proxies ativos"
       },
       "area": {
         "name": "Área"
+      },
+      "area_last_seen": {
+        "name": "Última área vista"
+      },
+      "area_switch_diagnostic": {
+        "name": "Diagnóstico de mudança de área"
+      },
+      "distance": {
+        "name": "Distância"
+      },
+      "distance_to_scanner": {
+        "name": "Distância até {scanner_name}"
+      },
+      "floor": {
+        "name": "Piso"
+      },
+      "in100_adc_voltage": {
+        "name": "Tensão ADC IN100"
+      },
+      "in100_temperature": {
+        "name": "Temperatura IN100"
+      },
+      "in100_vcc": {
+        "name": "Tensão de alimentação IN100"
+      },
+      "micro_location": {
+        "name": "Micro-localização"
+      },
+      "nearby_devices": {
+        "name": "Dispositivos próximos"
+      },
+      "nearest_rssi": {
+        "name": "RSSI mais próximo"
+      },
+      "nearest_scanner": {
+        "name": "Scanner mais próximo"
+      },
+      "total_device_count": {
+        "name": "Número total de dispositivos"
+      },
+      "total_proxy_count": {
+        "name": "Número total de proxies"
+      },
+      "unfiltered_distance_to_scanner": {
+        "name": "Distância não filtrada até {scanner_name}"
+      },
+      "visible_device_count": {
+        "name": "Número de dispositivos visíveis"
+      }
+    }
+  },
+  "exceptions": {
+    "bluetooth_not_available": {
+      "message": "Não existe nenhum adaptador ou proxy Bluetooth disponível para monitorizar dispositivos privados."
+    },
+    "irk_not_found": {
+      "message": "Não está atualmente visível nenhum dispositivo correspondente a esse IRK. Certifique-se de que está próximo, ligado e com o Bluetooth ativado."
+    },
+    "irk_not_valid": {
+      "message": "Isto não parece ser um IRK válido. Tem de ter 16 bytes: 32 carateres hexadecimais, ou base64 terminado em '='."
+    },
+    "not_loaded": {
+      "message": "O Bermuda não está carregado. Configure a integração antes de chamar este serviço."
+    },
+    "unknown": {
+      "message": "Não foi possível registar o dispositivo a partir desse IRK. Verifique a chave e tente novamente."
+    }
+  },
+  "issues": {
+    "scanner_without_area": {
+      "description": "O Bermuda exige que todos os proxies Bluetooth tenham uma área válida atribuída para funcionar corretamente. Atribua uma área acedendo à página de dispositivo de cada proxy (em `Dispositivos e Serviços`) e clicando no ícone do lápis no canto superior direito para atribuir uma área. Os seguintes proxies não têm área atribuída:\n\n{scannerlist}",
+      "title": "Alguns proxies Bluetooth não têm ÁREA"
+    }
+  },
+  "options": {
+    "error": {
+      "bluetooth_not_available": "Não existe nenhum adaptador ou proxy Bluetooth disponível para monitorizar dispositivos privados.",
+      "err_scanner_no_record": "O scanner selecionado ainda não viu este dispositivo.",
+      "irk_not_found": "Não está atualmente visível nenhum dispositivo correspondente a esse IRK. Certifique-se de que está próximo, ligado e com o Bluetooth ativado.",
+      "irk_not_valid": "Isto não parece ser um IRK válido (são necessários 16 bytes: 32 carateres hexadecimais, ou base64 terminado em '=').",
+      "no_devices": "Nenhum dispositivo Bluetooth está a ser reportado ativamente pelos seus scanners. Resolva esta questão antes de o Bermuda ser útil.",
+      "no_scanners": "Precisa de configurar alguns scanners Bluetooth antes de o Bermuda poder funcionar. Pode começar com dispositivos como esphome bluetooth_proxy, Shelly bluetooth proxy ou um adaptador Bluetooth local.",
+      "some_active": "Tem pelo menos alguns dispositivos ativos, isso é bom.",
+      "unknown": "Não foi possível registar o dispositivo. Verifique o IRK e tente novamente."
+    },
+    "step": {
+      "area_entities": {
+        "data": {
+          "area_entities": "Entidades de presença",
+          "area_entity_distance": "Distância virtual predefinida (m)"
+        },
+        "data_description": {
+          "area_entities": "Entidades cuja área é utilizada enquanto estiverem ativas.",
+          "area_entity_distance": "Distância com que a área ativada compete; um valor mais baixo vence mais leituras BLE. Predefinição 0,1 m."
+        },
+        "description": "Escolha entidades do Home Assistant (movimento, ocupação, contacto, ...) cuja área deve reforçar ou substituir a deteção BLE. Quando uma entidade está ativa, a sua área compete com o BLE a uma 'distância virtual' (menor = substituição mais forte).",
+        "title": "Entidades de presença por área"
+      },
+      "area_entities_distance": {
+        "description": "Defina uma distância virtual (metros) por entidade — um valor menor vence o BLE mais facilmente. Agrupado por área:\n\n{area_summary}",
+        "title": "Distância virtual por entidade"
+      },
+      "enrol_private": {
+        "data": {
+          "irk": "IRK",
+          "name": "Nome (opcional)"
+        },
+        "data_description": {
+          "irk": "Cole a chave como 32 carateres hexadecimais, ou base64 (terminado em '='). É aceite um prefixo 'irk:'.",
+          "name": "Um nome simples para o dispositivo monitorizado. Deixe em branco para usar o nome próprio do dispositivo."
+        },
+        "description": "Monitorize um iPhone, Apple Watch ou outro dispositivo de privacidade através do seu **IRK** (Identity Resolving Key). O Home Assistant resolve o seu MAC rotativo e o Bermuda passa então a monitorizá-lo automaticamente.\n\n**Onde encontrar o IRK**\n- **iOS / watchOS** (necessita de um Mac com sessão iniciada na mesma iCloud): abra o *Acesso às Chaves* → *Itens Locais* → procure `Bluetooth` → escolha o registo correspondente ao MAC do dispositivo (Definições › Geral › Informações) → *Mostrar palavra-passe* → copie o **Remote IRK** (base64).\n- **Android** (com root): em `/data/misc/bluedroid/bt_config.conf` leia `LE_LOCAL_KEY_IRK` (inverta a ordem dos bytes).\n\nO dispositivo tem de estar próximo e a transmitir neste momento, caso contrário a chave é rejeitada.",
+        "title": "Registar um dispositivo privado (IRK)"
+      },
+      "globalopts": {
+        "description": "Ajuste o modelo de distância global, os tempos limite de monitorização de dispositivos e a suavização do RSSI. Estas definições aplicam-se a todos os dispositivos monitorizados.",
+        "sections": {
+          "distance_model": {
+            "data": {
+              "attenuation": "Atenuação - Fator de atenuação do ambiente para o cálculo/calibração da distância.",
+              "max_area_radius": "Raio máximo em metros para deteção simples de ÁREA",
+              "ref_power": "Potência de referência - RSSI predefinido à distância de 1 metro, para calibração da distância."
+            },
+            "data_description": {
+              "attenuation": "Depois de definir ref_power a 1 metro, ajuste a atenuação para que as outras distâncias sejam lidas corretamente - mais ou menos.",
+              "max_area_radius": "Na funcionalidade simples `AREA`, um dispositivo será marcado como estando na ÁREA do recetor mais próximo, se estiver dentro deste raio. Se o definir pequeno, os dispositivos passarão a `desconhecido` entre recetores, mas se for grande, os dispositivos aparecerão sempre na sua área mais próxima.",
+              "ref_power": "Coloque o seu beacon mais comum a 1 metro (3,28') do seu proxy/scanner mais comum. Ajuste o ref_power até o sensor de distância apresentar uma distância mínima (não média) de 1 metro."
+            },
+            "description": "Potência de referência, atenuação e raio máximo — a relação entre RSSI e distância.",
+            "name": "Modelo de distância"
+          },
+          "smoothing": {
+            "data": {
+              "max_velocity": "Velocidade máxima em metros por segundo - ignorar leituras que impliquem afastamento mais rápido do que este limite. 3 m/s (10 km/h) é um bom valor.",
+              "smoothing_samples": "Amostras de suavização - quantas amostras usar para suavizar as leituras de distância."
+            },
+            "data_description": {
+              "max_velocity": "Se uma leitura implicar que um dispositivo se está a afastar mais depressa do que isto, ignoramos essa leitura. As pessoas caminham normalmente a 1,4 m/s; se estiverem a segurar tesouras, deslocam-se a 3 m/s.",
+              "smoothing_samples": "Quantas amostras usar na média para a suavização da distância. Números maiores tornam mais lento o aumento da distância. As reduções de distância não são afetadas. 10 ou 20 parece bem."
+            },
+            "description": "Número de amostras e limite de velocidade que estabilizam as leituras de distância.",
+            "name": "Suavização de RSSI"
+          },
+          "tracking": {
+            "data": {
+              "devtracker_nothome_timeout": "Tempo limite do Devtracker em segundos para considerar um dispositivo `Ausente`.",
+              "update_interval": "Intervalo de atualização - Com que frequência (em segundos) atualizar as leituras dos sensores."
+            },
+            "data_description": {
+              "devtracker_nothome_timeout": "Com que rapidez marcar as entidades device_tracker como `not_home` depois de deixarmos de ver anúncios. 30 a 300 segundos é provavelmente um bom valor.",
+              "update_interval": "As reduções de distância continuam a ser aplicadas de imediato, mas os aumentos de distância serão limitados por este valor, para reduzir o crescimento da sua base de dados."
+            },
+            "description": "Quanto tempo até um dispositivo ser reportado como Ausente, e com que frequência os sensores são atualizados.",
+            "name": "Monitorização de dispositivos"
+          }
+        },
+        "title": "Definições globais"
+      },
+      "init": {
+        "description": "Atualmente, o Bermuda consegue ver:\n- {device_counter_active} de {device_counter_devices} dispositivos Bluetooth ativos.\n- {scanner_counter_active} de {scanner_counter_scanners} scanners Bluetooth ativos.\n\n{status}",
+        "menu_options": {
+          "area_entities": "Entidades de presença por área",
+          "enrol_private": "Registar um dispositivo privado (IRK)",
+          "globalopts": "Opções globais",
+          "scan": "Procurar novos dispositivos",
+          "selectdevices": "Selecionar dispositivos a monitorizar"
+        },
+        "title": "Configurar o Bermuda"
+      },
+      "scan": {
+        "data": {
+          "add": "Dispositivos a seguir",
+          "refresh": "Atualizar a lista"
+        },
+        "data_description": {
+          "add": "Apenas dispositivos ainda não seguidos, sinal mais forte (dBm) primeiro.",
+          "refresh": "Marque e submeta para procurar de novo sem guardar — a lista é atualizada."
+        },
+        "description": "{count} dispositivo(s) próximo(s) ainda não seguido(s), sinal mais forte primeiro. Marque os que quer seguir — são adicionados aos seus dispositivos seguidos.",
+        "title": "Procurar novos dispositivos"
+      },
+      "selectdevices": {
+        "data": {
+          "devices": "Dispositivos a monitorizar",
+          "exclude": "Excluir estes",
+          "track_categories": "Monitorizar categorias inteiras"
+        },
+        "data_description": {
+          "devices": "Escolha os dispositivos BLE que o Bermuda deve monitorizar. Escreva para pesquisar. Os iBeacons e MAC aleatórios estão identificados; os dispositivos que monitoriza mas que não estão atualmente visíveis aparecem como (saved).",
+          "exclude": "Nunca monitorizar estes, mesmo que correspondam a uma categoria monitorizada.",
+          "track_categories": "Monitoriza automaticamente todos os dispositivos que correspondam a uma categoria selecionada (por exemplo, todos os iBeacons ou todos os dispositivos com nome)."
+        },
+        "description": "Escolha quais dispositivos deseja monitorizar. Se nenhum dispositivo aparecer abaixo, o Bermuda não está a receber dados de scanners Bluetooth. Certifique-se de que possui um dispositivo esphome ble_proxy, dispositivos Shelly configurados como proxy Bluetooth ou um adaptador Bluetooth local.",
+        "title": "Selecionar dispositivos"
+      }
+    }
+  },
+  "selector": {
+    "track_category": {
+      "options": {
+        "amazfit": "Amazfit / Mi",
+        "apple": "Apple",
+        "garmin": "Garmin",
+        "google": "Google",
+        "ibeacon": "iBeacons",
+        "irk": "Dispositivos privados (IRK)",
+        "microsoft": "Microsoft",
+        "named": "Dispositivos com nome",
+        "public": "MAC público",
+        "random": "MAC aleatório",
+        "samsung": "Samsung"
       }
     }
   },
   "services": {
+    "calibrate_location": {
+      "description": "Regista o local atual de um dispositivo monitorizado como uma micro-localização com nome (por exemplo, 'Cabide das chaves'), capturando a impressão digital de RF de cada proxy que o consegue ouvir. Repetir com o mesmo dispositivo e nome recalibra esse local.",
+      "fields": {
+        "area": {
+          "description": "Área do Home Assistant opcional a associar a este local. Por predefinição, a área atual do dispositivo.",
+          "name": "Área"
+        },
+        "device": {
+          "description": "O dispositivo/item monitorizado a calibrar. Um nome de dispositivo, MAC/UUID, ou ID de dispositivo do Home Assistant.",
+          "name": "Dispositivo"
+        },
+        "name": {
+          "description": "O nome deste local, por exemplo 'Cabide das chaves' ou 'Gaveta da mesa de cabeceira'.",
+          "name": "Nome do local"
+        }
+      },
+      "name": "Calibrar micro-localização"
+    },
     "dump_devices": {
-      "name": "Exportar Dispositivos",
       "description": "Retorna a estrutura de dados interna, limitada opcionalmente aos endereços fornecidos. Inclui o RSSI e outras informações de cada scanner.",
       "fields": {
         "addresses": {
-          "name": "Endereços",
-          "description": "Uma lista opcional de endereços MAC separados por espaços para obter informações. Se em branco, retorna todos os endereços."
+          "description": "Uma lista opcional de endereços MAC separados por espaços para obter informações. Se em branco, retorna todos os endereços.",
+          "name": "Endereços"
         },
         "configured_devices": {
-          "name": "Dispositivos Configurados",
-          "description": "Selecione para incluir apenas scanners e dispositivos configurados na saída."
+          "description": "Selecione para incluir apenas scanners e dispositivos configurados na saída.",
+          "name": "Dispositivos Configurados"
         },
         "redact": {
-          "name": "Redigir",
-          "description": "Defina como VERDADEIRO para garantir que os endereços MAC sejam redigidos na saída, para maior privacidade."
+          "description": "Defina como VERDADEIRO para garantir que os endereços MAC sejam redigidos na saída, para maior privacidade.",
+          "name": "Redigir"
         }
-      }
+      },
+      "name": "Exportar Dispositivos"
+    },
+    "enrol_private_device": {
+      "description": "Monitorize um dispositivo de privacidade (iPhone, Apple Watch, …) através do seu IRK. Entrega a chave à integração Private BLE Device do Home Assistant, que resolve o MAC rotativo; o Bermuda passa então a monitorizá-lo automaticamente. O dispositivo tem de estar próximo e a transmitir para que a chave seja aceite.",
+      "fields": {
+        "irk": {
+          "description": "Identity Resolving Key, como 32 carateres hexadecimais ou base64 (terminado em '=').",
+          "name": "IRK"
+        },
+        "name": {
+          "description": "Nome simples opcional para o dispositivo monitorizado.",
+          "name": "Nome"
+        }
+      },
+      "name": "Registar um dispositivo privado"
+    },
+    "get_config": {
+      "description": "Devolve a calibração atual do Bermuda, os dispositivos monitorizados, os scanners e o número de micro-localizações.",
+      "name": "Obter configuração"
+    },
+    "list_locations": {
+      "description": "Lista as micro-localizações guardadas, opcionalmente filtradas por um dispositivo.",
+      "fields": {
+        "device": {
+          "description": "Dispositivo opcional para filtrar. Deixe em branco para listar todos os locais guardados.",
+          "name": "Dispositivo"
+        }
+      },
+      "name": "Listar micro-localizações"
+    },
+    "remove_location": {
+      "description": "Elimina uma micro-localização guardada de um dispositivo pelo nome.",
+      "fields": {
+        "device": {
+          "description": "O dispositivo a que pertence o local.",
+          "name": "Dispositivo"
+        },
+        "name": {
+          "description": "O nome do local a remover.",
+          "name": "Nome do local"
+        }
+      },
+      "name": "Remover micro-localização"
+    },
+    "rename_location": {
+      "description": "Renomeia uma micro-localização guardada de um dispositivo.",
+      "fields": {
+        "device": {
+          "description": "O dispositivo a que pertence o local.",
+          "name": "Dispositivo"
+        },
+        "name": {
+          "description": "O nome atual do local.",
+          "name": "Nome atual"
+        },
+        "new_name": {
+          "description": "O novo nome para o local.",
+          "name": "Novo nome"
+        }
+      },
+      "name": "Renomear micro-localização"
+    },
+    "set_global_calibration": {
+      "description": "Define a potência de referência e/ou a atenuação globais utilizadas nas estimativas de distância.",
+      "fields": {
+        "attenuation": {
+          "description": "Fator de atenuação ambiental utilizado além de 1 metro.",
+          "name": "Atenuação"
+        },
+        "ref_power": {
+          "description": "RSSI (dBm) medido a 1 metro. Um valor mais negativo significa distâncias estimadas mais curtas.",
+          "name": "Potência de referência"
+        }
+      },
+      "name": "Definir calibração global"
+    },
+    "set_scanner_offset": {
+      "description": "Define um desvio de RSSI por scanner (o passo de calibração por proxy, como serviço).",
+      "fields": {
+        "rssi_offset": {
+          "description": "Desvio adicionado ao RSSI deste scanner. Um valor negativo aumenta a distância, um positivo diminui-a.",
+          "name": "Desvio de RSSI"
+        },
+        "scanner": {
+          "description": "O scanner/proxy a ajustar. Um nome ou endereço de scanner.",
+          "name": "Scanner"
+        }
+      },
+      "name": "Definir desvio de RSSI do scanner"
+    },
+    "track_device": {
+      "description": "Adiciona um dispositivo Bluetooth aos dispositivos monitorizados pelo Bermuda (cria os respetivos sensores).",
+      "fields": {
+        "device": {
+          "description": "O dispositivo a monitorizar. Um nome de dispositivo, MAC/UUID, ou ID de dispositivo do Home Assistant.",
+          "name": "Dispositivo"
+        }
+      },
+      "name": "Monitorizar dispositivo"
+    },
+    "untrack_device": {
+      "description": "Remove um dispositivo dos dispositivos monitorizados pelo Bermuda.",
+      "fields": {
+        "device": {
+          "description": "O dispositivo a deixar de monitorizar.",
+          "name": "Dispositivo"
+        }
+      },
+      "name": "Deixar de monitorizar dispositivo"
+    },
+    "where_is": {
+      "description": "Reporta a área atual de um dispositivo e a micro-localização correspondente, com nível de confiança.",
+      "fields": {
+        "device": {
+          "description": "O dispositivo/item a localizar. Um nome de dispositivo, MAC/UUID, ou ID de dispositivo do Home Assistant.",
+          "name": "Dispositivo"
+        }
+      },
+      "name": "Onde está"
     }
   }
 }

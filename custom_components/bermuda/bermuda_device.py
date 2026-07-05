@@ -14,23 +14,18 @@ from __future__ import annotations
 
 import binascii
 import re
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any
 
 from bluetooth_data_tools import monotonic_time_coarse
-from homeassistant.components.bluetooth import (
-    BaseHaRemoteScanner,
-    BaseHaScanner,
-    BluetoothChange,
-    BluetoothServiceInfoBleak,
-)
 from homeassistant.components.private_ble_device import coordinator as pble_coordinator
-from homeassistant.const import STATE_HOME, STATE_NOT_HOME
+from homeassistant.const import CONF_NAME, STATE_HOME, STATE_NOT_HOME
 from homeassistant.core import callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.util import slugify
 
 from .bermuda_advert import BermudaAdvert
+from .bermuda_device_scanner import BermudaScannerDeviceMixin
 from .const import (
     _LOGGER,
     _LOGGER_SPAM_LESS,
@@ -38,29 +33,51 @@ from .const import (
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     BDADDR_TYPE_NOT_MAC48,
     BDADDR_TYPE_OTHER,
+    BDADDR_TYPE_RANDOM_RESERVED,
     BDADDR_TYPE_RANDOM_RESOLVABLE,
     BDADDR_TYPE_RANDOM_STATIC,
     BDADDR_TYPE_RANDOM_UNRESOLVABLE,
     BDADDR_TYPE_UNKNOWN,
+    CATEGORY_IBEACON,
+    CATEGORY_IRK,
+    CATEGORY_NAMED,
+    CATEGORY_PUBLIC,
+    CATEGORY_RANDOM,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
+    CONF_EXCLUDE_DEVICES,
+    CONF_REF_POWER,
+    CONF_TRACK_CATEGORIES,
     DEFAULT_DEVTRACK_TIMEOUT,
+    DEFAULT_MOBILITY_TYPE,
     DOMAIN,
     ICON_DEFAULT_AREA,
     ICON_DEFAULT_FLOOR,
+    IN100_PAYLOAD_LEN,
+    MANUFACTURER_ID_INPLAY,
     METADEVICE_IBEACON_DEVICE,
     METADEVICE_PRIVATE_BLE_DEVICE,
     METADEVICE_TYPE_IBEACON_SOURCE,
+    MOBILITY_MOVING,
+    MOBILITY_OPTIONS,
+    VENDOR_CATEGORIES,
 )
-from .util import mac_math_offset, mac_norm
+from .trackers import identify_tracker, short_uuid
+from .util import mac_norm
 
 if TYPE_CHECKING:
     from bleak.backends.scanner import AdvertisementData
+    from homeassistant.components.bluetooth import (
+        BaseHaRemoteScanner,
+        BaseHaScanner,
+        BluetoothChange,
+        BluetoothServiceInfoBleak,
+    )
 
     from .coordinator import BermudaDataUpdateCoordinator
 
 
-class BermudaDevice(dict):
+class BermudaDevice(BermudaScannerDeviceMixin):
     """
     This class is to represent a single bluetooth "device" tracked by Bermuda.
 
@@ -84,7 +101,11 @@ class BermudaDevice(dict):
         self.name_bt_local_name: str | None = None  # From service_info.advertisement.local_name
         self.name_devreg: str | None = None  # From device registry, for other integrations like scanners, pble devices
         self.name_by_user: str | None = None  # Any user-defined (in the HA UI) name discovered for a device.
-        self.address: Final[str] = _address
+        # Not annotated Final: BermudaScannerDeviceMixin (a base class, mixed in below)
+        # also declares this attribute, and mypy disallows a subclass narrowing an
+        # inherited attribute to Final. Runtime behaviour is unaffected either way, as
+        # CPython does not enforce `Final`.
+        self.address: str = _address
         self.address_ble_mac: str = _address
         self.address_wifi_mac: str | None = None
         # We use a weakref to avoid any possible GC issues (only likely if we add a __del__ method, but *shrug*)
@@ -92,6 +113,15 @@ class BermudaDevice(dict):
         self.ref_power: float = 0  # If non-zero, use in place of global ref_power.
         self.ref_power_changed: float = 0  # Stamp for last change to ref_power, for cache zapping.
         self.options = self._coordinator.options
+        # Per-device enrolment from a "device" subentry (authoritative at setup; the
+        # ref_power number entity may still tweak it live within the session).
+        self.name_subentry: str | None = None
+        _dc = getattr(self._coordinator, "device_config", None)
+        _device_cfg = _dc.get(_address.upper()) if isinstance(_dc, dict) else None
+        if _device_cfg:
+            if _device_cfg.get(CONF_REF_POWER):
+                self.ref_power = _device_cfg[CONF_REF_POWER]
+            self.name_subentry = _device_cfg.get(CONF_NAME) or None
         self.unique_id: str | None = _address  # mac address formatted.
         self.address_type = BDADDR_TYPE_UNKNOWN
 
@@ -110,19 +140,47 @@ class BermudaDevice(dict):
         self.area_rssi: float | None = None  # rssi from closest scanner
         self.area_advert: BermudaAdvert | None = None  # currently closest BermudaScanner
 
+        # Mobility-aware area resolution: the device's mobility mode (set by the
+        # mobility select), whether the area is the explicit "Unknown" outcome, and
+        # the rolling decision state used to smooth area switches (lazily created by
+        # the trilateration module so this stays decoupled from it).
+        self.mobility_type: str = DEFAULT_MOBILITY_TYPE
+        self.area_is_unknown: bool = False
+        self.area_decision_state: Any = None
+
+        # Micro-location (sub-area RF fingerprint match): a named spot like "Key hook",
+        # finer than an Area, set by the coordinator each cycle when a saved fingerprint
+        # for this device matches confidently.
+        self.micro_location_id: str | None = None
+        self.micro_location_name: str | None = None
+        self.micro_location_confidence: float | None = None
+        self.micro_location_last_seen: str | None = None
+        # (candidate_id, consecutive_cycles) used for switch hysteresis.
+        self.micro_location_streak: tuple[str | None, int] = (None, 0)
+
         self.floor: fr.FloorEntry | None = None
         self.floor_id: str | None = None
         self.floor_name: str | None = None
         self.floor_icon: str = ICON_DEFAULT_FLOOR
-        self.floor_level: str | None = None
+        self.floor_level: int | None = None  # matches FloorEntry.level (int | None); was mistyped as str | None
 
         self.zone: str = STATE_NOT_HOME  # STATE_HOME or STATE_NOT_HOME
         self.manufacturer: str | None = None
+        self.manufacturer_id: int | None = None  # Bluetooth SIG company id, for vendor categorisation
+        self.tracker_type: str | None = None  # recognised item-tracker brand/network, if any
+        # InPlay IN100 / DFRobot Fermion telemetry (manufacturer data 0x0505).
+        self.in100_detected: bool = False
+        self.in100_vcc: float | None = None
+        self.in100_temp_c: float | None = None
+        self.in100_adc_voltage: float | None = None
+        self.in100_raw_payload_hex: str | None = None
+        self.in100_last_payload_len: int | None = None
+        self.create_in100_done: bool = False  # IN100 telemetry sensors have been spun up
         self._hascanner: BaseHaRemoteScanner | BaseHaScanner | None = None  # HA's scanner
         self._is_scanner: bool = False
         self._is_remote_scanner: bool | None = None
         self.stamps: dict[str, float] = {}
-        self.metadevice_type: set = set()
+        self.metadevice_type: set[str] = set()
         self.metadevice_sources: list[str] = []  # list of MAC addresses that have/should match this beacon
         self.beacon_unique_id: str | None = None  # combined uuid_major_minor for *really* unique id
         self.beacon_uuid: str | None = None
@@ -131,20 +189,22 @@ class BermudaDevice(dict):
         self.beacon_power: float | None = None
 
         self.entry_id: str | None = None  # used for scanner devices
+        self.scanner_entity_id: str | None = None  # if this device is a scanner: its HA switch/light entity_id
         self.create_sensor: bool = False  # Create/update a sensor for this device
         self.create_sensor_done: bool = False  # Sensor should now exist
         self.create_tracker_done: bool = False  # device_tracker should now exist
         self.create_number_done: bool = False
-        self.create_button_done: bool = False
+        self.create_select_done: bool = False
         self.create_all_done: bool = False  # All platform entities are done and ready.
         self.last_seen: float = 0  # stamp from most recent scanner spotting. monotonic_time_coarse
-        self.diag_area_switch: str | None = None  # saves output of AreaTests
+        self.diag_area_switch: str | None = None  # saves the full AreaTests diagnostic dump
+        self.diag_area_switch_reason: str | None = None  # saves the concise AreaTests reason string
         self.adverts: dict[
             tuple[str, str], BermudaAdvert
         ] = {}  # str will be a scanner address OR a deviceaddress__scanneraddress
         self._async_process_address_type()
 
-    def _async_process_address_type(self):
+    def _async_process_address_type(self) -> None:
         """
         Identify the address type (MAC, IRK, iBeacon etc) and perform any setup.
 
@@ -192,7 +252,8 @@ class BermudaDevice(dict):
                     self._coordinator.config_entry.async_on_unload(
                         _pble_coord.async_track_service_info(self.async_handle_pble_callback, _irk_bytes)
                     )
-                    _LOGGER.debug("Private BLE Callback registered for %s, %s", self.name, self.address)
+                    # self.address is the raw IRK here; log only a short prefix (key material).
+                    _LOGGER.debug("Private BLE Callback registered for %s (irk %s…)", self.name, self.address[:4])
                     #
                     # Also register a callback with our own, which can fake the PBLE callbacks.
                     self._coordinator.config_entry.async_on_unload(
@@ -206,342 +267,21 @@ class BermudaDevice(dict):
             elif len(self.address) == 17:
                 top_bits = int(self.address[0:1], 16) >> 2
                 # The two MSBs of the first octet dictate the random type...
-                if top_bits & 0b00:  # First char will be in [0 1 2 3]
+                if (top_bits & 0b11) == 0b00:  # First char will be in [0 1 2 3]
                     self.address_type = BDADDR_TYPE_RANDOM_UNRESOLVABLE
-                elif top_bits & 0b01:  # Addresses where the first char will be 4,5,6 or 7
-                    _LOGGER.debug("Identified Resolvable Private (potential IRK source) Address on %s", self.address)
+                elif (top_bits & 0b11) == 0b01:  # Addresses where the first char will be 4,5,6 or 7
                     self.address_type = BDADDR_TYPE_RANDOM_RESOLVABLE
                     self._coordinator.irk_manager.check_mac(self.address)
-                elif top_bits & 0b10:
-                    self.address_type = "reserved"
-                    _LOGGER.debug("Hey, got one of those reserved MACs, %s", self.address)
-                elif top_bits & 0b11:
+                elif (top_bits & 0b11) == 0b10:
+                    self.address_type = BDADDR_TYPE_RANDOM_RESERVED
+                elif (top_bits & 0b11) == 0b11:
                     self.address_type = BDADDR_TYPE_RANDOM_STATIC
 
             else:
-                # This is a normal MAC address.
+                # Fallback for any other colon-form address shape.
+                # (No OUI->manufacturer lookup here: the SIG tables are keyed by
+                # 16-bit company IDs, so a 24-bit OUI prefix never matches.)
                 self.address_type = BDADDR_TYPE_OTHER
-                name, generic = self._coordinator.get_manufacturer_from_id(self.address[:8])
-                if name and (self.manufacturer is None or not generic):
-                    self.manufacturer = name
-
-    @property
-    def is_scanner(self):
-        return self._is_scanner
-
-    @property
-    def is_remote_scanner(self):
-        return self._is_remote_scanner
-
-    def async_as_scanner_nolonger(self):
-        """Call when this device is unregistered as a BaseHaScanner."""
-        self._is_scanner = False
-        self._is_remote_scanner = False
-        self._coordinator.scanner_list_del(self)
-
-    def async_as_scanner_init(self, ha_scanner: BaseHaScanner):
-        """
-        Configure this device as a scanner device.
-
-        Use to set up a device as a scanner.
-        """
-        if self._hascanner is ha_scanner:
-            # Actual object has not changed, we're good.
-            return
-
-        # If we don't already have a self._hascanner, then this must be our
-        # first initialisation. Otherwise we're just updating with a (potentially) new
-        # hascanner.
-        _first_init = self._hascanner is None
-
-        self._hascanner = ha_scanner
-        self._is_scanner = True
-        # Only Remote ha scanners provide explicit timestamps...
-        if isinstance(self._hascanner, BaseHaRemoteScanner):
-            self._is_remote_scanner = True
-        else:
-            self._is_remote_scanner = False
-        self._coordinator.scanner_list_add(self)
-
-        # Find the relevant device entries in HA for this scanner and apply the names, addresses etc
-        self.async_as_scanner_resolve_device_entries()
-
-        # Call the per-update processor as well, but only
-        # if this is our first ha_scanner.
-        # This is because we must avoid an infinite loop in the case
-        # where the scanner_update might call us.
-        if _first_init:
-            self.async_as_scanner_update(ha_scanner)
-
-    def async_as_scanner_resolve_device_entries(self):
-        """From the known MAC address, resolve any relevant device entries and names etc."""
-        # As of 2025.2.0 The bluetooth integration creates its own device entries
-        # for all HaScanners, not just local adaptors. So since there are two integration
-        # pages where a user might apply an area setting (eg, the bluetooth page or the shelly/esphome pages)
-        # we should check both to see if the user has applied an area (or name) anywhere, and
-        # prefer the bluetooth one if both are set.
-
-        # espressif devices have a base_mac
-        # https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/misc_system_api.html#local-mac-addresses
-        # base_mac (WiFi STA), +1 (AP), +2 (BLE), +3 (Ethernet)
-        # Also possible for them to use LocalMAC, where the AP and Ether MACs are derived from STA and BLE
-        # MACs, with first octet having bitvalue0x2 set, or if it was already, bitvalue0x4 XORd
-        #
-        # core Bluetooth now reports the BLE MAC address, while ESPHome (and maybe Shelly?) use
-        # the ethernet or wifi MAC for their connection links. We want both devices (if present) so that
-        # we can let the user apply name and area settings to either device.
-
-        if self._hascanner is None:
-            _LOGGER.warning("Scanner %s has no ha_scanner, can not resolve devices.", self.__repr__())
-            return
-
-        # scanner_ha: BaseHaScanner from HA's bluetooth backend
-        # scanner_devreg_bt: DeviceEntry from HA's device_registry from Bluetooth integration
-        # scanner_devreg_mac: DeviceEntry from HA's *other* integrations, like ESPHome, Shelly.
-
-        connlist = set()  # For macthing against device_registry connections
-        maclist = set()  # For matching against device_registry identifier
-
-        # The device registry devices for the bluetooth and ESPHome/Shelly devices.
-        scanner_devreg_bt = None
-        scanner_devreg_mac = None
-        scanner_devreg_mac_address = None
-        scanner_devreg_bt_address = None
-
-        # We don't know which address is being reported/used. So create the full
-        # range of possible addresses, and see what we find in the device registry,
-        # on the *assumption* that there won't be overlap between devices.
-        for offset in range(-3, 3):
-            if (altmac := mac_math_offset(self.address, offset)) is not None:
-                connlist.add(("bluetooth", altmac.upper()))
-                connlist.add(("mac", altmac))
-                maclist.add(altmac)
-
-        # Requires 2025.3
-        devreg_devices = self._coordinator.dr.devices.get_entries(None, connections=connlist)
-        devreg_count = 0  # can't len() an iterable.
-        devreg_stringlist = ""  # for debug logging
-        for devreg_device in devreg_devices:
-            devreg_count += 1
-            # _LOGGER.debug("DevregScanner: %s", devreg_device)
-            devreg_stringlist += f"** {devreg_device.name_by_user or devreg_device.name}\n"
-            for conn in devreg_device.connections:
-                if conn[0] == "bluetooth":
-                    # Bluetooth component's device!
-                    scanner_devreg_bt = devreg_device
-                    scanner_devreg_bt_address = conn[1].lower()
-                if conn[0] == "mac":
-                    # ESPHome, Shelly
-                    scanner_devreg_mac = devreg_device
-                    scanner_devreg_mac_address = conn[1]
-
-        if devreg_count not in (1, 2, 3):
-            # We expect just the bt, or bt and another like esphome/shelly, or
-            # two bt's and shelly/esphome, the second bt being the alternate
-            # MAC address.
-            _LOGGER_SPAM_LESS.warning(
-                f"multimatch_devreg_{self._hascanner.source}",
-                "Unexpectedly got %d device registry matches for %s: %s\n",
-                devreg_count,
-                self._hascanner.name,
-                devreg_stringlist,
-            )
-
-        if scanner_devreg_bt is None and scanner_devreg_mac is None:
-            _LOGGER_SPAM_LESS.error(
-                f"scanner_not_in_devreg_{self.address:s}",
-                "Failed to find scanner %s (%s) in Device Registry",
-                self._hascanner.name,
-                self._hascanner.source,
-            )
-            return
-
-        # We found the device entry and have created our scannerdevice,
-        # now update any fields that might be new from the device reg.
-        # First clear the existing to make prioritising the bt/mac matches
-        # easier (feel free to refactor, bear in mind we prefer bt first)
-        _area_id = None
-
-        _bt_name = None
-        _mac_name = None
-        _bt_name_by_user = None
-        _mac_name_by_user = None
-
-        if scanner_devreg_bt is not None:
-            _area_id = scanner_devreg_bt.area_id
-            self.entry_id = scanner_devreg_bt.id
-            _bt_name_by_user = scanner_devreg_bt.name_by_user
-            _bt_name = scanner_devreg_bt.name
-        if scanner_devreg_mac is not None:
-            # Only apply if the bt device entry hasn't been applied:
-            _area_id = _area_id or scanner_devreg_mac.area_id
-            self.entry_id = self.entry_id or scanner_devreg_mac.id
-            _mac_name = scanner_devreg_mac.name
-            _mac_name_by_user = scanner_devreg_mac.name_by_user
-
-        # As of ESPHome 2025.3.0 (via aioesphomeapi 29.3.1) ESPHome proxies now
-        # report their BLE MAC address instead of their WIFI MAC in the hascanner
-        # details.
-        # To work around breaking the existing distance_to entities, retain the
-        # ESPHome / Shelly integration's MAC as the unique_id
-        self.unique_id = scanner_devreg_mac_address or scanner_devreg_bt_address or self._hascanner.source
-        self.address_ble_mac = scanner_devreg_bt_address or scanner_devreg_mac_address or self._hascanner.source
-        self.address_wifi_mac = scanner_devreg_mac_address
-
-        # Populate the possible metadevice source MACs so that we capture any
-        # data the scanner is sending (Shelly's already send broadcasts, and
-        # future ESPHome Bermuda templates will, too). We can't easily tell
-        # if our base address is the wifi mac, ble mac or ether mac, so whack
-        # 'em all in and let the loop sort it out.
-        for mac in (
-            self.address_ble_mac,  # BLE mac, if known
-            mac_math_offset(self.address_wifi_mac, 2),  # WIFI+2=BLE
-            mac_math_offset(self.address_wifi_mac, -1),  # ETHER-1=BLE
-        ):
-            if (
-                mac is not None
-                and mac not in self.metadevice_sources
-                and mac != self.address  # because it won't need to be a metadevice
-            ):
-                self.metadevice_sources.append(mac)
-
-        # Bluetooth integ names scanners by address, so prefer the source integration's
-        # autogenerated name over that.
-        self.name_devreg = _mac_name or _bt_name
-        # Bluetooth device reg is newer, so use the user-given name there if it exists.
-        self.name_by_user = _bt_name_by_user or _mac_name_by_user
-        # Apply any name changes.
-        self.make_name()
-
-        self._update_area_and_floor(_area_id)
-
-    def _update_area_and_floor(self, area_id: str | None):
-        """Given an area_id, update the area and floor properties."""
-        if area_id is None:
-            self.area = None
-            self.area_id = None
-            self.area_name = None
-            self.area_icon = ICON_DEFAULT_AREA
-            self.floor = None
-            self.floor_id = None
-            self.floor_name = None
-            self.floor_icon = ICON_DEFAULT_FLOOR
-            self.floor_level = None
-            return
-
-        # Look up areas
-        if area := self.ar.async_get_area(area_id):
-            self.area = area
-            self.area_id = area_id
-            self.area_name = area.name
-            self.area_icon = area.icon or ICON_DEFAULT_AREA
-            self.floor_id = area.floor_id
-            if self.floor_id is not None:
-                self.floor = self.fr.async_get_floor(self.floor_id)
-                if self.floor is not None:
-                    self.floor_name = self.floor.name
-                    self.floor_icon = self.floor.icon or ICON_DEFAULT_FLOOR
-                    self.floor_level = self.floor_level
-                else:
-                    # floor_id was invalid
-                    _LOGGER_SPAM_LESS.warning(
-                        f"floor_id invalid for {self.__repr__()}",
-                        "Update of area for %s has invalid floor_id of %s",
-                        self.__repr__(),
-                        self.floor_id,
-                    )
-                    self.floor_id = None
-                    self.floor_name = "Invalid Floor ID"
-                    self.floor_icon = ICON_DEFAULT_FLOOR
-                    self.floor_level = None
-            else:
-                # Floor_id is none
-                self.floor = None
-                self.floor_name = None
-                self.floor_icon = ICON_DEFAULT_FLOOR
-        else:
-            _LOGGER_SPAM_LESS.warning(
-                f"no_area_on_update{self.name}",
-                "Setting area of %s with invalid area id of %s",
-                self.__repr__(),
-                area_id,
-            )
-            self.area = None
-            self.area_name = f"Invalid Area for {self.name}"
-            self.area_icon = ICON_DEFAULT_AREA
-            self.floor = None
-            self.floor_id = None
-            self.floor_name = None
-            self.floor_icon = ICON_DEFAULT_FLOOR
-
-    def async_as_scanner_update(self, ha_scanner: BaseHaScanner):
-        """
-        Fast update of scanner details per update-cycle.
-
-        Typically only performs fast-update tasks (like refreshing the stamps list)
-        but if a new ha_scanner is passed it will first call the init function. This
-        can be avoided by separately re-calling async_as_scanner_init() first.
-        """
-        if self._hascanner is not ha_scanner:
-            # The ha_scanner instance is new or we never had one, let's [re]init ourselves.
-            if self._hascanner is not None:
-                # Ordinarily we'd expect init to have been called first, so...
-                _LOGGER.info("Received replacement ha_scanner object for %s", self.__repr__)
-            self.async_as_scanner_init(ha_scanner)
-
-        # This needs to be recalculated each run, since we don't have access to _last_update
-        # and need to use a derived value rather than reference.
-        scannerstamp = 0 - ha_scanner.time_since_last_detection() + monotonic_time_coarse()
-        if scannerstamp > self.last_seen:
-            self.last_seen = scannerstamp
-        elif self.last_seen - scannerstamp > 0.8:  # For some reason small future-offsets are common.
-            _LOGGER.debug(
-                "Scanner stamp for %s went backwards %.2fs. new %f < last %f",
-                self.name,
-                self.last_seen - scannerstamp,
-                scannerstamp,
-                self.last_seen,
-            )
-
-        # Populate the local copy of timestamps, if applicable
-        # Only Remote ha scanners provide explicit timestamps...
-        if self.is_remote_scanner:
-            # Set typing ignore to avoid cost of an if isinstance, since is_remote_scanner already implies
-            # that ha_scanner is a BaseHaRemoteScanner.
-            # New API in 2025.4.0
-            if self._coordinator.hass_version_min_2025_4:
-                self.stamps = self._hascanner.discovered_device_timestamps  # type: ignore
-            else:
-                # pylint: disable=W0212,C0301
-                self.stamps = self._hascanner._discovered_device_timestamps  # type: ignore # noqa: SLF001
-
-    def async_as_scanner_get_stamp(self, address: str) -> float | None:
-        """
-        Returns the latest known timestamp for the given address from this scanner.
-
-        Does *not* pull directly from backend, but will be current as at the
-        last update cycle as the data is copied in at that time. Returns None
-        if the scanner has no current stamp for that device or if the scanner
-        itself does not provide stamps (such as usb Bluetooth / BlueZ devices).
-        """
-        if self.is_remote_scanner:
-            if self.stamps is None:
-                _LOGGER_SPAM_LESS.debug(
-                    f"remote_no_stamps{self.address}", "Remote Scanner %s has no stamps dict", self.__repr__()
-                )
-                return None
-            if len(self.stamps) == 0:
-                _LOGGER_SPAM_LESS.debug(
-                    f"remote_stamps_empty{self.address}", "Remote scanner %s has an empty stamps dict", self.__repr__()
-                )
-                return None
-            try:
-                return self.stamps[address.upper()]
-            except (KeyError, AttributeError):
-                # No current record, device might have "stale"d out.
-                return None
-        # Probably a usb / BlueZ device.
-        return None
 
     @callback
     def async_handle_pble_callback(
@@ -565,7 +305,7 @@ class BermudaDevice(dict):
             # be fine because our irk_manager will only fire another callback if the mac is new.
             self._coordinator.irk_manager.add_macirk(address, bytes.fromhex(self.address))
 
-    def make_name(self):
+    def make_name(self) -> str:
         """
         Refreshes self.name, sets and returns it, based on naming preferences.
 
@@ -573,7 +313,8 @@ class BermudaDevice(dict):
         to manufacturer name and bluetooth address.
         """
         _newname = (
-            self.name_by_user
+            self.name_by_user  # an explicit Home Assistant rename always wins
+            or self.name_subentry  # then a per-device enrolment subentry name
             or self.name_devreg
             or self.name_bt_local_name
             or self.name_bt_serviceinfo
@@ -593,7 +334,7 @@ class BermudaDevice(dict):
 
         return self.name
 
-    def set_ref_power(self, new_ref_power: float):
+    def set_ref_power(self, new_ref_power: float) -> None:
         """
         Set a new reference power for this device and immediately apply
         an interim distance calculation.
@@ -604,7 +345,7 @@ class BermudaDevice(dict):
         if new_ref_power != self.ref_power:
             # it's actually changed, proceed...
             self.ref_power = new_ref_power
-            nearest_distance = 9999  # running tally to find closest scanner
+            nearest_distance: float = 9999  # running tally to find closest scanner
             nearest_scanner = None
             for advert in self.adverts.values():
                 rawdist = advert.set_ref_power(new_ref_power)
@@ -621,12 +362,51 @@ class BermudaDevice(dict):
             # new measurement(s) immediately.
             self.ref_power_changed = monotonic_time_coarse()
 
-    def apply_scanner_selection(self, bermuda_advert: BermudaAdvert | None):
+    def get_mobility_type(self) -> str:
+        """Return the validated mobility mode (moving/stationary)."""
+        if self.mobility_type in MOBILITY_OPTIONS:
+            return self.mobility_type
+        return MOBILITY_MOVING
+
+    def set_mobility_type(self, mobility_type: str | None) -> None:
+        """Set the mobility mode, falling back to the default if invalid."""
+        self.mobility_type = mobility_type if mobility_type in MOBILITY_OPTIONS else DEFAULT_MOBILITY_TYPE
+
+    @property
+    def category(self) -> str:
+        """
+        Single ESPresense-style fingerprint for this device.
+
+        Precedence: iBeacon → IRK (resolved private BLE) → known vendor (by company
+        id) → named (has an advertised local name) → random MAC → public MAC. Used to
+        group the discovery list and to track whole classes of device at once.
+        """
+        if self.address_type == ADDR_TYPE_IBEACON:
+            return CATEGORY_IBEACON
+        if self.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
+            return CATEGORY_IRK
+        vendor = VENDOR_CATEGORIES.get(self.manufacturer_id) if self.manufacturer_id is not None else None
+        if vendor is not None:
+            return vendor
+        if self.name_bt_local_name:
+            return CATEGORY_NAMED
+        if self.address_type in (
+            BDADDR_TYPE_RANDOM_RESOLVABLE,
+            BDADDR_TYPE_RANDOM_UNRESOLVABLE,
+            BDADDR_TYPE_RANDOM_STATIC,
+            BDADDR_TYPE_RANDOM_RESERVED,
+        ):
+            return CATEGORY_RANDOM
+        return CATEGORY_PUBLIC
+
+    def apply_scanner_selection(self, bermuda_advert: BermudaAdvert | None, *, force_unknown: bool = False) -> None:
         """
         Given a BermudaAdvert entry, apply the distance and area attributes
         from it to this device.
 
         Used to apply a "winning" scanner's data to the device for setting closest Area.
+        ``force_unknown`` reports the explicit "Unknown" area (evidence too weak to
+        place the device) rather than not_home (device not seen at all).
         """
         old_area = self.area_name
         if bermuda_advert is not None and bermuda_advert.rssi_distance is not None:
@@ -641,7 +421,7 @@ class BermudaDevice(dict):
         else:
             # Not close to any scanners, or closest scanner has timed out!
             self.area_advert = None
-            self._update_area_and_floor(None)
+            self._update_area_and_floor(None, force_unknown=force_unknown)
             self.area_distance = None
             self.area_rssi = None
 
@@ -653,25 +433,40 @@ class BermudaDevice(dict):
                 self.area_name,
             )
 
-    def get_scanner(self, scanner_address) -> BermudaAdvert | None:
+    def apply_area_override(self, area_id: str, distance: float) -> None:
+        """
+        Force this device's area from an external presence entity (not a BLE scanner).
+
+        Used by the area-entity override: the area comes from a triggered HA entity at
+        a virtual distance, so there is no winning advert (area_advert is cleared).
+        """
+        self._update_area_and_floor(area_id)
+        self.area_distance = distance
+        self.area_rssi = 0
+        self.area_advert = None
+
+    def get_scanner(self, scanner_address: str) -> BermudaAdvert | None:
         """
         Given a scanner address, return the most recent BermudaDeviceScanner (advert) that matches.
 
         This is required as the list of device.scanners is keyed by [address, scanner], and
         a device might switch back and forth between multiple addresses.
         """
-        _stamp = 0
+        _stamp = 0.0
         _found_scanner = None
         for advert in self.adverts.values():
             if advert.scanner_address == scanner_address:
-                # we have matched the scanner, but is it the most recent address?
-                if _stamp == 0 or (advert.stamp is not None and advert.stamp > _stamp):
+                # Keep the most recent matching advert. Use _found_scanner (not a
+                # zero stamp) as the "first match" sentinel, otherwise a matched
+                # advert with stamp 0/None makes every later match win regardless.
+                advert_stamp = advert.stamp or 0.0
+                if _found_scanner is None or advert_stamp > _stamp:
                     _found_scanner = advert
-                    _stamp = _found_scanner.stamp or 0
+                    _stamp = advert_stamp
 
         return _found_scanner
 
-    def calculate_data(self):
+    def calculate_data(self) -> None:
         """
         Call after doing update_scanner() calls so that distances
         etc can be freshly smoothed and filtered.
@@ -689,21 +484,27 @@ class BermudaDevice(dict):
                     "scanner_not_instance", "Scanner device is not a BermudaDevice instance, skipping."
                 )
 
-        # Update whether this device has been seen recently, for device_tracker:
-        if (
-            self.last_seen is not None
-            and monotonic_time_coarse() - self.options.get(CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT)
-            < self.last_seen
-        ):
+        # Update whether this device has been seen recently, for device_tracker.
+        # A "device" enrolment subentry may override the global away timeout per-device.
+        _dc = getattr(self._coordinator, "device_config", None)
+        _dev_cfg = _dc.get(self.address.upper(), {}) if isinstance(_dc, dict) else {}
+        _timeout = _dev_cfg.get(CONF_DEVTRACK_TIMEOUT) or self.options.get(
+            CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT
+        )
+        if self.last_seen is not None and monotonic_time_coarse() - _timeout < self.last_seen:
             self.zone = STATE_HOME
         else:
             self.zone = STATE_NOT_HOME
 
-        if self.address.upper() in self.options.get(CONF_DEVICES, []):
-            # We are a device we track. Flag for set-up:
+        addr = self.address.upper()
+        if addr not in self.options.get(CONF_EXCLUDE_DEVICES, []) and (
+            addr in self.options.get(CONF_DEVICES, []) or self.category in self.options.get(CONF_TRACK_CATEGORIES, [])
+        ):
+            # Tracked either explicitly (configured_devices) or by category
+            # (track_categories), and not on the exclusion denylist. Flag for set-up.
             self.create_sensor = True
 
-    def process_advertisement(self, scanner_device: BermudaDevice, advertisementdata: AdvertisementData):
+    def process_advertisement(self, scanner_device: BermudaDevice, advertisementdata: AdvertisementData) -> None:
         """
         Add/Update a scanner/advert entry pair on this device, indicating a received advertisement.
 
@@ -746,14 +547,37 @@ class BermudaDevice(dict):
         if device_advert.stamp is not None and self.last_seen < device_advert.stamp:
             self.last_seen = device_advert.stamp
 
-    def process_manufacturer_data(self, advert: BermudaAdvert):
+    def identify_tracker_type(self, advert: BermudaAdvert) -> None:
+        """
+        Best-effort recognition of a known item-tracker from the advert signature.
+
+        Sets ``self.tracker_type`` (AirTag, Tile, Samsung SmartTag, Google Find My,
+        ...) the first time a signature matches; see ``trackers.identify_tracker``.
+        """
+        manufacturer_data = advert.manufacturer_data[0] if advert.manufacturer_data else {}
+        service_data = {short_uuid(k): v for k, v in advert.service_data[0].items()} if advert.service_data else {}
+        service_uuids = {short_uuid(u) for u in advert.service_uuids}
+        result = identify_tracker(manufacturer_data, service_uuids, service_data, self.name_bt_local_name)
+        if result is not None:
+            self.tracker_type = result
+
+    def process_manufacturer_data(self, advert: BermudaAdvert) -> None:
         """Parse manufacturer data for maker name and iBeacon etc."""
         # Only override existing manufacturer name if it's "better"
 
         # ==== Check service uuids (type 0x16)
         _want_name_update = False
         for uuid in advert.service_uuids:
-            name, generic = self._coordinator.get_manufacturer_from_id(uuid[4:8])
+            # Extract UUID short form - try both full UUID format and short format
+            uuid_str = str(uuid).upper()
+
+            # Try to extract the 16-bit UUID from the full format
+            if len(uuid_str) >= 8:
+                uuid_short = uuid_str[4:8]
+            else:
+                uuid_short = uuid_str
+
+            name, generic = self._coordinator.get_manufacturer_from_id(uuid_short)
             # We'll use the name if we don't have one already, or if it's non-generic.
             if name and (self.manufacturer is None or not generic):
                 self.manufacturer = name
@@ -767,6 +591,7 @@ class BermudaDevice(dict):
                 name, generic = self._coordinator.get_manufacturer_from_id(company_code)
                 if name and (self.manufacturer is None or not generic):
                     self.manufacturer = name
+                    self.manufacturer_id = company_code
 
                 if company_code == 0x004C:  # 76 Apple Inc
                     if man_data[:1] == b"\x02":  # iBeacon: Almost always 0x0215, but 0x15 is the length part
@@ -808,21 +633,60 @@ class BermudaDevice(dict):
                         self.make_name()
                         self._coordinator.register_ibeacon_source(self)
 
-    def to_dict(self):
+        # Decode InPlay IN100 / DFRobot Fermion telemetry (manufacturer data 0x0505).
+        self._parse_in100_telemetry(advert)
+
+    def _parse_in100_telemetry(self, advert: BermudaAdvert) -> None:
+        """
+        Decode InPlay IN100 / DFRobot Fermion telemetry from manufacturer data 0x0505.
+
+        Only the latest manufacturer-data entry is considered (telemetry is
+        time-sensitive); the first five bytes encode supply voltage, temperature and an
+        ADC voltage. A short/malformed payload clears the decoded values but still flags
+        the device as detected. Ported/adapted from kamilzierke/bermuda.
+        """
+        latest = advert.manufacturer_data[0] if advert.manufacturer_data else None
+        man_data = latest.get(MANUFACTURER_ID_INPLAY) if latest else None
+        if man_data is None:
+            return
+
+        self.in100_raw_payload_hex = man_data.hex()
+        self.in100_last_payload_len = len(man_data)
+        self.in100_detected = True
+
+        applied_fallback_name = False
+        if self.manufacturer is None:
+            self.manufacturer = "InPlay / DFRobot"
+            applied_fallback_name = True
+
+        # Reset the decoded values; a short payload leaves them cleared.
+        self.in100_vcc = None
+        self.in100_temp_c = None
+        self.in100_adc_voltage = None
+
+        if len(man_data) >= IN100_PAYLOAD_LEN:
+            payload = man_data[:IN100_PAYLOAD_LEN]
+            self.in100_vcc = payload[0] / 32.0
+            self.in100_temp_c = int.from_bytes(payload[1:3], byteorder="big", signed=True) / 100.0
+            self.in100_adc_voltage = int.from_bytes(payload[3:5], byteorder="big", signed=False) / 1000.0
+
+        if applied_fallback_name:
+            self.make_name()
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert class to serialisable dict for dump_devices."""
-        out = {}
+        out: dict[str, Any] = {}
         for var, val in vars(self).items():
             if val is None:
                 # Catch the Nones first, as otherwise they might match some other objects below if
                 # they are None (like self._hascanner), which will prevent them showing at all.
                 out[var] = val
                 continue
-            if val in [self._coordinator, self.floor, self.area, self.ar, self.fr]:
+            if val is self._coordinator or val is self.floor or val is self.area or val is self.ar or val is self.fr:
                 # Objects to ignore completely.
                 continue
-            if val in [self._hascanner, self.area, self.floor, self.ar, self.fr]:
-                if hasattr(val, "__repr__"):
-                    out[var] = val.__repr__()
+            if val is self._hascanner:
+                out[var] = val.__repr__()
                 continue
             if val is self.adverts:
                 advertout = {}

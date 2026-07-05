@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Release helper — relies on release-please to bump version, tag and publish.
+#
+# Normal flow: push conventional commits to main → release-please opens/maintains
+# a "chore(main): release X.Y.Z" PR → MERGE that PR → release-please creates the
+# vX.Y.Z tag → release.yaml publishes the signed zip.
+#
+# This script is a convenience wrapper for manual cuts (rarely needed):
+#   scripts/release <X.Y.Z>   # create + push a vX.Y.Z tag manually
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <X.Y.Z>"
+    echo "Prefer merging the release-please PR instead. This is for manual tag cuts only."
+    exit 1
+fi
+
+VERSION="$1"
+TAG="v${VERSION}"
+
+git tag -a "$TAG" -m "Release $VERSION"
+git push origin "$TAG"
+echo "Tag $TAG pushed. The release workflow will build and publish the signed zip."

@@ -1,4 +1,4 @@
-"""Diagnostics support for WLED."""
+"""Diagnostics support for Bermuda BLE Trilateration."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Bermuda
     # We can call this with our own config_entry because the diags step doesn't
     # actually use it.
 
-    bt_diags = await coordinator._manager.async_diagnostics()  # noqa
+    bt_diags = await coordinator.async_get_bluetooth_manager_diagnostics()
 
     # Param structure for service call
     call = ServiceCall(hass, DOMAIN, "dump_devices", {"redact": True})

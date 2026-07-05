@@ -11,26 +11,34 @@ on:
     - cron: "0 0 * * *"
 
 env:
-  DEFAULT_PYTHON: 3.13
+  DEFAULT_PYTHON: "3.14"
   UV_SYSTEM_PYTHON: 1
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   linting:
     runs-on: "ubuntu-latest"
     name: Linting
+    timeout-minutes: 15
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           # Install a specific version of uv.
-          version: "0.7.9"
+          version: "0.11.26"
           enable-cache: true
 
       - name: Set up Python ${{ env.DEFAULT_PYTHON }}
-        uses: actions/setup-python@v5.6.0
+        uses: actions/setup-python@v6.3.0
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
           cache: "pip"
@@ -49,15 +57,16 @@ jobs:
   hacs:
     runs-on: "ubuntu-latest"
     name: HACS
+    timeout-minutes: 10
     steps:
       - name: Check out the repository
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@v7"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           # Install a specific version of uv.
-          version: "0.7.9"
+          version: "0.11.26"
           enable-cache: true
 
       - name: HACS validation
@@ -69,9 +78,10 @@ jobs:
   hassfest:
     runs-on: "ubuntu-latest"
     name: Hassfest
+    timeout-minutes: 10
     steps:
       - name: Check out the repository
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@v7"
 
       - name: Hassfest validation
         uses: "home-assistant/actions/hassfest@master"
@@ -79,19 +89,20 @@ jobs:
   tests:
     runs-on: "ubuntu-latest"
     name: Run tests
+    timeout-minutes: 15
     steps:
       - name: Check out code from GitHub
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@v7"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           # Install a specific version of uv.
-          version: "0.7.9"
+          version: "0.11.26"
           enable-cache: true
 
       - name: Setup Python ${{ env.DEFAULT_PYTHON }}
-        uses: "actions/setup-python@v5.6.0"
+        uses: "actions/setup-python@v6.3.0"
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
 

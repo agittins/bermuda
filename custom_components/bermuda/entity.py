@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.core import callback
@@ -13,24 +13,22 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import (
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
-    ATTRIBUTION,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     DOMAIN_PRIVATE_BLE_DEVICE,
 )
+from .coordinator import BermudaDataUpdateCoordinator
 
 if TYPE_CHECKING:
     from . import BermudaConfigEntry
-    from .coordinator import BermudaDataUpdateCoordinator
-    # from . import BermudaDevice
 
 
-class BermudaEntity(CoordinatorEntity):
+class BermudaEntity(CoordinatorEntity[BermudaDataUpdateCoordinator]):
     """
     Co-ordinator for Bermuda data.
 
-    Gathers the device infor for receivers and transmitters, calculates
+    Gathers the device info for receivers and transmitters, calculates
     distances etc.
     """
 
@@ -41,7 +39,6 @@ class BermudaEntity(CoordinatorEntity):
         address: str,
     ) -> None:
         super().__init__(coordinator)
-        self.coordinator = coordinator
         self.config_entry = config_entry
         self.address = address
         self._device = coordinator.devices[address]
@@ -54,22 +51,25 @@ class BermudaEntity(CoordinatorEntity):
         self.bermuda_last_state: Any = 0
         self.bermuda_last_stamp: float = 0
 
-    def _cached_ratelimit(self, statevalue: Any, fast_falling=True, fast_rising=False, interval=None):
+    def _cached_ratelimit[T](
+        self, statevalue: T, *, fast_falling: bool = True, fast_rising: bool = False, interval: int | None = None
+    ) -> T:
         """
         Uses the CONF_UPDATE_INTERVAL and other logic to return either the given statevalue
         or an older, cached value. Helps to reduce excess sensor churn without compromising latency.
 
         Mostly suitable for MEASUREMENTS, but should work with strings, too.
-        If interval is specified the cache will use that (in seconds), otherwise the deafult is
+        If interval is specified the cache will use that (in seconds), otherwise the default is
         the CONF_UPPDATE_INTERVAL (typically suitable for fast-close slow-far sensors)
         """
-        if interval is not None:
-            self.bermuda_update_interval = interval
+        # Use the per-call interval if given, without mutating the entity's
+        # configured default (a one-off interval must not stick for later calls).
+        effective_interval = interval if interval is not None else self.bermuda_update_interval
 
         nowstamp = monotonic_time_coarse()
         if (
-            (self.bermuda_last_stamp < nowstamp - self.bermuda_update_interval)  # Cache is stale
-            or (self._device.ref_power_changed > nowstamp + 2)  # ref power changed in last 2sec
+            (self.bermuda_last_stamp < nowstamp - effective_interval)  # Cache is stale
+            or (self._device.ref_power_changed > nowstamp - 2)  # ref power changed in last 2sec
             or (self.bermuda_last_state is None)  # Nothing compares to you.
             or (statevalue is None)  # or you.
             or (fast_falling and statevalue < self.bermuda_last_state)  # (like Distance)
@@ -80,8 +80,10 @@ class BermudaEntity(CoordinatorEntity):
             self.bermuda_last_state = statevalue
             return statevalue
         else:
-            # Send the cached value, don't update cache
-            return self.bermuda_last_state
+            # Send the cached value, don't update cache.
+            # bermuda_last_state is Any (it caches whatever value-type this entity's
+            # native_value has been passing in, consistently, across calls).
+            return cast("T", self.bermuda_last_state)
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -101,12 +103,12 @@ class BermudaEntity(CoordinatorEntity):
         self.async_write_ha_state()
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str | None:
         """Return a unique ID to use for this entity."""
         return self._device.unique_id
 
     @property
-    def device_info(self):
+    def device_info(self) -> dr.DeviceInfo:
         """
         Implementing this creates an entry in the device registry.
 
@@ -117,7 +119,6 @@ class BermudaEntity(CoordinatorEntity):
         # For scanners we use ethernet MAC, which looks like they are
         # normally stored lowercased, otherwise we use our btmac, which
         # seem to be stored uppercased.
-        # existing_device_id = None
         domain_name = DOMAIN
         model = None
 
@@ -141,43 +142,26 @@ class BermudaEntity(CoordinatorEntity):
             connections = {("private_ble_device", self._device.address.lower())}
             # We don't set the model since the Private BLE integration should have
             # already named it nicely.
-            # model = f"IRK: {self._device.address.lower()[:4]}"
-            # We look up and use the device from the registry so we get
-            # the private_ble_device device congealment!
-            # The "connection" is actually being used as the "identifiers" tuple
-            # here.
-            # dr_device = self.devreg.async_get_device(connection)
-            # if dr_device is not None:
-            #    existing_device_id = dr_device.id
             domain_name = DOMAIN_PRIVATE_BLE_DEVICE
         else:
             connections = {(dr.CONNECTION_BLUETOOTH, self._device.address.upper())}
             # No need to set model, since MAC address will be shown via connection.
-            # model = f"Bermuda: {self._device.address.lower()}"
 
-        device_info = {
-            "identifiers": {(domain_name, self._device.unique_id)},
-            "connections": connections,
-            "name": self._device.name,
-        }
+        device_info = dr.DeviceInfo(
+            # BermudaDevice.unique_id is set (to a str) in __init__ and only ever
+            # reassigned to another str (see BermudaScannerDeviceMixin); it is typed
+            # Optional only to mirror Entity.unique_id's own signature.
+            identifiers={(domain_name, cast("str", self._device.unique_id))},
+            connections=connections,
+            name=self._device.name,
+        )
         if model is not None:
             device_info["model"] = model
-        # if existing_device_id is not None:
-        #    device_info['id'] = existing_device_id
 
         return device_info
 
-    @property
-    def device_state_attributes(self):
-        """Return the state attributes."""
-        return {
-            "attribution": ATTRIBUTION,
-            "id": str(self.coordinator.data.get("id")),
-            "integration": DOMAIN,
-        }
 
-
-class BermudaGlobalEntity(CoordinatorEntity):
+class BermudaGlobalEntity(CoordinatorEntity[BermudaDataUpdateCoordinator]):
     """Holds all Bermuda global data under one entity type/device."""
 
     def __init__(
@@ -186,7 +170,6 @@ class BermudaGlobalEntity(CoordinatorEntity):
         config_entry: BermudaConfigEntry,
     ) -> None:
         super().__init__(coordinator)
-        self.coordinator = coordinator
         self.config_entry = config_entry
         self._cache_ratelimit_value = None
         self._cache_ratelimit_stamp: float = 0
@@ -201,13 +184,13 @@ class BermudaGlobalEntity(CoordinatorEntity):
         """
         self.async_write_ha_state()
 
-    def _cached_ratelimit(self, statevalue: Any, interval: int | None = None):
+    def _cached_ratelimit(self, statevalue: Any, interval: int | None = None) -> Any:
         """A simple way to rate-limit sensor updates."""
-        if interval is not None:
-            self._cache_ratelimit_interval = interval
+        # Per-call interval without mutating the entity's default.
+        effective_interval = interval if interval is not None else self._cache_ratelimit_interval
         nowstamp = monotonic_time_coarse()
 
-        if nowstamp > self._cache_ratelimit_stamp + self._cache_ratelimit_interval:
+        if nowstamp > self._cache_ratelimit_stamp + effective_interval:
             self._cache_ratelimit_stamp = nowstamp
             self._cache_ratelimit_value = statevalue
             return statevalue
@@ -215,9 +198,9 @@ class BermudaGlobalEntity(CoordinatorEntity):
             return self._cache_ratelimit_value
 
     @property
-    def device_info(self):
+    def device_info(self) -> dr.DeviceInfo:
         """Implementing this creates an entry in the device registry."""
-        return {
-            "identifiers": {(DOMAIN, "BERMUDA_GLOBAL")},
-            "name": "Bermuda Global",
-        }
+        return dr.DeviceInfo(
+            identifiers={(DOMAIN, "BERMUDA_GLOBAL")},
+            name="Bermuda Global",
+        )

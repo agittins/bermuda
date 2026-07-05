@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
@@ -28,3 +28,13 @@ uv pip install git+https://github.com/boto/botocore
 
 uv pip install --requirement requirements.txt
 uv pip install --requirement requirements_test.txt
+
+# prek is a drop-in Rust replacement for pre-commit (faster).
+# Falls back to pre-commit (already in requirements_test.txt) if pipx is absent.
+if ! command -v prek >/dev/null 2>&1; then
+    pipx install prek 2>/dev/null || pip install --user prek 2>/dev/null || true
+fi
+command -v prek >/dev/null 2>&1 && prek install
+command -v pre-commit >/dev/null 2>&1 && pre-commit install 2>/dev/null || true
+
+echo "Setup complete. Next: scripts/develop"

@@ -1,0 +1,118 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "forkProcessing": "enabled",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":semanticCommitTypeAll(deps)",
+    "group:allNonMajor",
+    "group:monorepos",
+    ":dependencyDashboard",
+    ":enableVulnerabilityAlertsWithLabel('security')",
+    ":maintainLockFilesWeekly",
+    ":timezone(Europe/Paris)",
+    ":separatePatchReleases",
+    "schedule:nonOfficeHours"
+  ],
+  "labels": ["dependencies"],
+  "reviewers": ["foXaCe"],
+  "assignees": ["foXaCe"],
+  "prCreation": "immediate",
+  "prHourlyLimit": 4,
+  "prConcurrentLimit": 10,
+  "rangeStrategy": "auto",
+  "rebaseWhen": "auto",
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "📦 Renovate Dependency Dashboard",
+  "dependencyDashboardLabels": ["dependencies", "dashboard"],
+  "configMigration": true,
+
+  "vulnerabilityAlerts": {
+    "labels": ["security", "dependencies"],
+    "minimumReleaseAge": null,
+    "schedule": "at any time",
+    "prCreation": "immediate"
+  },
+
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"],
+    "commitMessageAction": "Lock file maintenance",
+    "automerge": true
+  },
+
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "automerge": true,
+      "platformAutomerge": true,
+      "labels": ["dependencies", "auto-merge"]
+    },
+    {
+      "matchUpdateTypes": ["minor"],
+      "automerge": false,
+      "labels": ["dependencies", "minor"]
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "major", "needs-review"],
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "matchManagers": ["pip_requirements", "pip_setup", "pep621"],
+      "labels": ["dependencies", "python"],
+      "commitMessageTopic": "Python dep {{depName}}"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "labels": ["dependencies", "github-actions"],
+      "commitMessageTopic": "GH Action {{depName}}",
+      "automerge": true,
+      "platformAutomerge": true
+    },
+    {
+      "matchDepNames": ["homeassistant", "home-assistant"],
+      "labels": ["dependencies", "homeassistant", "needs-review"],
+      "automerge": false,
+      "minimumReleaseAge": "14 days",
+      "groupName": "homeassistant",
+      "schedule": ["before 6am on the first day of the month"]
+    },
+    {
+      "matchDepNames": ["pytest-homeassistant-custom-component"],
+      "groupName": "homeassistant test deps"
+    },
+    {
+      "groupName": "lint & format tools",
+      "automerge": true,
+      "platformAutomerge": true,
+      "matchPackageNames": ["/^ruff/", "/^mypy/"]
+    },
+    {
+      "groupName": "pytest stack",
+      "matchPackageNames": ["/^pytest/"]
+    }
+  ],
+
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update HA version pinned in workflows or scripts (# renovate: datasource=pypi depName=homeassistant)",
+      "managerFilePatterns": ["/.github/workflows/.+\\.ya?ml$/", "/scripts/.+/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+.+?version[:= ]*[\"']?(?<currentValue>[\\d.]+)"
+      ]
+    }
+  ],
+
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/.venv/**",
+    "**/venv/**",
+    "**/__pycache__/**",
+    "**/.tox/**"
+  ]
+}

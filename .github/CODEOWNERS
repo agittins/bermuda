@@ -1,0 +1,11 @@
+# Default owners for everything
+* @foXaCe
+
+# Custom components
+/custom_components/bermuda/ @foXaCe
+
+# CI/CD
+/.github/ @foXaCe
+
+# Tests
+/tests/ @foXaCe

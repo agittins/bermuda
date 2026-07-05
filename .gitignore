@@ -1,15 +1,69 @@
-__pycache__
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
 pythonenv*
+ENV/
+env/
+.env
+.env.local
+.env.*.local
 .python-version
+
+# IDE / Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.code-workspace
+
+# Tests
+.pytest_cache/
 .coverage
-venv
-.venv
+htmlcov/
+.tox/
+
+# Distribution / Build
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Ruff
+.ruff_cache/
+
+# Logs
+*.log
+logging.conf
+
+# Home Assistant specific
+config/
 config/.storage/
 config/home-assistant*
 config/blueprint*
-
 config/.HA_VERSION
 config/configuration.yaml
 config/known_devices.yaml
+.HA_VERSION
+home-assistant.log
+home-assistant_v2.db
 
+# Node
+node_modules/
 node_modules/.cache*
+
+# Debug/test dumps
+core.*
+bump*.txt
+
+# Claude Code (local files, do not share)
+CLAUDE.md
+AGENTS.md

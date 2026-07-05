@@ -1,31 +1,486 @@
 {
   "config": {
+    "abort": {
+      "single_instance_allowed": "Denne integrasjonen kan kun konfigureres en gang."
+    },
     "step": {
       "user": {
-        "title": "Bermuda BLE Trilateration",
-        "description": "Hvis du trenger hjep til konfigurasjon ta en titt her: https://github.com/agittins/bermuda",
-        "data": {
-          "username": "Brukernavn",
-          "password": "Passord"
+        "description": "Hvis du trenger hjep til konfigurasjon ta en titt her: {github_url}",
+        "title": "Bermuda BLE Trilateration"
+      }
+    }
+  },
+  "config_subentries": {
+    "calibration": {
+      "abort": {
+        "no_scanners": "Alle kjente skannere har allerede en kalibreringsforskyvning."
+      },
+      "entry_type": "Skannerkalibrering",
+      "initiate_flow": {
+        "reconfigure": "Rediger skannerforskyvning",
+        "user": "Legg til skannerforskyvning"
+      },
+      "step": {
+        "reconfigure": {
+          "data": {
+            "rssi_offset": "RSSI-forskyvning (dB)"
+          },
+          "data_description": {
+            "rssi_offset": "Legges til denne skannerens RSSI før avstanden beregnes."
+          },
+          "description": "Juster dB-forskyvningen for {scanner}.",
+          "title": "Rediger RSSI-forskyvning"
+        },
+        "user": {
+          "data": {
+            "rssi_offset": "RSSI-forskyvning (dB)",
+            "scanner": "Skanner"
+          },
+          "data_description": {
+            "rssi_offset": "Legges til denne skannerens RSSI før avstanden beregnes. Positiv = behandles som sterkere/nærmere.",
+            "scanner": "Bluetooth-proxyen som skal kalibreres."
+          },
+          "description": "Legg til en dB-forskyvning for en skanner slik at målingene stemmer overens med de andre.",
+          "title": "RSSI-forskyvning per skanner"
         }
       }
     },
-    "error": {
-      "auth": "Brukernavn/Passord er feil."
+    "device": {
+      "abort": {
+        "no_devices": "Alle oppdagede enheter er allerede registrert."
+      },
+      "entry_type": "Sporet enhet",
+      "initiate_flow": {
+        "reconfigure": "Rediger enhet",
+        "user": "Registrer en enhet"
+      },
+      "step": {
+        "reconfigure": {
+          "data": {
+            "devtracker_nothome_timeout": "Tidsavbrudd for fravær (s)",
+            "name": "Navn (valgfritt)",
+            "ref_power": "Referansestyrke (rssi @ 1 m)"
+          },
+          "data_description": {
+            "devtracker_nothome_timeout": "Sekunder uten en måling før denne enheten er Ikke hjemme.",
+            "name": "Overstyrer det annonserte navnet (en omdøping i Home Assistant har fortsatt forrang).",
+            "ref_power": "Rssi per enhet ved 1 m. Overstyrer den globale verdien ved oppstart."
+          },
+          "description": "Juster registreringen for {device}.",
+          "title": "Rediger enhet"
+        },
+        "user": {
+          "data": {
+            "address": "Enhet",
+            "devtracker_nothome_timeout": "Tidsavbrudd for fravær (s)",
+            "name": "Navn (valgfritt)",
+            "ref_power": "Referansestyrke (rssi @ 1 m)"
+          },
+          "data_description": {
+            "devtracker_nothome_timeout": "Sekunder uten en måling før denne enheten er Ikke hjemme.",
+            "name": "Overstyrer det annonserte navnet (en omdøping i Home Assistant har fortsatt forrang).",
+            "ref_power": "Rssi per enhet ved 1 m. Overstyrer den globale verdien ved oppstart."
+          },
+          "description": "Spor en enhet med sitt eget navn, referansestyrke og tidsavbrudd for fravær.",
+          "title": "Registrer en enhet"
+        }
+      }
+    }
+  },
+  "entity": {
+    "device_tracker": {
+      "bermuda_tracker": {
+        "name": "Bermuda-sporer"
+      }
     },
-    "abort": {
-      "single_instance_allowed": "Denne integrasjonen kan kun konfigureres en gang."
+    "number": {
+      "ref_power": {
+        "name": "Referansestyrke ved 1 m (0 for standard)"
+      }
+    },
+    "select": {
+      "mobility_type": {
+        "name": "Mobilitetstype",
+        "state": {
+          "moving": "I bevegelse",
+          "stationary": "Stillestående"
+        }
+      }
+    },
+    "sensor": {
+      "active_proxy_count": {
+        "name": "Antall aktive proxyer"
+      },
+      "area": {
+        "name": "Område"
+      },
+      "area_last_seen": {
+        "name": "Område sist sett"
+      },
+      "area_switch_diagnostic": {
+        "name": "Diagnostikk for områdebytte"
+      },
+      "distance": {
+        "name": "Avstand"
+      },
+      "distance_to_scanner": {
+        "name": "Avstand til {scanner_name}"
+      },
+      "floor": {
+        "name": "Etasje"
+      },
+      "in100_adc_voltage": {
+        "name": "IN100 ADC-spenning"
+      },
+      "in100_temperature": {
+        "name": "IN100-temperatur"
+      },
+      "in100_vcc": {
+        "name": "IN100 forsyningsspenning"
+      },
+      "micro_location": {
+        "name": "Mikroplassering"
+      },
+      "nearby_devices": {
+        "name": "Enheter i nærheten"
+      },
+      "nearest_rssi": {
+        "name": "Nærmeste RSSI"
+      },
+      "nearest_scanner": {
+        "name": "Nærmeste skanner"
+      },
+      "total_device_count": {
+        "name": "Totalt antall enheter"
+      },
+      "total_proxy_count": {
+        "name": "Totalt antall proxyer"
+      },
+      "unfiltered_distance_to_scanner": {
+        "name": "Ufiltrert avstand til {scanner_name}"
+      },
+      "visible_device_count": {
+        "name": "Antall synlige enheter"
+      }
+    }
+  },
+  "exceptions": {
+    "bluetooth_not_available": {
+      "message": "Ingen Bluetooth-adapter eller -proxy er tilgjengelig for å spore private enheter."
+    },
+    "irk_not_found": {
+      "message": "Ingen enhet som samsvarer med denne IRK-en er synlig for øyeblikket. Sørg for at den er i nærheten, slått på, og at Bluetooth er aktivert."
+    },
+    "irk_not_valid": {
+      "message": "Dette ser ikke ut som en gyldig IRK. Den må være 16 byte: 32 heksadesimale tegn, eller base64 som slutter på '='."
+    },
+    "not_loaded": {
+      "message": "Bermuda er ikke lastet inn. Sett opp integrasjonen før du kaller denne tjenesten."
+    },
+    "unknown": {
+      "message": "Kunne ikke registrere enheten fra den IRK-en. Sjekk nøkkelen og prøv igjen."
+    }
+  },
+  "issues": {
+    "scanner_without_area": {
+      "description": "Bermuda krever at alle Bluetooth-proxyer har et gyldig område tildelt for å fungere riktig. Tildel et område ved å gå til hver proxys enhetsside (via `Enheter og tjenester`), og klikk på blyantikonet øverst til høyre for å tildele et område. Følgende proxyer mangler et tildelt område:\n\n{scannerlist}",
+      "title": "Enkelte Bluetooth-proxyer har ikke et OMRÅDE"
     }
   },
   "options": {
+    "error": {
+      "bluetooth_not_available": "Ingen Bluetooth-adapter eller -proxy er tilgjengelig for å spore private enheter.",
+      "err_scanner_no_record": "Den valgte skanneren har (ennå) ikke sett denne enheten.",
+      "irk_not_found": "Ingen enhet som samsvarer med denne IRK-en er synlig for øyeblikket. Sørg for at den er i nærheten, slått på, og at Bluetooth er aktivert.",
+      "irk_not_valid": "Dette ser ikke ut som en gyldig IRK (krever 16 byte: 32 heksadesimale tegn, eller base64 som slutter på '=').",
+      "no_devices": "Ingen Bluetooth-enheter blir for øyeblikket rapportert av skannerne dine. \nDu må løse dette før Bermuda kan være til særlig hjelp.",
+      "no_scanners": "Du må konfigurere noen Bluetooth-skannere før Bermuda har noe å jobbe med. \nEn av esphome bluetooth_proxy, Shelly Bluetooth-proxy eller en lokal Bluetooth-adapter bør få deg i gang.",
+      "some_active": "Du har i det minste noen aktive enheter, det er bra.",
+      "unknown": "Kunne ikke registrere enheten. Sjekk IRK-en og prøv igjen."
+    },
     "step": {
-      "user": {
+      "area_entities": {
         "data": {
-          "binary_sensor": "Binær sensor aktivert",
-          "sensor": "Sensor aktivert",
-          "switch": "Bryter aktivert"
-        }
+          "area_entities": "Tilstedeværelsesentiteter",
+          "area_entity_distance": "Standard virtuell avstand (m)"
+        },
+        "data_description": {
+          "area_entities": "Entiteter hvis område brukes mens de er på.",
+          "area_entity_distance": "Avstanden det utløste området konkurrerer med; lavere verdi vinner over flere BLE-målinger. Standard 0,1 m."
+        },
+        "description": "Velg Home Assistant-entiteter (bevegelse, tilstedeværelse, kontakt, ...) hvis område skal forsterke eller overstyre BLE-deteksjon. Når en entitet er på, konkurrerer området dens med BLE ved en 'virtuell avstand' (mindre = sterkere overstyring).",
+        "title": "Tilstedeværelsesentiteter for område"
+      },
+      "area_entities_distance": {
+        "description": "Angi en virtuell avstand (meter) per entitet — mindre vinner lettere over BLE. Gruppert etter område:\n\n{area_summary}",
+        "title": "Virtuell avstand per entitet"
+      },
+      "enrol_private": {
+        "data": {
+          "irk": "IRK",
+          "name": "Navn (valgfritt)"
+        },
+        "data_description": {
+          "irk": "Lim inn nøkkelen som 32 heksadesimale tegn, eller base64 (som slutter på '='). Et 'irk:'-prefiks er greit.",
+          "name": "Et vennlig navn for den sporede enheten. La stå tomt for å bruke enhetens eget navn."
+        },
+        "description": "Spor en iPhone, Apple Watch eller annen personvernenhet via dens **IRK** (Identity Resolving Key). Home Assistant løser opp den roterende MAC-adressen, og Bermuda sporer den deretter automatisk.\n\n**Hvor du finner IRK-en**\n- **iOS / watchOS** (krever en Mac logget inn på samme iCloud-konto): åpne *Nøkkelknippe-tilgang* → *Lokale elementer* → søk etter `Bluetooth` → velg oppføringen som samsvarer med enhetens MAC-adresse (Innstillinger › Generelt › Om) → *Vis passord* → kopier **Remote IRK** (base64).\n- **Android** (rootet): les `LE_LOCAL_KEY_IRK` i `/data/misc/bluedroid/bt_config.conf` (snu byte-rekkefølgen).\n\nEnheten må være i nærheten og kringkaste akkurat nå, ellers blir nøkkelen avvist.",
+        "title": "Registrer en privat enhet (IRK)"
+      },
+      "globalopts": {
+        "description": "Juster den globale avstandsmodellen, tidsavbrudd for enhetssporing og RSSI-utjevning. Disse gjelder for alle sporede enheter.",
+        "sections": {
+          "distance_model": {
+            "data": {
+              "attenuation": "Demping - Miljødempingsfaktor for avstandsberegning/kalibrering.",
+              "max_area_radius": "Maksimal radius i meter for enkel OMRÅDE-deteksjon",
+              "ref_power": "Referansestyrke - Standard rssi ved 1 meters avstand, for avstandskalibrering."
+            },
+            "data_description": {
+              "attenuation": "Etter å ha satt ref_power ved 1 meter, juster dempingen slik at andre avstander vises riktig - mer eller mindre.",
+              "max_area_radius": "I den enkle `AREA`-funksjonen vil en enhet bli markert som værende i OMRÅDET til sin nærmeste mottaker, hvis den er innenfor denne radiusen. Hvis du setter den lite, vil enheter gå til `ukjent` mellom mottakere, men hvis den er stor, vil enheter alltid vises som i sitt nærmeste område.",
+              "ref_power": "Plasser din vanligste beacon 1 meter (3,28') unna din vanligste proxy/skanner. Juster ref_power til avstandssensoren viser en laveste (ikke gjennomsnittlig) avstand på 1 meter."
+            },
+            "description": "Referansestyrke, demping og maksimal radius — forholdet mellom RSSI og avstand.",
+            "name": "Avstandsmodell"
+          },
+          "smoothing": {
+            "data": {
+              "max_velocity": "Maksimal hastighet i meter per sekund - ignorer målinger som antyder bevegelse bort raskere enn denne grensen. 3 m/s (10 km/t) er bra.",
+              "smoothing_samples": "Utjevningsprøver - hvor mange prøver som skal brukes til å jevne ut avstandsmålinger."
+            },
+            "data_description": {
+              "max_velocity": "Hvis en måling antyder at en enhet beveger seg bort raskere enn dette, ignorerer vi den målingen. Mennesker går normalt i 1,4 m/s, og hvis de holder saks beveger de seg i 3 m/s.",
+              "smoothing_samples": "Hvor mange prøver som skal gjennomsnittsberegnes for avstandsutjevning. Større tall gir tregere avstandsøkning. Avtagende avstander påvirkes ikke. 10 eller 20 virker bra."
+            },
+            "description": "Antall prøver og hastighetsbegrensning som stabiliserer avstandsmålingene.",
+            "name": "RSSI-utjevning"
+          },
+          "tracking": {
+            "data": {
+              "devtracker_nothome_timeout": "Devtracker-tidsavbrudd i sekunder for å anse en enhet som `Ikke hjemme`.",
+              "update_interval": "Oppdateringsintervall - Hvor ofte (i sekunder) sensormålingene skal oppdateres."
+            },
+            "data_description": {
+              "devtracker_nothome_timeout": "Hvor raskt device_tracker-entiteter skal merkes som `not_home` etter at vi slutter å se annonseringer. 30 til 300 sekunder er sannsynligvis bra.",
+              "update_interval": "Avtagende avstander vil fortsatt utløses umiddelbart, men økende avstander vil bli hastighetsbegrenset av dette for å redusere hvor mye databasen din vokser."
+            },
+            "description": "Hvor lenge det tar før en enhet rapporteres som Ikke hjemme, og hvor ofte sensorene oppdateres.",
+            "name": "Enhetssporing"
+          }
+        },
+        "title": "Globale innstillinger"
+      },
+      "init": {
+        "description": "Bermuda kan for øyeblikket se:\n- {device_counter_active} aktive av {device_counter_devices} Bluetooth-enheter.\n- {scanner_counter_active} aktive av {scanner_counter_scanners} Bluetooth-skannerenheter.\n\n{status}",
+        "menu_options": {
+          "area_entities": "Tilstedeværelsesentiteter for område",
+          "enrol_private": "Registrer en privat enhet (IRK)",
+          "globalopts": "Globale alternativer",
+          "scan": "Søk etter nye enheter",
+          "selectdevices": "Velg enheter å spore"
+        },
+        "title": "Konfigurer Bermuda"
+      },
+      "scan": {
+        "data": {
+          "add": "Enheter å spore",
+          "refresh": "Oppdater listen"
+        },
+        "data_description": {
+          "add": "Bare enheter som ikke allerede spores, sterkest signal (dBm) først.",
+          "refresh": "Kryss av og send inn for å søke på nytt uten å lagre — listen oppdateres."
+        },
+        "description": "{count} enhet(er) i nærheten som ennå ikke spores, sterkest signal først. Kryss av dem du vil spore — de legges til i de sporede enhetene dine.",
+        "title": "Søk etter nye enheter"
+      },
+      "selectdevices": {
+        "data": {
+          "devices": "Enheter å spore",
+          "exclude": "Ekskluder disse",
+          "track_categories": "Spor hele kategorier"
+        },
+        "data_description": {
+          "devices": "Velg BLE-enhetene Bermuda skal spore. Skriv for å søke. iBeacons og tilfeldige MAC-adresser er merket; enheter du sporer, men som ikke er synlige for øyeblikket, vises som (saved).",
+          "exclude": "Spor aldri disse, selv om de samsvarer med en sporet kategori.",
+          "track_categories": "Spor automatisk alle enheter som samsvarer med en valgt kategori (f.eks. alle iBeacons eller alle navngitte enheter)."
+        },
+        "description": "Bermuda oppretter kun sporingsentiteter for enhetene du velger her. Hvis listen er tom, er det ennå ikke sett noen Bluetooth-enheter.",
+        "title": "Velg enheter"
       }
+    }
+  },
+  "selector": {
+    "track_category": {
+      "options": {
+        "amazfit": "Amazfit / Mi",
+        "apple": "Apple",
+        "garmin": "Garmin",
+        "google": "Google",
+        "ibeacon": "iBeacons",
+        "irk": "Private enheter (IRK)",
+        "microsoft": "Microsoft",
+        "named": "Navngitte enheter",
+        "public": "Offentlig MAC",
+        "random": "Tilfeldig MAC",
+        "samsung": "Samsung"
+      }
+    }
+  },
+  "services": {
+    "calibrate_location": {
+      "description": "Registrer en sporet enhets nåværende plassering som en navngitt mikroplassering (f.eks. 'Nøkkelkrok'), ved å ta et øyeblikksbilde av RF-fingeravtrykket fra hver proxy som kan høre den. Å kjøre på nytt med samme enhet og navn rekalibrerer den plasseringen.",
+      "fields": {
+        "area": {
+          "description": "Valgfritt Home Assistant-område å knytte til denne plasseringen. Standard er enhetens gjeldende område.",
+          "name": "Område"
+        },
+        "device": {
+          "description": "Den sporede enheten/gjenstanden som skal kalibreres. Et enhetsnavn, MAC/UUID, eller en Home Assistant-enhets-ID.",
+          "name": "Enhet"
+        },
+        "name": {
+          "description": "Navnet på denne plasseringen, f.eks. 'Nøkkelkrok' eller 'Nattbordskuff'.",
+          "name": "Stedsnavn"
+        }
+      },
+      "name": "Kalibrer mikroplassering"
+    },
+    "dump_devices": {
+      "description": "Returnerer den interne datastrukturen, eventuelt begrenset til de(n) angitte adressen(e). Inkluderer rssi og annen informasjon fra hver skanner",
+      "fields": {
+        "addresses": {
+          "description": "En valgfri, mellomromsseparert liste over MAC-adresser å returnere informasjon om. Hvis tom, hentes alle adresser.",
+          "name": "Adresser"
+        },
+        "configured_devices": {
+          "description": "Velg for å kun inkludere skannere og konfigurerte enheter i resultatet.",
+          "name": "Konfigurerte enheter"
+        },
+        "redact": {
+          "description": "Sett til TRUE for å sikre at MAC-adresser skjules i resultatet av personvernhensyn.",
+          "name": "Skjul"
+        }
+      },
+      "name": "Eksporter enheter"
+    },
+    "enrol_private_device": {
+      "description": "Spor en personvernenhet (iPhone, Apple Watch, …) via dens IRK. Overleverer nøkkelen til Home Assistants Private BLE Device-integrasjon, som løser opp den roterende MAC-adressen; Bermuda sporer den deretter automatisk. Enheten må være i nærheten og kringkaste for at nøkkelen skal godtas.",
+      "fields": {
+        "irk": {
+          "description": "Identity Resolving Key, som 32 heksadesimale tegn eller base64 (som slutter på '=').",
+          "name": "IRK"
+        },
+        "name": {
+          "description": "Valgfritt vennlig navn for den sporede enheten.",
+          "name": "Navn"
+        }
+      },
+      "name": "Registrer en privat enhet"
+    },
+    "get_config": {
+      "description": "Returnerer Bermudas gjeldende kalibrering, sporede enheter, skannere og antall mikroplasseringer.",
+      "name": "Hent konfigurasjon"
+    },
+    "list_locations": {
+      "description": "Vis lagrede mikroplasseringer, eventuelt filtrert til én enhet.",
+      "fields": {
+        "device": {
+          "description": "Valgfri enhet å filtrere etter. La stå tomt for å vise alle lagrede plasseringer.",
+          "name": "Enhet"
+        }
+      },
+      "name": "Vis mikroplasseringer"
+    },
+    "remove_location": {
+      "description": "Slett en enhets lagrede mikroplassering etter navn.",
+      "fields": {
+        "device": {
+          "description": "Enheten plasseringen tilhører.",
+          "name": "Enhet"
+        },
+        "name": {
+          "description": "Navnet på plasseringen som skal fjernes.",
+          "name": "Stedsnavn"
+        }
+      },
+      "name": "Fjern mikroplassering"
+    },
+    "rename_location": {
+      "description": "Gi nytt navn til en enhets lagrede mikroplassering.",
+      "fields": {
+        "device": {
+          "description": "Enheten plasseringen tilhører.",
+          "name": "Enhet"
+        },
+        "name": {
+          "description": "Det nåværende navnet på plasseringen.",
+          "name": "Nåværende navn"
+        },
+        "new_name": {
+          "description": "Det nye navnet på plasseringen.",
+          "name": "Nytt navn"
+        }
+      },
+      "name": "Gi nytt navn til mikroplassering"
+    },
+    "set_global_calibration": {
+      "description": "Angi den globale referansestyrken og/eller dempingen som brukes for avstandsestimater.",
+      "fields": {
+        "attenuation": {
+          "description": "Miljødempingsfaktor brukt utover 1 meter.",
+          "name": "Demping"
+        },
+        "ref_power": {
+          "description": "RSSI (dBm) målt ved 1 meter. Mer negativ betyr kortere estimerte avstander.",
+          "name": "Referansestyrke"
+        }
+      },
+      "name": "Angi global kalibrering"
+    },
+    "set_scanner_offset": {
+      "description": "Angi en RSSI-forskyvning per skanner (kalibreringstrinnet per proxy, som en tjeneste).",
+      "fields": {
+        "rssi_offset": {
+          "description": "Forskyvning lagt til denne skannerens RSSI. Negativ øker avstanden, positiv reduserer den.",
+          "name": "RSSI-forskyvning"
+        },
+        "scanner": {
+          "description": "Skanneren/proxyen som skal justeres. Et skannernavn eller en adresse.",
+          "name": "Skanner"
+        }
+      },
+      "name": "Angi skannerens RSSI-forskyvning"
+    },
+    "track_device": {
+      "description": "Legg til en Bluetooth-enhet i Bermudas sporede enheter (oppretter sensorene dens).",
+      "fields": {
+        "device": {
+          "description": "Enheten som skal spores. Et enhetsnavn, MAC/UUID, eller en Home Assistant-enhets-ID.",
+          "name": "Enhet"
+        }
+      },
+      "name": "Spor enhet"
+    },
+    "untrack_device": {
+      "description": "Fjern en enhet fra Bermudas sporede enheter.",
+      "fields": {
+        "device": {
+          "description": "Enheten det skal sluttes å spore.",
+          "name": "Enhet"
+        }
+      },
+      "name": "Slutt å spore enhet"
+    },
+    "where_is": {
+      "description": "Rapporter en enhets gjeldende område og samsvarende mikroplassering, med konfidens.",
+      "fields": {
+        "device": {
+          "description": "Enheten/gjenstanden som skal lokaliseres. Et enhetsnavn, MAC/UUID, eller en Home Assistant-enhets-ID.",
+          "name": "Enhet"
+        }
+      },
+      "name": "Hvor er"
     }
   }
 }

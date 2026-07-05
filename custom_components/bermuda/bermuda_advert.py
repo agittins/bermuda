@@ -14,7 +14,8 @@ to the combination of the scanner and the device it is reporting.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Final
+import statistics
+from typing import TYPE_CHECKING, Any, Final
 
 from bluetooth_data_tools import monotonic_time_coarse
 
@@ -25,12 +26,13 @@ from .const import (
     CONF_REF_POWER,
     CONF_RSSI_OFFSETS,
     CONF_SMOOTHING_SAMPLES,
-    DISTANCE_INFINITE,
+    DEFAULT_MAX_VELOCITY,
+    DEFAULT_SMOOTHING_SAMPLES,
     DISTANCE_TIMEOUT,
     HIST_KEEP_COUNT,
+    MOBILITY_STATIONARY,
 )
-
-# from .const import _LOGGER_SPAM_LESS
+from .distance_filter import median_abs_deviation, minimum_hugging_average, peak_retreat_velocity
 from .util import clean_charbuf, rssi_to_metres
 
 if TYPE_CHECKING:
@@ -38,14 +40,8 @@ if TYPE_CHECKING:
 
     from .bermuda_device import BermudaDevice
 
-# The if instead of min/max triggers PLR1730, but when
-# split over two lines, ruff removes it, then complains again.
-# so we're just disabling it for the whole file.
-# https://github.com/astral-sh/ruff/issues/4244
-# ruff: noqa: PLR1730
 
-
-class BermudaAdvert(dict):
+class BermudaAdvert:
     """
     Represents details from a scanner relevant to a specific device.
 
@@ -70,7 +66,7 @@ class BermudaAdvert(dict):
         self,
         parent_device: BermudaDevice,  # The device being tracked
         advertisementdata: AdvertisementData,  # The advertisement info from the device, received by the scanner
-        options,
+        options: dict[str, Any],
         scanner_device: BermudaDevice,  # The scanner device that "saw" it.
     ) -> None:
         self.scanner_address: Final[str] = scanner_device.address
@@ -84,21 +80,28 @@ class BermudaAdvert(dict):
         self.stamp: float = 0
         self.new_stamp: float | None = None  # Set when a new advert is loaded from update
         self.rssi: float | None = None
+        self.rssi_filtered: float | None = None  # robust-clamped, EMA-smoothed RSSI (mobility-aware)
+        self.rssi_dispersion: float = 0.0  # MAD-based jitter estimate of the filtered RSSI
+        self.rssi_adjusted_raw: float | None = None  # raw RSSI + scanner offset, pre-filter
         self.tx_power: float | None = None
         self.rssi_distance: float | None = None
-        self.rssi_distance_raw: float
+        self.rssi_distance_raw: float | None = None
         self.stale_update_count = 0  # How many times we did an update but no new stamps were found.
         self.hist_stamp: list[float] = []
         self.hist_rssi: list[int] = []
-        self.hist_distance: list[float] = []
-        self.hist_distance_by_interval: list[float] = []  # updated per-interval
-        self.hist_interval = []  # WARNING: This is actually "age of ad when we polled"
+        self.hist_rssi_adjusted: list[float] = []  # offset-adjusted RSSI samples (pre-filter)
+        self.hist_rssi_filtered: list[float] = []  # filtered RSSI history (for dispersion)
+        self.hist_distance: list[float | None] = []
+        self.hist_distance_by_interval: list[float | None] = []  # updated per-interval
+        self.hist_interval: list[float | None] = []  # WARNING: This is actually "age of ad when we polled"
         self.hist_velocity: list[float] = []  # Effective velocity versus previous stamped reading
         self.conf_rssi_offset = self.options.get(CONF_RSSI_OFFSETS, {}).get(self.scanner_address, 0)
         self.conf_ref_power = self.options.get(CONF_REF_POWER)
         self.conf_attenuation = self.options.get(CONF_ATTENUATION)
-        self.conf_max_velocity = self.options.get(CONF_MAX_VELOCITY)
-        self.conf_smoothing_samples = self.options.get(CONF_SMOOTHING_SAMPLES)
+        # Coordinator always seeds these two into options before any advert is
+        # created; the fallback here is purely defensive (matches the same default).
+        self.conf_max_velocity: float = self.options.get(CONF_MAX_VELOCITY, DEFAULT_MAX_VELOCITY)
+        self.conf_smoothing_samples: int = self.options.get(CONF_SMOOTHING_SAMPLES, DEFAULT_SMOOTHING_SAMPLES)
         self.local_name: list[tuple[str, bytes]] = []
         self.manufacturer_data: list[dict[int, bytes]] = []
         self.service_data: list[dict[str, bytes]] = []
@@ -107,7 +110,7 @@ class BermudaAdvert(dict):
         # Just pass the rest on to update...
         self.update_advertisement(advertisementdata, self.scanner_device)
 
-    def apply_new_scanner(self, scanner_device: BermudaDevice):
+    def apply_new_scanner(self, scanner_device: BermudaDevice) -> None:
         self.name: str = scanner_device.name  # or scandata.scanner.name
         self.scanner_device = scanner_device  # links to the source device
         if self.scanner_address != scanner_device.address:
@@ -117,7 +120,7 @@ class BermudaAdvert(dict):
         # Only remote scanners log timestamps, local usb adaptors do not.
         self.scanner_sends_stamps = scanner_device.is_remote_scanner
 
-    def update_advertisement(self, advertisementdata: AdvertisementData, scanner_device: BermudaDevice):
+    def update_advertisement(self, advertisementdata: AdvertisementData, scanner_device: BermudaDevice) -> None:
         """
         Update gets called every time we see a new packet or
         every time we do a polled update.
@@ -144,13 +147,11 @@ class BermudaAdvert(dict):
 
             if new_stamp is None:
                 self.stale_update_count += 1
-                _LOGGER.debug("Advert from %s for %s lacks stamp, unexpected.", scanner.name, self._device.name)
                 return
 
             if self.stamp > new_stamp:
-                # The existing stamp is NEWER, bail but complain on the way.
+                # The existing stamp is NEWER, bail.
                 self.stale_update_count += 1
-                _LOGGER.debug("Advert from %s for %s is OLDER than last recorded", scanner.name, self._device.name)
                 return
 
             if self.stamp == new_stamp:
@@ -168,12 +169,6 @@ class BermudaAdvert(dict):
 
         # Update our parent scanner's last_seen if we have a new stamp.
         if new_stamp > self.scanner_device.last_seen + 0.01:  # some slight warp seems common.
-            _LOGGER.debug(
-                "Advert from %s for %s is %.6fs NEWER than scanner's last_seen, odd",
-                self.scanner_device.name,
-                self._device.name,
-                new_stamp - self.scanner_device.last_seen,
-            )
             self.scanner_device.last_seen = new_stamp
 
         if len(self.hist_stamp) == 0 or new_stamp is not None:
@@ -204,7 +199,7 @@ class BermudaAdvert(dict):
             self.hist_stamp.insert(0, self.stamp)
 
         # if self.tx_power is not None and scandata.advertisement.tx_power != self.tx_power:
-        #     # Not really an erorr, we just don't account for this happening -
+        #     # Not really an error, we just don't account for this happening -
         #     # I want to know if it does.
         #     # AJG 2024-01-11: This does happen. Looks like maybe apple devices?
         #     # Changing from warning to debug to quiet users' logs.
@@ -246,7 +241,7 @@ class BermudaAdvert(dict):
 
         if len(self.service_data) == 0 or self.service_data[0] != advertisementdata.service_data:
             self.service_data.insert(0, advertisementdata.service_data)
-            if advertisementdata.service_data not in self.manufacturer_data[1:]:
+            if advertisementdata.service_data not in self.service_data[1:]:
                 _want_name_update = True
             del self.service_data[HIST_KEEP_COUNT:]
 
@@ -256,13 +251,59 @@ class BermudaAdvert(dict):
                 _want_name_update = True
                 del self.service_uuids[HIST_KEEP_COUNT:]
 
+        # Recognise known item-trackers (AirTag, Tile, SmartTag...) by signature.
+        # Cheap and idempotent; only attempted until a match is found.
+        if self._device.tracker_type is None:
+            self._device.identify_tracker_type(self)
+
         if _want_name_update:
             self._device.make_name()
 
         # Finally, save the new advert timestamp.
         self.new_stamp = new_stamp
 
-    def _update_raw_distance(self, reading_is_new=True) -> float:
+    def _rssi_filter_policy(self) -> tuple[int, float, float]:
+        """Return mobility-aware RSSI filter params: (window, ema_alpha, base_outlier_db)."""
+        if self._device.get_mobility_type() == MOBILITY_STATIONARY:
+            return (13, 0.22, 12.0)
+        return (9, 0.45, 15.0)
+
+    def _update_filtered_rssi(self, adjusted_rssi: float) -> float:
+        """
+        Apply robust outlier handling + EMA to a new (offset-adjusted) RSSI sample.
+
+        Clamps a spike to the recent median when it exceeds a MAD-derived threshold,
+        then exponentially smooths it, and refreshes the dispersion (jitter) estimate.
+        The window/alpha/threshold come from the device's mobility mode.
+        """
+        window, alpha, outlier_db = self._rssi_filter_policy()
+        prior = self.hist_rssi_adjusted[:window]
+        sample = adjusted_rssi
+
+        if len(prior) >= 3:
+            med = statistics.median(prior)
+            mad = median_abs_deviation(prior, med)
+            robust_sigma = max(mad * 1.4826, 1.0)
+            threshold = max(outlier_db, robust_sigma * 3.0)
+            if abs(sample - med) > threshold:
+                sample = med
+
+        if self.rssi_filtered is None:
+            self.rssi_filtered = sample
+        else:
+            self.rssi_filtered = (alpha * sample) + ((1 - alpha) * self.rssi_filtered)
+
+        self.hist_rssi_adjusted.insert(0, sample)
+        self.hist_rssi_filtered.insert(0, self.rssi_filtered)
+        del self.hist_rssi_adjusted[HIST_KEEP_COUNT:]
+        del self.hist_rssi_filtered[HIST_KEEP_COUNT:]
+
+        filt_window = self.hist_rssi_filtered[:window]
+        self.rssi_dispersion = median_abs_deviation(filt_window) * 1.4826 if len(filt_window) >= 3 else 0.0
+
+        return self.rssi_filtered
+
+    def _update_raw_distance(self, *, reading_is_new: bool = True) -> float | None:
         """
         Converts rssi to raw distance and updates history stack and
         returns the new raw distance.
@@ -280,7 +321,20 @@ class BermudaAdvert(dict):
         else:
             ref_power = self.ref_power
 
-        distance = rssi_to_metres(self.rssi + self.conf_rssi_offset, ref_power, self.conf_attenuation)
+        if self.rssi is None:
+            # No rssi reading yet (advert created but the first update was a
+            # stale / no-stamp early-return). Nothing to recalculate yet.
+            return self.rssi_distance_raw
+
+        adjusted_rssi = self.rssi + self.conf_rssi_offset
+        self.rssi_adjusted_raw = adjusted_rssi
+        if reading_is_new:
+            filtered_rssi = self._update_filtered_rssi(adjusted_rssi)
+        else:
+            # Override (e.g. a ref_power change between cycles): reuse the last
+            # filtered RSSI rather than feeding a phantom sample into the filter.
+            filtered_rssi = self.rssi_filtered if self.rssi_filtered is not None else adjusted_rssi
+        distance = rssi_to_metres(filtered_rssi, ref_power, self.conf_attenuation)
         self.rssi_distance_raw = distance
         if reading_is_new:
             # Add a new historical reading
@@ -320,10 +374,10 @@ class BermudaAdvert(dict):
         # its own ref_power without need.
         if value != self.ref_power:
             self.ref_power = value
-            return self._update_raw_distance(False)
+            return self._update_raw_distance(reading_is_new=False)
         return self.rssi_distance_raw
 
-    def calculate_data(self):
+    def calculate_data(self) -> None:
         """
         Filter and update distance estimates.
 
@@ -343,7 +397,7 @@ class BermudaAdvert(dict):
 
         This is called by self.update, but should also be called for
         any remaining scanners that have not sent in an update in this
-        cycle. This is mainly beacuse usb/bluez adaptors seem to flush
+        cycle. This is mainly because usb/bluez adaptors seem to flush
         their advertisement lists quicker than we time out, so we need
         to make sure we still update the scanner entry even if the scanner
         no longer carries advert history for this device.
@@ -380,66 +434,39 @@ class BermudaAdvert(dict):
                 # and might have fewer side-effects.
                 self.hist_distance_by_interval.clear()
                 self.hist_distance_by_interval.append(self.rssi_distance_raw)
+                # Seed the RSSI filter so it starts fresh on arrival too.
+                if self.rssi_filtered is None:
+                    self.rssi_filtered = self.rssi_adjusted_raw
+                self.hist_rssi_filtered.clear()
+                if self.rssi_filtered is not None:
+                    self.hist_rssi_filtered.append(self.rssi_filtered)
 
         elif new_stamp is None and (self.stamp is None or self.stamp < monotonic_time_coarse() - DISTANCE_TIMEOUT):
             # DEVICE IS AWAY!
             # Last distance reading is stale, mark device distance as unknown.
             self.rssi_distance = None
+            self.rssi_filtered = None
+            self.rssi_dispersion = 0.0
             # Clear the smoothing history
             if len(self.hist_distance_by_interval) > 0:
                 self.hist_distance_by_interval.clear()
+            self.hist_rssi_filtered.clear()
+            self.hist_rssi_adjusted.clear()
 
         else:
             # Add the current reading (whether new or old) to
             # a historical log that is evenly spaced by update_interval.
 
             # Verify the new reading is vaguely sensible. If it isn't, we
-            # ignore it by duplicating the last cycle's reading.
-            if len(self.hist_stamp) > 1:
-                # How far (away) did it travel in how long?
-                # we check this reading against the recent readings to find
-                # the peak average velocity we are alleged to have reached.
-                velo_newdistance = self.hist_distance[0]
-                velo_newstamp = self.hist_stamp[0]
-                peak_velocity = 0
-                # walk through the history of distances/stamps, and find
-                # the peak
-                delta_t = velo_newstamp - self.hist_stamp[1]
-                delta_d = velo_newdistance - self.hist_distance[1]
-                if delta_t > 0:
-                    peak_velocity = delta_d / delta_t
-                # if our initial reading is an approach, we are done here
-                if peak_velocity >= 0:
-                    for old_distance, old_stamp in zip(self.hist_distance[2:], self.hist_stamp[2:], strict=False):
-                        if old_stamp is None:
-                            continue  # Skip this iteration if hist_stamp[i] is None
-
-                        delta_t = velo_newstamp - old_stamp
-                        if delta_t <= 0:
-                            # Additionally, skip if delta_t is zero or negative
-                            # to avoid division by zero
-                            continue
-                        delta_d = velo_newdistance - old_distance
-
-                        velocity = delta_d / delta_t
-
-                        # Don't use max() as it's slower.
-                        if velocity > peak_velocity:  # noqa: RUF100, PLR1730
-                            # but on subsequent comparisons we only care if they're faster retreats
-                            peak_velocity = velocity
-                # we've been through the history and have peak velo retreat, or the most recent
-                # approach velo.
-                velocity = peak_velocity
-            else:
-                # There's no history, so no velocity
-                velocity = 0
-
+            # ignore it by duplicating the last cycle's reading. The peak
+            # retreat velocity over recent history tells us if it looks bogus.
+            velocity = peak_retreat_velocity(self.hist_distance, self.hist_stamp)
             self.hist_velocity.insert(0, velocity)
 
             if velocity > self.conf_max_velocity:
                 if self._device.create_sensor:
                     _LOGGER.debug(
-                        "This sparrow %s flies too fast (%2fm/s), ignoring",
+                        "This sparrow %s flies too fast (%.2fm/s), ignoring",
                         self._device.name,
                         velocity,
                     )
@@ -457,26 +484,9 @@ class BermudaAdvert(dict):
             if len(self.hist_distance_by_interval) > self.conf_smoothing_samples:
                 del self.hist_distance_by_interval[self.conf_smoothing_samples :]
 
-            # Calculate a moving-window average, that only includes
-            # historical values if they're "closer" (ie more reliable).
-            #
-            # This might be improved by weighting the values by age, but
-            # already does a fairly reasonable job of hugging the bottom
-            # of the noisy rssi data. A better way to control the maximum
-            # slope angle (other than increasing bucket count) might be
-            # helpful, but probably dependent on use-case.
-            #
-            dist_total: float = 0
-            local_min: float = self.rssi_distance_raw or DISTANCE_INFINITE
-            for distance in self.hist_distance_by_interval:
-                if distance is not None and distance <= local_min:
-                    local_min = distance
-                dist_total += local_min
-
-            if (_hist_dist_len := len(self.hist_distance_by_interval)) > 0:
-                movavg = dist_total / _hist_dist_len
-            else:
-                movavg = local_min
+            # Calculate a moving-window average that hugs the closest (most
+            # reliable) recent readings. See distance_filter for the rationale.
+            movavg = minimum_hugging_average(self.hist_distance_by_interval, self.rssi_distance_raw)
 
             # Finally, set the new, smoothed rssi_distance value.
             # The average is only helpful if it's lower than the actual reading.
@@ -492,16 +502,16 @@ class BermudaAdvert(dict):
         del self.hist_stamp[HIST_KEEP_COUNT:]
         del self.hist_velocity[HIST_KEEP_COUNT:]
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         """Convert class to serialisable dict for dump_devices."""
         # using "is" comparisons instead of string matching means
         # linting and typing can catch errors.
-        out = {}
+        out: dict[str, Any] = {}
         for var, val in vars(self).items():
-            if val in [self.options]:
+            if val is self.options:
                 # skip certain vars that we don't want in the dump output.
                 continue
-            if val in [self.options, self._device, self.scanner_device]:
+            if val is self._device or val is self.scanner_device:
                 # objects we might want to represent but not fully iterate etc.
                 out[var] = val.__repr__()
                 continue

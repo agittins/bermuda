@@ -6,15 +6,25 @@ on:
       - main
       - master
 
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+concurrency:
+  group: labeler-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   labeler:
     name: Labeler
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Run Labeler
-        uses: crazy-max/ghaction-github-labeler@v5.3.0
+        uses: crazy-max/ghaction-github-labeler@v6.0.0
         with:
           skip-delete: true

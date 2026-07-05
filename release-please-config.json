@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "include-component-in-tag": false,
+  "include-v-in-tag": true,
+  "tag-separator": "-",
+  "packages": {
+    ".": {
+      "package-name": "bermuda",
+      "release-type": "simple",
+      "extra-files": ["custom_components/bermuda/manifest.json"]
+    }
+  }
+}

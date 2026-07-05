@@ -6,7 +6,7 @@ from functools import lru_cache
 
 
 @lru_cache(64)
-def mac_math_offset(mac, offset=0) -> str | None:
+def mac_math_offset(mac: str | None, offset: int = 0) -> str | None:
     """
     Perform addition/subtraction on a MAC address.
 
@@ -84,8 +84,21 @@ def mac_redact(mac: str, tag: str | None = None) -> str:
     return f"{mac[:2]}::{tag}::{mac[-2:]}"
 
 
+def address_is_resolvable(address: str) -> bool:
+    """
+    Return True if a BLE address is a Resolvable Private Address (an IRK device).
+
+    The random address sub-type lives in the *top two bits* of the first octet (the
+    first hex character of an ``aa:bb:..`` address); ``0b01`` marks a resolvable
+    private address. Note this is ``>> 2``, not a single-bit ``& 0x04`` test, which
+    would misclassify static-random addresses (first char C-F) as resolvable. See
+    ``bermuda_device._async_process_address_type`` for the full 4-way split.
+    """
+    return (int(address[0], 16) >> 2) == 0b01
+
+
 @lru_cache(1024)
-def rssi_to_metres(rssi, ref_power=None, attenuation=None):
+def rssi_to_metres(rssi: float, ref_power: float | None = None, attenuation: float | None = None) -> float | None:
     """
     Convert instant rssi value to a distance in metres.
 
@@ -99,11 +112,9 @@ def rssi_to_metres(rssi, ref_power=None, attenuation=None):
                     calibration, antenna design and orientation etc.
     """
     if ref_power is None:
-        return False
-        # ref_power = self.ref_power
+        return None
     if attenuation is None:
-        return False
-        # attenuation= self.attenuation
+        return None
 
     return 10 ** ((ref_power - rssi) / (10 * attenuation))
 

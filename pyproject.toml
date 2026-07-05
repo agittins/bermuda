@@ -1,6 +1,3 @@
-[tool.pylint]
-max-line-length=120
-
 # Adapted from https://github.com/ludeeus/integration_blueprint/blob/main/.ruff.toml
 [tool.ruff]
 target-version = "py312"
@@ -10,7 +7,6 @@ line-length = 120        # This is all me and not HA - I will die on the hill th
 select = ["ALL"]
 
 ignore = [
-    "ANN101",  # Missing type annotation for `self` in method
     "ANN401",  # Dynamically typed expressions (typing.Any) are disallowed
     "D203",    # no-blank-line-before-class (incompatible with formatter)
     "D212",    # multi-line-summary-first-line (incompatible with formatter)
@@ -19,15 +15,10 @@ ignore = [
     "ERA001",  # commented out code
     "D401",    # First line should be in imperative - let's skip for now
     "D205",    # 1 blank line required between summary line and description
-    "ANN001",  # Return type annoations - should be done later as lot of manual changes
-    "ANN003",  # Type annotation for **kwargs
     "PGH004",  # Use specific rule codes for noqa
     "D102",    # Docstring in public method - should be done later
     "D107",    # Dosctring in init
-    "ANN002",  # Missing type annotations for *args
-    "ANN202",  #Missing return type annotation for private function
     "RUF012",  #Mutable class attributes should be annotated with `typing.ClassVar`
-    "ANN201",  #Missing return type annotation for public function should be done later
     "FBT002",  #Boolean default positional argument in function definition
     "FBT003",  # Boolean positional value in function call
     "ARG001",  # Unused function argument
@@ -42,7 +33,6 @@ ignore = [
     "PLR0915", # Too many statements
     "FIX002",  # Resolve TODO
     "SIM102",  # Use a single if instead of nested if
-    "ANN205",  # missing return type annotation for staticmethod
     "ARG002",  # Unused method argument
     "PGH003",  # Use specific rule codes when ignore type issues
     "D404",    # First word of the dosctring should not be "This"
@@ -121,3 +111,27 @@ voluptuous = "vol"
 "homeassistant.helpers.issue_registry" = "ir"
 "homeassistant.helpers.label_registry" = "lr"
 "homeassistant.util.dt" = "dt_util"
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["custom_components/bermuda"]
+warn_unused_ignores = true
+
+[tool.bandit]
+exclude_dirs = ["tests", "config"]
+skips = ["B101"]  # Skip assert_used check (common in HA integrations)
+
+[tool.pytest.ini_options]
+# Single source of pytest config — do NOT add a pytest.ini, it would silently
+# override this whole section (including the coverage gate).
+asyncio_mode = "auto"
+addopts = "-qq --cov=custom_components.bermuda"
+console_output_style = "count"
+
+[tool.coverage.run]
+branch = false
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 95

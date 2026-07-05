@@ -1,0 +1,61 @@
+{
+  "entity": {
+    "device_tracker": {
+      "bermuda_tracker": {
+        "default": "mdi:bluetooth-off",
+        "state": {
+          "home": "mdi:bluetooth-connect"
+        }
+      }
+    },
+    "number": {
+      "ref_power": {
+        "default": "mdi:signal-distance-variant"
+      }
+    },
+    "sensor": {
+      "active_proxy_count": {
+        "default": "mdi:bluetooth-transfer"
+      },
+      "area": {
+        "default": "mdi:land-plots-marker"
+      },
+      "area_last_seen": {
+        "default": "mdi:land-plots-marker"
+      },
+      "area_switch_diagnostic": {
+        "default": "mdi:swap-horizontal"
+      },
+      "distance": {
+        "default": "mdi:signal-distance-variant"
+      },
+      "distance_to_scanner": {
+        "default": "mdi:signal-distance-variant"
+      },
+      "floor": {
+        "default": "mdi:selection-marker"
+      },
+      "nearest_rssi": {
+        "default": "mdi:signal"
+      },
+      "nearest_scanner": {
+        "default": "mdi:bluetooth-audio"
+      },
+      "total_device_count": {
+        "default": "mdi:bluetooth"
+      },
+      "total_proxy_count": {
+        "default": "mdi:bluetooth-transfer"
+      },
+      "unfiltered_distance_to_scanner": {
+        "default": "mdi:signal-distance-variant"
+      },
+      "visible_device_count": {
+        "default": "mdi:bluetooth"
+      }
+    }
+  },
+  "services": {
+    "dump_devices": "mdi:database-export"
+  }
+}

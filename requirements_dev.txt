@@ -1,2 +1,7 @@
 -r requirements.txt
 -r requirements_test.txt
+
+# Static typing (mypy --strict, see [tool.mypy] in pyproject.toml)
+mypy
+types-aiofiles
+types-PyYAML

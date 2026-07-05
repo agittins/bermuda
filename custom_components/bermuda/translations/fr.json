@@ -1,31 +1,486 @@
 {
   "config": {
+    "abort": {
+      "single_instance_allowed": "Une seule instance est autorisée."
+    },
     "step": {
       "user": {
-        "title": "Bermuda BLE Trilateration",
-        "description": "Si vous avez besoin d'aide pour la configuration, regardez ici: https://github.com/agittins/bermuda",
-        "data": {
-          "username": "Identifiant",
-          "password": "Mot de Passe"
+        "description": "Si vous avez besoin d'aide pour la configuration, consultez notre [page GitHub]({github_url})",
+        "title": "Bermuda BLE Trilatération"
+      }
+    }
+  },
+  "config_subentries": {
+    "calibration": {
+      "abort": {
+        "no_scanners": "Tous les scanners connus ont déjà un offset de calibration."
+      },
+      "entry_type": "Calibration de scanner",
+      "initiate_flow": {
+        "reconfigure": "Modifier l'offset de scanner",
+        "user": "Ajouter un offset de scanner"
+      },
+      "step": {
+        "reconfigure": {
+          "data": {
+            "rssi_offset": "Offset RSSI (dB)"
+          },
+          "data_description": {
+            "rssi_offset": "Ajouté au RSSI de ce scanner avant le calcul de distance."
+          },
+          "description": "Ajustez l'offset (dB) de {scanner}.",
+          "title": "Modifier l'offset RSSI"
+        },
+        "user": {
+          "data": {
+            "rssi_offset": "Offset RSSI (dB)",
+            "scanner": "Scanner"
+          },
+          "data_description": {
+            "rssi_offset": "Ajouté au RSSI de ce scanner avant le calcul de distance. Positif = considéré plus fort/proche.",
+            "scanner": "Le proxy Bluetooth à calibrer."
+          },
+          "description": "Ajoutez un offset (dB) à un scanner pour aligner ses mesures sur les autres.",
+          "title": "Offset RSSI par scanner"
         }
       }
     },
-    "error": {
-      "auth": "Identifiant ou mot de passe erroné."
+    "device": {
+      "abort": {
+        "no_devices": "Tous les appareils découverts sont déjà enrôlés."
+      },
+      "entry_type": "Appareil suivi",
+      "initiate_flow": {
+        "reconfigure": "Modifier l'appareil",
+        "user": "Enrôler un appareil"
+      },
+      "step": {
+        "reconfigure": {
+          "data": {
+            "devtracker_nothome_timeout": "Délai d'absence (s)",
+            "name": "Nom (optionnel)",
+            "ref_power": "Puissance de référence (rssi à 1 m)"
+          },
+          "data_description": {
+            "devtracker_nothome_timeout": "Secondes sans lecture avant que l'appareil soit « Absent ».",
+            "name": "Remplace le nom annoncé (un renommage Home Assistant reste prioritaire).",
+            "ref_power": "RSSI à 1 m par appareil. Remplace la valeur globale au démarrage."
+          },
+          "description": "Ajuster l'enrôlement de {device}.",
+          "title": "Modifier l'appareil"
+        },
+        "user": {
+          "data": {
+            "address": "Appareil",
+            "devtracker_nothome_timeout": "Délai d'absence (s)",
+            "name": "Nom (optionnel)",
+            "ref_power": "Puissance de référence (rssi à 1 m)"
+          },
+          "data_description": {
+            "devtracker_nothome_timeout": "Secondes sans lecture avant que l'appareil soit « Absent ».",
+            "name": "Remplace le nom annoncé (un renommage Home Assistant reste prioritaire).",
+            "ref_power": "RSSI à 1 m par appareil. Remplace la valeur globale au démarrage."
+          },
+          "description": "Suivre un appareil avec son propre nom, sa puissance de référence et son délai d'absence.",
+          "title": "Enrôler un appareil"
+        }
+      }
+    }
+  },
+  "entity": {
+    "device_tracker": {
+      "bermuda_tracker": {
+        "name": "Suivi Bermuda"
+      }
     },
-    "abort": {
-      "single_instance_allowed": "Une seule instance est autorisée."
+    "number": {
+      "ref_power": {
+        "name": "Puissance de référence à 1 m (0 par défaut)"
+      }
+    },
+    "select": {
+      "mobility_type": {
+        "name": "Type de mobilité",
+        "state": {
+          "moving": "En mouvement",
+          "stationary": "Fixe"
+        }
+      }
+    },
+    "sensor": {
+      "active_proxy_count": {
+        "name": "Nombre de proxys actifs"
+      },
+      "area": {
+        "name": "Zone"
+      },
+      "area_last_seen": {
+        "name": "Dernière zone vue"
+      },
+      "area_switch_diagnostic": {
+        "name": "Diagnostic de changement de zone"
+      },
+      "distance": {
+        "name": "Distance"
+      },
+      "distance_to_scanner": {
+        "name": "Distance vers {scanner_name}"
+      },
+      "floor": {
+        "name": "Étage"
+      },
+      "in100_adc_voltage": {
+        "name": "Tension ADC IN100"
+      },
+      "in100_temperature": {
+        "name": "Température IN100"
+      },
+      "in100_vcc": {
+        "name": "Tension d'alimentation IN100"
+      },
+      "micro_location": {
+        "name": "Micro-localisation"
+      },
+      "nearby_devices": {
+        "name": "Appareils à proximité"
+      },
+      "nearest_rssi": {
+        "name": "RSSI le plus proche"
+      },
+      "nearest_scanner": {
+        "name": "Scanner le plus proche"
+      },
+      "total_device_count": {
+        "name": "Nombre total d'appareils"
+      },
+      "total_proxy_count": {
+        "name": "Nombre total de proxys"
+      },
+      "unfiltered_distance_to_scanner": {
+        "name": "Distance non filtrée vers {scanner_name}"
+      },
+      "visible_device_count": {
+        "name": "Nombre d'appareils visibles"
+      }
+    }
+  },
+  "exceptions": {
+    "bluetooth_not_available": {
+      "message": "Aucun adaptateur ni proxy Bluetooth n'est disponible pour suivre des appareils privés."
+    },
+    "irk_not_found": {
+      "message": "Aucun appareil correspondant à cet IRK n'est visible actuellement. Vérifiez qu'il est à proximité, allumé et que le Bluetooth est activé."
+    },
+    "irk_not_valid": {
+      "message": "Cela ne ressemble pas à un IRK valide. Il doit faire 16 octets : 32 caractères hexadécimaux, ou base64 finissant par « = »."
+    },
+    "not_loaded": {
+      "message": "Bermuda n'est pas chargé. Configurez l'intégration avant d'appeler ce service."
+    },
+    "unknown": {
+      "message": "Impossible d'enrôler l'appareil à partir de cet IRK. Vérifiez la clé et réessayez."
+    }
+  },
+  "issues": {
+    "scanner_without_area": {
+      "description": "Bermuda nécessite que tous les proxys Bluetooth aient une zone valide assignée pour fonctionner correctement. Assignez une zone en visitant la page de chaque proxy (via `Appareils et services`), et cliquez sur l'icône crayon en haut à droite pour assigner une zone. Les proxys suivants n'ont pas de zone assignée :\n\n{scannerlist}",
+      "title": "Certains proxys Bluetooth n'ont pas de ZONE"
     }
   },
   "options": {
+    "error": {
+      "bluetooth_not_available": "Aucun adaptateur ni proxy Bluetooth n'est disponible pour suivre des appareils privés.",
+      "err_scanner_no_record": "Le scanner sélectionné n'a pas (encore) vu cet appareil.",
+      "irk_not_found": "Aucun appareil correspondant à cet IRK n'est visible actuellement. Vérifiez qu'il est à proximité, allumé et que le Bluetooth est activé.",
+      "irk_not_valid": "Cela ne ressemble pas à un IRK valide (16 octets attendus : 32 caractères hexadécimaux, ou base64 finissant par « = »).",
+      "no_devices": "Aucun appareil Bluetooth n'est actuellement signalé par vos scanners. \nVous devrez résoudre ce problème avant que Bermuda puisse être utile.",
+      "no_scanners": "Vous devez configurer des scanners Bluetooth avant que Bermuda puisse fonctionner. \nUn proxy Bluetooth ESPHome, un proxy Bluetooth Shelly ou un adaptateur Bluetooth local devrait vous permettre de démarrer.",
+      "some_active": "Vous avez au moins quelques appareils actifs, c'est bien.",
+      "unknown": "Impossible d'enrôler l'appareil. Vérifiez l'IRK et réessayez."
+    },
     "step": {
-      "user": {
+      "area_entities": {
         "data": {
-          "binary_sensor": "Capteur binaire activé",
-          "sensor": "Capteur activé",
-          "switch": "Interrupteur activé"
-        }
+          "area_entities": "Entités de présence",
+          "area_entity_distance": "Distance virtuelle par défaut (m)"
+        },
+        "data_description": {
+          "area_entities": "Entités dont la zone est utilisée quand elles sont actives.",
+          "area_entity_distance": "Distance à laquelle la zone déclenchée concourt ; plus basse = bat plus de lectures BLE. Défaut 0,1 m."
+        },
+        "description": "Choisissez des entités Home Assistant (mouvement, occupation, contact…) dont la zone renforce ou remplace la détection BLE. Quand une entité est active, sa zone concourt avec le BLE à une « distance virtuelle » (plus petite = override plus fort).",
+        "title": "Entités de présence par zone"
+      },
+      "area_entities_distance": {
+        "description": "Définissez une distance virtuelle (mètres) par entité — plus petite l'emporte plus facilement sur le BLE. Regroupé par zone :\n\n{area_summary}",
+        "title": "Distance virtuelle par entité"
+      },
+      "enrol_private": {
+        "data": {
+          "irk": "IRK",
+          "name": "Nom (facultatif)"
+        },
+        "data_description": {
+          "irk": "Collez la clé en 32 caractères hexadécimaux, ou en base64 (finissant par « = »). Un préfixe « irk: » est accepté.",
+          "name": "Un nom convivial pour l'appareil suivi. Laissez vide pour utiliser le nom de l'appareil."
+        },
+        "description": "Suivez un iPhone, une Apple Watch ou un autre appareil à vie privée via son **IRK** (Identity Resolving Key). Home Assistant résout sa MAC tournante et Bermuda le suit ensuite automatiquement.\n\n**Où trouver l'IRK**\n- **iOS / watchOS** (nécessite un Mac connecté au même iCloud) : ouvrez *Trousseaux d'accès* → *Éléments locaux* → recherchez `Bluetooth` → sélectionnez l'enregistrement correspondant à la MAC de l'appareil (Réglages › Général › Informations) → *Afficher le mot de passe* → copiez le champ **Remote IRK** (base64).\n- **Android** (rooté) : dans `/data/misc/bluedroid/bt_config.conf`, lisez `LE_LOCAL_KEY_IRK` (inversez l'ordre des octets).\n\nL'appareil doit être à proximité et émettre maintenant, sinon la clé est rejetée.",
+        "title": "Enrôler un appareil privé (IRK)"
+      },
+      "globalopts": {
+        "description": "Réglez le modèle de distance global, les délais de suivi et le lissage RSSI. Ces réglages s'appliquent à tous les appareils suivis.",
+        "sections": {
+          "distance_model": {
+            "data": {
+              "attenuation": "Atténuation — Facteur d'atténuation de l'environnement pour le calcul/calibrage de la distance.",
+              "max_area_radius": "Rayon maximum en mètres pour la détection ZONE simple",
+              "ref_power": "Puissance de référence — RSSI par défaut à 1 mètre de distance, pour le calibrage de la distance."
+            },
+            "data_description": {
+              "attenuation": "Après avoir réglé ref_power à 1 mètre, ajustez l'atténuation pour que les autres distances se lisent correctement — plus ou moins.",
+              "max_area_radius": "Dans la fonctionnalité `AREA` simple, un appareil sera marqué comme étant dans la ZONE de son récepteur le plus proche, s'il se trouve dans ce rayon. Si vous le réglez petit, les appareils passeront à `inconnu` entre les récepteurs, mais s'il est grand, les appareils apparaîtront toujours dans leur zone la plus proche.",
+              "ref_power": "Placez votre balise la plus courante à 1 mètre (3,28') de votre proxy/scanner le plus courant. Ajustez ref_power jusqu'à ce que le capteur de distance affiche une distance minimale (pas moyenne) de 1 mètre."
+            },
+            "description": "Puissance de référence, atténuation et rayon max — la relation RSSI→distance.",
+            "name": "Modèle de distance"
+          },
+          "smoothing": {
+            "data": {
+              "max_velocity": "Vitesse maximale en mètres par seconde — ignorer les lectures impliquant un mouvement plus rapide que cette limite. 3 m/s (10 km/h) est une bonne valeur.",
+              "smoothing_samples": "Échantillons de lissage — combien d'échantillons utiliser pour lisser les lectures de distance."
+            },
+            "data_description": {
+              "max_velocity": "Si une lecture implique qu'un appareil s'éloigne plus rapidement que cela, nous ignorons cette lecture. Les humains marchent normalement à 1,4 m/s, s'ils tiennent des ciseaux, ils se déplacent à 3 m/s.",
+              "smoothing_samples": "Combien d'échantillons moyenner pour le lissage de la distance. Des nombres plus grands ralentissent l'augmentation de la distance. Les distances décroissantes ne sont pas affectées. 10 ou 20 semble bien."
+            },
+            "description": "Nombre d'échantillons et limite de vitesse qui stabilisent les distances.",
+            "name": "Lissage RSSI"
+          },
+          "tracking": {
+            "data": {
+              "devtracker_nothome_timeout": "Délai d'expiration Devtracker en secondes pour considérer un appareil comme `Absent`.",
+              "update_interval": "Intervalle de mise à jour — À quelle fréquence (en secondes) mettre à jour les lectures des capteurs."
+            },
+            "data_description": {
+              "devtracker_nothome_timeout": "Combien de temps attendre avant de marquer les entités device_tracker comme `absent` après avoir cessé de voir les annonces. 30 à 300 secondes est probablement une bonne valeur.",
+              "update_interval": "Le raccourcissement des distances déclenchera toujours immédiatement, mais l'augmentation des distances sera limitée par cela pour réduire la croissance de votre base de données."
+            },
+            "description": "Délai avant « Absent » et fréquence de rafraîchissement des capteurs.",
+            "name": "Suivi des appareils"
+          }
+        },
+        "title": "Paramètres globaux"
+      },
+      "init": {
+        "description": "Bermuda peut actuellement voir :\n- {device_counter_active} actifs sur {device_counter_devices} appareils Bluetooth.\n- {scanner_counter_active} actifs sur {scanner_counter_scanners} scanners Bluetooth.\n\n{status}",
+        "menu_options": {
+          "area_entities": "Entités de présence par zone",
+          "enrol_private": "Enrôler un appareil privé (IRK)",
+          "globalopts": "Options globales",
+          "scan": "Scanner les nouveaux appareils",
+          "selectdevices": "Choisir les appareils à suivre"
+        },
+        "title": "Configurer Bermuda"
+      },
+      "scan": {
+        "data": {
+          "add": "Appareils à suivre",
+          "refresh": "Rafraîchir la liste"
+        },
+        "data_description": {
+          "add": "Seuls les appareils pas encore suivis sont listés, du signal le plus fort (dBm) au plus faible.",
+          "refresh": "Cochez et validez pour re-scanner sans rien enregistrer — la liste se met à jour."
+        },
+        "description": "{count} appareil(s) détecté(s) et pas encore suivi(s), du signal le plus fort au plus faible. Cochez ceux à suivre — ils sont ajoutés à vos appareils suivis.",
+        "title": "Scanner les nouveaux appareils"
+      },
+      "selectdevices": {
+        "data": {
+          "devices": "Appareils à suivre",
+          "exclude": "Exclure ceux-ci",
+          "track_categories": "Suivre des catégories entières"
+        },
+        "data_description": {
+          "devices": "Choisissez les appareils BLE que Bermuda doit suivre. Tapez pour rechercher. Les iBeacons et MAC aléatoires sont étiquetés ; les appareils suivis mais non détectés actuellement apparaissent en (saved).",
+          "exclude": "Ne jamais suivre ceux-ci, même s'ils correspondent à une catégorie suivie.",
+          "track_categories": "Suit automatiquement tout appareil d'une catégorie sélectionnée (ex. tous les iBeacons ou tous les appareils nommés)."
+        },
+        "description": "Bermuda ne crée des entités de suivi que pour les appareils sélectionnés ici. Si la liste est vide, aucun appareil Bluetooth n'est encore détecté.",
+        "title": "Sélectionner les appareils"
       }
+    }
+  },
+  "selector": {
+    "track_category": {
+      "options": {
+        "amazfit": "Amazfit / Mi",
+        "apple": "Apple",
+        "garmin": "Garmin",
+        "google": "Google",
+        "ibeacon": "iBeacons",
+        "irk": "Appareils privés (IRK)",
+        "microsoft": "Microsoft",
+        "named": "Appareils nommés",
+        "public": "MAC publique",
+        "random": "MAC aléatoire",
+        "samsung": "Samsung"
+      }
+    }
+  },
+  "services": {
+    "calibrate_location": {
+      "description": "Enregistre l'emplacement actuel d'un appareil suivi comme micro-localisation nommée (p. ex. « Crochet à clés »), en capturant l'empreinte RF de chaque proxy qui l'entend. Relancer avec le même appareil et le même nom recalibre cet emplacement.",
+      "fields": {
+        "area": {
+          "description": "Zone Home Assistant optionnelle à associer à cet emplacement. Par défaut, la zone actuelle de l'appareil.",
+          "name": "Zone"
+        },
+        "device": {
+          "description": "L'appareil/objet suivi à calibrer. Un nom d'appareil, une MAC/UUID, ou un identifiant d'appareil Home Assistant.",
+          "name": "Appareil"
+        },
+        "name": {
+          "description": "Le nom de cet emplacement, p. ex. « Crochet à clés » ou « Tiroir ».",
+          "name": "Nom de l'emplacement"
+        }
+      },
+      "name": "Calibrer une micro-localisation"
+    },
+    "dump_devices": {
+      "description": "Renvoie la structure de données interne, éventuellement limitée aux adresses données. Inclut le RSSI et d'autres informations de chaque scanner",
+      "fields": {
+        "addresses": {
+          "description": "Une liste facultative d'adresses MAC séparées par des espaces pour lesquelles renvoyer des informations. Si vide, renvoie toutes les adresses.",
+          "name": "Adresses"
+        },
+        "configured_devices": {
+          "description": "Sélectionnez pour inclure uniquement les scanners et les appareils configurés dans la sortie.",
+          "name": "Appareils configurés"
+        },
+        "redact": {
+          "description": "Définir sur TRUE pour s'assurer que les adresses MAC sont masquées dans la sortie pour la confidentialité.",
+          "name": "Masquer"
+        }
+      },
+      "name": "Exporter les appareils"
+    },
+    "enrol_private_device": {
+      "description": "Suivez un appareil à vie privée (iPhone, Apple Watch, …) via son IRK. Transmet la clé à l'intégration Private BLE Device de Home Assistant, qui résout la MAC tournante ; Bermuda le suit ensuite automatiquement. L'appareil doit être à proximité et émettre pour que la clé soit acceptée.",
+      "fields": {
+        "irk": {
+          "description": "Identity Resolving Key, en 32 caractères hexadécimaux ou base64 (finissant par « = »).",
+          "name": "IRK"
+        },
+        "name": {
+          "description": "Nom convivial facultatif pour l'appareil suivi.",
+          "name": "Nom"
+        }
+      },
+      "name": "Enrôler un appareil privé"
+    },
+    "get_config": {
+      "description": "Renvoie la calibration actuelle de Bermuda, les appareils suivis, les scanners et le nombre de micro-localisations.",
+      "name": "Obtenir la configuration"
+    },
+    "list_locations": {
+      "description": "Liste les micro-localisations enregistrées, éventuellement filtrées sur un appareil.",
+      "fields": {
+        "device": {
+          "description": "Appareil optionnel pour filtrer. Laisser vide pour lister tous les emplacements enregistrés.",
+          "name": "Appareil"
+        }
+      },
+      "name": "Lister les micro-localisations"
+    },
+    "remove_location": {
+      "description": "Supprime une micro-localisation enregistrée d'un appareil, par son nom.",
+      "fields": {
+        "device": {
+          "description": "L'appareil auquel appartient l'emplacement.",
+          "name": "Appareil"
+        },
+        "name": {
+          "description": "Le nom de l'emplacement à supprimer.",
+          "name": "Nom de l'emplacement"
+        }
+      },
+      "name": "Supprimer une micro-localisation"
+    },
+    "rename_location": {
+      "description": "Renomme une micro-localisation enregistrée d'un appareil.",
+      "fields": {
+        "device": {
+          "description": "L'appareil auquel appartient l'emplacement.",
+          "name": "Appareil"
+        },
+        "name": {
+          "description": "Le nom actuel de l'emplacement.",
+          "name": "Nom actuel"
+        },
+        "new_name": {
+          "description": "Le nouveau nom de l'emplacement.",
+          "name": "Nouveau nom"
+        }
+      },
+      "name": "Renommer une micro-localisation"
+    },
+    "set_global_calibration": {
+      "description": "Définit la puissance de référence et/ou l'atténuation globales utilisées pour les estimations de distance.",
+      "fields": {
+        "attenuation": {
+          "description": "Facteur d'atténuation environnementale utilisé au-delà de 1 m.",
+          "name": "Atténuation"
+        },
+        "ref_power": {
+          "description": "RSSI (dBm) mesuré à 1 m. Plus négatif donne des distances estimées plus courtes.",
+          "name": "Puissance de référence"
+        }
+      },
+      "name": "Définir la calibration globale"
+    },
+    "set_scanner_offset": {
+      "description": "Définit un décalage RSSI par scanner (l'étape de calibration par proxy, en service).",
+      "fields": {
+        "rssi_offset": {
+          "description": "Décalage ajouté au RSSI de ce scanner. Négatif augmente la distance, positif la réduit.",
+          "name": "Décalage RSSI"
+        },
+        "scanner": {
+          "description": "Le scanner/proxy à ajuster. Un nom ou une adresse de scanner.",
+          "name": "Scanner"
+        }
+      },
+      "name": "Définir le décalage RSSI d'un scanner"
+    },
+    "track_device": {
+      "description": "Ajoute un appareil Bluetooth aux appareils suivis par Bermuda (crée ses capteurs).",
+      "fields": {
+        "device": {
+          "description": "L'appareil à suivre. Un nom d'appareil, une MAC/UUID, ou un identifiant d'appareil Home Assistant.",
+          "name": "Appareil"
+        }
+      },
+      "name": "Suivre un appareil"
+    },
+    "untrack_device": {
+      "description": "Retire un appareil des appareils suivis par Bermuda.",
+      "fields": {
+        "device": {
+          "description": "L'appareil à ne plus suivre.",
+          "name": "Appareil"
+        }
+      },
+      "name": "Ne plus suivre un appareil"
+    },
+    "where_is": {
+      "description": "Indique la zone actuelle d'un appareil et la micro-localisation correspondante, avec un indice de confiance.",
+      "fields": {
+        "device": {
+          "description": "L'appareil/objet à localiser. Un nom d'appareil, une MAC/UUID, ou un identifiant d'appareil Home Assistant.",
+          "name": "Appareil"
+        }
+      },
+      "name": "Où se trouve"
     }
   }
 }

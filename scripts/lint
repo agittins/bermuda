@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-#source venv/bin/activate
-
-#ruff check . --fix
-
-pre-commit run --all-files --show-diff-on-failure --color=always
+# prek is a drop-in Rust replacement for pre-commit (faster).
+# Fall back to pre-commit if prek is not installed.
+if command -v prek >/dev/null 2>&1; then
+    prek run --all-files --show-diff-on-failure --color=always
+else
+    pre-commit run --all-files --show-diff-on-failure --color=always
+fi

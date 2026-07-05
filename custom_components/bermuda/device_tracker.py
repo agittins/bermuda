@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.device_tracker.config_entry import BaseTrackerEntity
+try:
+    # Pre-2024.9 HA location. mypy resolves this branch statically against the
+    # installed HA version, where it no longer exports BaseTrackerEntity here, so
+    # this appears unreachable to mypy even though it is live on older cores.
+    from homeassistant.components.device_tracker import BaseTrackerEntity  # type: ignore[attr-defined]
+except ImportError:
+    from homeassistant.components.device_tracker.config_entry import BaseTrackerEntity
 from homeassistant.components.device_tracker.const import SourceType
 from homeassistant.const import STATE_HOME
 from homeassistant.core import HomeAssistant, callback
@@ -12,6 +18,8 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import SIGNAL_DEVICE_NEW
 from .entity import BermudaEntity
+
+PARALLEL_UPDATES = 0
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -64,15 +72,15 @@ async def async_setup_entry(
     # await coordinator.async_config_entry_first_refresh()
 
 
-class BermudaDeviceTracker(BermudaEntity, BaseTrackerEntity):
+class BermudaDeviceTracker(BermudaEntity, BaseTrackerEntity):  # type: ignore[misc]
     """A trackable Bermuda Device."""
 
     _attr_should_poll = False
     _attr_has_entity_name = True
-    _attr_name = "Bermuda Tracker"
+    _attr_translation_key = "bermuda_tracker"
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str | None:
         """
         "Uniquely identify this sensor so that it gets stored in the entity_registry,
         and can be maintained / renamed etc by the user.

@@ -1,0 +1,486 @@
+{
+  "config": {
+    "abort": {
+      "single_instance_allowed": "Only a single instance is allowed."
+    },
+    "step": {
+      "user": {
+        "description": "If you need help with the configuration have a look at our [GitHub page]({github_url})",
+        "title": "Bermuda BLE Trilateration"
+      }
+    }
+  },
+  "entity": {
+    "device_tracker": {
+      "bermuda_tracker": {
+        "name": "Bermuda Tracker"
+      }
+    },
+    "number": {
+      "ref_power": {
+        "name": "Reference Power at 1m (0 for default)"
+      }
+    },
+    "sensor": {
+      "active_proxy_count": {
+        "name": "Active proxy count"
+      },
+      "area": {
+        "name": "Area"
+      },
+      "area_last_seen": {
+        "name": "Area Last Seen"
+      },
+      "area_switch_diagnostic": {
+        "name": "Area Switch Diagnostic"
+      },
+      "distance": {
+        "name": "Distance"
+      },
+      "distance_to_scanner": {
+        "name": "Distance to {scanner_name}"
+      },
+      "floor": {
+        "name": "Floor"
+      },
+      "nearest_rssi": {
+        "name": "Nearest RSSI"
+      },
+      "nearest_scanner": {
+        "name": "Nearest Scanner"
+      },
+      "total_device_count": {
+        "name": "Total device count"
+      },
+      "total_proxy_count": {
+        "name": "Total proxy count"
+      },
+      "unfiltered_distance_to_scanner": {
+        "name": "Unfiltered Distance to {scanner_name}"
+      },
+      "visible_device_count": {
+        "name": "Visible device count"
+      },
+      "nearby_devices": {
+        "name": "Nearby devices"
+      },
+      "micro_location": {
+        "name": "Micro-location"
+      },
+      "in100_vcc": {
+        "name": "IN100 supply voltage"
+      },
+      "in100_temperature": {
+        "name": "IN100 temperature"
+      },
+      "in100_adc_voltage": {
+        "name": "IN100 ADC voltage"
+      }
+    },
+    "select": {
+      "mobility_type": {
+        "name": "Mobility Type",
+        "state": {
+          "moving": "Moving",
+          "stationary": "Stationary"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Bermuda is not loaded. Set up the integration before calling this service."
+    },
+    "irk_not_valid": {
+      "message": "That doesn't look like a valid IRK. It must be 16 bytes: 32 hex characters, or base64 ending in '='."
+    },
+    "irk_not_found": {
+      "message": "No device matching that IRK is currently visible. Make sure it is nearby, powered on, and Bluetooth is enabled."
+    },
+    "bluetooth_not_available": {
+      "message": "No Bluetooth adapter or proxy is available to track private devices."
+    },
+    "unknown": {
+      "message": "Could not enrol the device from that IRK. Check the key and try again."
+    }
+  },
+  "issues": {
+    "scanner_without_area": {
+      "description": "Bermuda requires all bluetooth proxies to have a valid area assigned in order to work correctly. Assign an area by visiting each proxy's device page (via `Devices and Services`), and click the pencil icon in the top-right to assign an area. The following proxies are missing an area assignment:\n\n{scannerlist}",
+      "title": "Some Bluetooth Proxies don't have an AREA"
+    }
+  },
+  "options": {
+    "error": {
+      "bluetooth_not_available": "No Bluetooth adapter or proxy is available to track private devices.",
+      "err_scanner_no_record": "The selected scanner hasn't (yet) seen this device.",
+      "irk_not_found": "No device matching that IRK is currently visible. Make sure it's nearby, powered on, and Bluetooth is enabled.",
+      "irk_not_valid": "That doesn't look like a valid IRK (need 16 bytes: 32 hex characters, or base64 ending in '=').",
+      "no_devices": "No bluetooth devices are actively being reported from your scanners. \nYou will need to solve this before Bermuda can be of much help.",
+      "no_scanners": "You need to configure some bluetooth scanners before Bermuda will have anything to work with. \nAny one of esphome bluetooth_proxy, Shelly bluetooth proxy or local bluetooth adaptor should get you started.",
+      "some_active": "You have at least some active devices, this is good.",
+      "unknown": "Could not enrol the device. Check the IRK and try again."
+    },
+    "step": {
+      "globalopts": {
+        "title": "Global settings",
+        "description": "Tune the global distance model, device-tracking timeouts and RSSI smoothing. These apply to every tracked device.",
+        "sections": {
+          "distance_model": {
+            "name": "Distance model",
+            "description": "Reference power, attenuation and max radius — the RSSI-to-distance relationship.",
+            "data": {
+              "ref_power": "Reference Power - Default rssi at 1 metre distance, for distance calibration.",
+              "attenuation": "Attenuation - Environment attenuation factor for distance calculation/calibration.",
+              "max_area_radius": "Max radius in metres for simple AREA detection"
+            },
+            "data_description": {
+              "ref_power": "Put your most-common beacon 1 metre (3.28') away from your most-common proxy / scanner. Adjust ref_power until the distance sensor shows a lowest (not average) distance of 1 metre.",
+              "attenuation": "After setting ref_power at 1 metre, adjust attenuation so that other distances read correctly - more or less.",
+              "max_area_radius": "In the simple `AREA` feature, a device will be marked as being in the AREA of it's closest receiver, if inside this radius. If you set it small, devices will go to `unknown` between receivers, but if large devices will always appear as in their closest Area."
+            }
+          },
+          "tracking": {
+            "name": "Device tracking",
+            "description": "How long until a device is reported Not Home, and how often sensors refresh.",
+            "data": {
+              "devtracker_nothome_timeout": "Devtracker Timeout in seconds to consider a device as `Not Home`.",
+              "update_interval": "Update Interval - How often (in seconds) to update sensor readings."
+            },
+            "data_description": {
+              "devtracker_nothome_timeout": "How quickly to mark device_tracker entities as `not_home` after we stop seeing advertisements. 30 to 300 seconds is probably good.",
+              "update_interval": "Shortening distances will still trigger immediately, but increasing distances will be rate limited by this to reduce how much your database grows."
+            }
+          },
+          "smoothing": {
+            "name": "RSSI smoothing",
+            "description": "Sample count and velocity clamp that stabilise distance readings.",
+            "data": {
+              "smoothing_samples": "Smoothing Samples - how many samples to use for smoothing distance readings.",
+              "max_velocity": "Max Velocity in metres per second - ignore readings that imply movement away faster than this limit. 3m/s (10km/h) is good."
+            },
+            "data_description": {
+              "smoothing_samples": "How many samples to average distance smoothing. Bigger numbers make for slower distance increases. Shortening distances are not affected. 10 or 20 seems good.",
+              "max_velocity": "If a reading implies a device is moving away faster than this, we ignore that reading. Humans normally walk at 1.4m/s, if they're holding scissors they move at 3m/s."
+            }
+          }
+        }
+      },
+      "init": {
+        "description": "Bermuda can currently see:\n- {device_counter_active} active out of {device_counter_devices} bluetooth devices.\n- {scanner_counter_active} active out of {scanner_counter_scanners} bluetooth scanner devices.\n\n{status}",
+        "title": "Configure Bermuda",
+        "menu_options": {
+          "globalopts": "Global options",
+          "selectdevices": "Select devices to track",
+          "enrol_private": "Enrol a private device (IRK)",
+          "area_entities": "Area presence entities",
+          "scan": "Scan for new devices"
+        }
+      },
+      "scan": {
+        "title": "Scan for new devices",
+        "description": "{count} nearby device(s) not yet tracked, strongest signal first. Tick the ones to track — they are added to your tracked devices.",
+        "data": {
+          "add": "Devices to start tracking",
+          "refresh": "Refresh the list"
+        },
+        "data_description": {
+          "add": "Only devices that are not already tracked are listed, strongest signal (dBm) first.",
+          "refresh": "Tick this and submit to re-scan without saving — the device list refreshes."
+        }
+      },
+      "selectdevices": {
+        "data": {
+          "devices": "Devices to track",
+          "track_categories": "Track whole categories",
+          "exclude": "Exclude these"
+        },
+        "data_description": {
+          "devices": "Pick the BLE devices Bermuda should track. Type to search. iBeacons and random MACs are labelled; devices you track but that aren't currently seen show as (saved).",
+          "track_categories": "Auto-track every device matching a selected category (e.g. all iBeacons or all named devices).",
+          "exclude": "Never track these, even if they match a tracked category."
+        },
+        "description": "Bermuda only creates tracker entities for the devices you select here. If the list is empty, no Bluetooth devices are being seen yet.",
+        "title": "Select Devices"
+      },
+      "enrol_private": {
+        "title": "Enrol a private device (IRK)",
+        "description": "Track an iPhone, Apple Watch or other privacy device by its **IRK** (Identity Resolving Key). Home Assistant resolves its rotating MAC and Bermuda then tracks it automatically.\n\n**Where to find the IRK**\n- **iOS / watchOS** (needs a Mac signed into the same iCloud): open *Keychain Access* → *Local Items* → search `Bluetooth` → pick the record matching the device MAC (Settings › General › About) → *Show password* → copy the **Remote IRK** (base64).\n- **Android** (rooted): in `/data/misc/bluedroid/bt_config.conf` read `LE_LOCAL_KEY_IRK` (reverse the byte order).\n\nThe device must be nearby and advertising right now, otherwise the key is rejected.",
+        "data": {
+          "irk": "IRK",
+          "name": "Name (optional)"
+        },
+        "data_description": {
+          "irk": "Paste the key as 32 hex characters, or base64 (ending in '='). An 'irk:' prefix is fine.",
+          "name": "A friendly name for the tracked device. Leave blank to use the device's own name."
+        }
+      },
+      "area_entities": {
+        "title": "Area presence entities",
+        "description": "Pick Home Assistant entities (motion, occupancy, contact, ...) whose area should reinforce or override BLE detection. When an entity is on, its area competes with BLE at a 'virtual distance' (smaller = stronger override).",
+        "data": {
+          "area_entities": "Presence entities",
+          "area_entity_distance": "Default virtual distance (m)"
+        },
+        "data_description": {
+          "area_entities": "Entities whose area is used while they are on.",
+          "area_entity_distance": "Distance the triggered area competes at; lower beats more BLE readings. Default 0.1 m."
+        }
+      },
+      "area_entities_distance": {
+        "title": "Per-entity virtual distance",
+        "description": "Set a virtual distance (metres) per entity — smaller wins over BLE more easily. Grouped by area:\n\n{area_summary}"
+      }
+    }
+  },
+  "services": {
+    "dump_devices": {
+      "description": "Returns the internal data structure, optionally limited to the given address(es). Includes the rssi and other info from each scanner",
+      "fields": {
+        "addresses": {
+          "description": "An optional space-separated list of MAC addresses to return info on. If blank get all addresses.",
+          "name": "Addresses"
+        },
+        "configured_devices": {
+          "description": "Select to include only scanners and configured devices in the output.",
+          "name": "Configured Devices"
+        },
+        "redact": {
+          "description": "Set to TRUE to ensure MAC addresses are redacted in output for privacy.",
+          "name": "Redact"
+        }
+      },
+      "name": "Dump Devices"
+    },
+    "enrol_private_device": {
+      "name": "Enrol a private device",
+      "description": "Track a privacy device (iPhone, Apple Watch, …) by its IRK. Hands the key to Home Assistant's Private BLE Device integration, which resolves the rotating MAC; Bermuda then tracks it automatically. The device must be nearby and advertising for the key to be accepted.",
+      "fields": {
+        "irk": {
+          "name": "IRK",
+          "description": "Identity Resolving Key, as 32 hex characters or base64 (ending in '=')."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Optional friendly name for the tracked device."
+        }
+      }
+    },
+    "calibrate_location": {
+      "name": "Calibrate micro-location",
+      "description": "Record a tracked device's current spot as a named micro-location (eg 'Key hook'), by snapshotting the RF fingerprint from every proxy that can hear it. Re-running with the same device and name re-calibrates that spot.",
+      "fields": {
+        "device": {
+          "name": "Device",
+          "description": "The tracked device/item to calibrate. A device name, MAC/UUID, or Home Assistant device id."
+        },
+        "name": {
+          "name": "Location name",
+          "description": "The name for this spot, eg 'Key hook' or 'Sidetable drawer'."
+        },
+        "area": {
+          "name": "Area",
+          "description": "Optional Home Assistant area to associate with this spot. Defaults to the device's current area."
+        }
+      }
+    },
+    "where_is": {
+      "name": "Where is",
+      "description": "Report a device's current area and matched micro-location, with confidence.",
+      "fields": {
+        "device": {
+          "name": "Device",
+          "description": "The device/item to locate. A device name, MAC/UUID, or Home Assistant device id."
+        }
+      }
+    },
+    "list_locations": {
+      "name": "List micro-locations",
+      "description": "List saved micro-locations, optionally filtered to one device.",
+      "fields": {
+        "device": {
+          "name": "Device",
+          "description": "Optional device to filter by. Leave blank to list all saved spots."
+        }
+      }
+    },
+    "remove_location": {
+      "name": "Remove micro-location",
+      "description": "Delete a device's saved micro-location by name.",
+      "fields": {
+        "device": {
+          "name": "Device",
+          "description": "The device the spot belongs to."
+        },
+        "name": {
+          "name": "Location name",
+          "description": "The name of the spot to remove."
+        }
+      }
+    },
+    "rename_location": {
+      "name": "Rename micro-location",
+      "description": "Rename a device's saved micro-location.",
+      "fields": {
+        "device": {
+          "name": "Device",
+          "description": "The device the spot belongs to."
+        },
+        "name": {
+          "name": "Current name",
+          "description": "The current name of the spot."
+        },
+        "new_name": {
+          "name": "New name",
+          "description": "The new name for the spot."
+        }
+      }
+    },
+    "track_device": {
+      "name": "Track device",
+      "description": "Add a Bluetooth device to Bermuda's tracked devices (creates its sensors).",
+      "fields": {
+        "device": {
+          "name": "Device",
+          "description": "The device to track. A device name, MAC/UUID, or Home Assistant device id."
+        }
+      }
+    },
+    "untrack_device": {
+      "name": "Untrack device",
+      "description": "Remove a device from Bermuda's tracked devices.",
+      "fields": {
+        "device": {
+          "name": "Device",
+          "description": "The device to stop tracking."
+        }
+      }
+    },
+    "set_global_calibration": {
+      "name": "Set global calibration",
+      "description": "Set the global reference power and/or attenuation used for distance estimates.",
+      "fields": {
+        "ref_power": {
+          "name": "Reference power",
+          "description": "RSSI (dBm) measured at 1 metre. More negative means shorter estimated distances."
+        },
+        "attenuation": {
+          "name": "Attenuation",
+          "description": "Environmental attenuation factor used beyond 1 metre."
+        }
+      }
+    },
+    "set_scanner_offset": {
+      "name": "Set scanner RSSI offset",
+      "description": "Set a per-scanner RSSI offset (the per-proxy calibration step, as a service).",
+      "fields": {
+        "scanner": {
+          "name": "Scanner",
+          "description": "The scanner/proxy to adjust. A scanner name or address."
+        },
+        "rssi_offset": {
+          "name": "RSSI offset",
+          "description": "Offset added to this scanner's RSSI. Negative increases distance, positive decreases it."
+        }
+      }
+    },
+    "get_config": {
+      "name": "Get configuration",
+      "description": "Return Bermuda's current calibration, tracked devices, scanners and micro-location count."
+    }
+  },
+  "config_subentries": {
+    "calibration": {
+      "entry_type": "Scanner calibration",
+      "initiate_flow": {
+        "user": "Add scanner offset",
+        "reconfigure": "Edit scanner offset"
+      },
+      "abort": {
+        "no_scanners": "Every known scanner already has a calibration offset."
+      },
+      "step": {
+        "user": {
+          "title": "Per-scanner RSSI offset",
+          "description": "Add a dB offset for a scanner so its readings line up with the others.",
+          "data": {
+            "scanner": "Scanner",
+            "rssi_offset": "RSSI offset (dB)"
+          },
+          "data_description": {
+            "scanner": "The Bluetooth proxy to calibrate.",
+            "rssi_offset": "Added to this scanner's RSSI before distance is computed. Positive = treated as stronger/closer."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit RSSI offset",
+          "description": "Adjust the dB offset for {scanner}.",
+          "data": {
+            "rssi_offset": "RSSI offset (dB)"
+          },
+          "data_description": {
+            "rssi_offset": "Added to this scanner's RSSI before distance is computed."
+          }
+        }
+      }
+    },
+    "device": {
+      "entry_type": "Tracked device",
+      "initiate_flow": {
+        "user": "Enrol a device",
+        "reconfigure": "Edit device"
+      },
+      "abort": {
+        "no_devices": "Every discovered device is already enrolled."
+      },
+      "step": {
+        "user": {
+          "title": "Enrol a device",
+          "description": "Track a device with its own name, reference power and away timeout.",
+          "data": {
+            "address": "Device",
+            "name": "Name (optional)",
+            "ref_power": "Reference power (rssi @ 1 m)",
+            "devtracker_nothome_timeout": "Away timeout (s)"
+          },
+          "data_description": {
+            "name": "Overrides the advertised name (a Home Assistant rename still wins).",
+            "ref_power": "Per-device rssi at 1 m. Overrides the global value at startup.",
+            "devtracker_nothome_timeout": "Seconds without a reading before this device is Not Home."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit device",
+          "description": "Adjust the enrolment for {device}.",
+          "data": {
+            "name": "Name (optional)",
+            "ref_power": "Reference power (rssi @ 1 m)",
+            "devtracker_nothome_timeout": "Away timeout (s)"
+          },
+          "data_description": {
+            "name": "Overrides the advertised name (a Home Assistant rename still wins).",
+            "ref_power": "Per-device rssi at 1 m. Overrides the global value at startup.",
+            "devtracker_nothome_timeout": "Seconds without a reading before this device is Not Home."
+          }
+        }
+      }
+    }
+  },
+  "selector": {
+    "track_category": {
+      "options": {
+        "ibeacon": "iBeacons",
+        "irk": "Private (IRK) devices",
+        "named": "Named devices",
+        "apple": "Apple",
+        "samsung": "Samsung",
+        "google": "Google",
+        "garmin": "Garmin",
+        "amazfit": "Amazfit / Mi",
+        "microsoft": "Microsoft",
+        "random": "Random MAC",
+        "public": "Public MAC"
+      }
+    }
+  }
+}
