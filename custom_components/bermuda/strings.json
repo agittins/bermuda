@@ -61,6 +61,9 @@
       "visible_device_count": {
         "name": "Visible device count"
       },
+      "nearby_devices": {
+        "name": "Nearby devices"
+      },
       "micro_location": {
         "name": "Micro-location"
       },
@@ -170,7 +173,18 @@
           "globalopts": "Global options",
           "selectdevices": "Select devices to track",
           "enrol_private": "Enrol a private device (IRK)",
-          "area_entities": "Area presence entities"
+          "area_entities": "Area presence entities",
+          "scan": "Scan for new devices"
+        }
+      },
+      "scan": {
+        "title": "Scan for new devices",
+        "description": "{count} nearby device(s) not yet tracked, strongest signal first. Tick the ones to track — they are added to your tracked devices.",
+        "data": {
+          "add": "Devices to start tracking"
+        },
+        "data_description": {
+          "add": "Only devices that are not already tracked are listed, strongest signal (dBm) first."
         }
       },
       "selectdevices": {

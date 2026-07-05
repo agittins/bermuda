@@ -31,6 +31,7 @@ from .sensor_entities import (
 from .sensor_global import (
     BermudaActiveProxyCount,
     BermudaGlobalSensor,
+    BermudaNearbyDevices,
     BermudaTotalDeviceCount,
     BermudaTotalProxyCount,
     BermudaVisibleDeviceCount,
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
 __all__ = [
     "BermudaActiveProxyCount",
     "BermudaGlobalSensor",
+    "BermudaNearbyDevices",
     "BermudaSensor",
     "BermudaSensorAreaLastSeen",
     "BermudaSensorAreaSwitchReason",
@@ -175,5 +177,6 @@ async def async_setup_entry(
             BermudaActiveProxyCount(coordinator, entry),
             BermudaTotalDeviceCount(coordinator, entry),
             BermudaVisibleDeviceCount(coordinator, entry),
+            BermudaNearbyDevices(coordinator, entry),
         )
     )

@@ -141,6 +141,9 @@
       "micro_location": {
         "name": "Mikroplassering"
       },
+      "nearby_devices": {
+        "name": "Enheter i nærheten"
+      },
       "nearest_rssi": {
         "name": "Nærmeste RSSI"
       },
@@ -274,9 +277,20 @@
           "area_entities": "Tilstedeværelsesentiteter for område",
           "enrol_private": "Registrer en privat enhet (IRK)",
           "globalopts": "Globale alternativer",
+          "scan": "Søk etter nye enheter",
           "selectdevices": "Velg enheter å spore"
         },
         "title": "Konfigurer Bermuda"
+      },
+      "scan": {
+        "data": {
+          "add": "Enheter å spore"
+        },
+        "data_description": {
+          "add": "Bare enheter som ikke allerede spores, sterkest signal (dBm) først."
+        },
+        "description": "{count} enhet(er) i nærheten som ennå ikke spores, sterkest signal først. Kryss av dem du vil spore — de legges til i de sporede enhetene dine.",
+        "title": "Søk etter nye enheter"
       },
       "selectdevices": {
         "data": {

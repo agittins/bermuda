@@ -141,6 +141,9 @@
       "micro_location": {
         "name": "Micro-localização"
       },
+      "nearby_devices": {
+        "name": "Dispositivos próximos"
+      },
       "nearest_rssi": {
         "name": "RSSI mais próximo"
       },
@@ -274,9 +277,20 @@
           "area_entities": "Entidades de presença por área",
           "enrol_private": "Registar um dispositivo privado (IRK)",
           "globalopts": "Opções globais",
+          "scan": "Procurar novos dispositivos",
           "selectdevices": "Selecionar dispositivos a monitorizar"
         },
         "title": "Configurar o Bermuda"
+      },
+      "scan": {
+        "data": {
+          "add": "Dispositivos a seguir"
+        },
+        "data_description": {
+          "add": "Apenas dispositivos ainda não seguidos, sinal mais forte (dBm) primeiro."
+        },
+        "description": "{count} dispositivo(s) próximo(s) ainda não seguido(s), sinal mais forte primeiro. Marque os que quer seguir — são adicionados aos seus dispositivos seguidos.",
+        "title": "Procurar novos dispositivos"
       },
       "selectdevices": {
         "data": {

@@ -21,12 +21,14 @@ from custom_components.bermuda.const import (
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     BDADDR_TYPE_RANDOM_STATIC,
+    NEARBY_MAX_DEVICES,
 )
 from custom_components.bermuda.device_tracker import BermudaDeviceTracker
 from custom_components.bermuda.entity import BermudaEntity, BermudaGlobalEntity
 from custom_components.bermuda.number import BermudaNumber
 from custom_components.bermuda.sensor import (
     BermudaActiveProxyCount,
+    BermudaNearbyDevices,
     BermudaSensor,
     BermudaSensorAreaLastSeen,
     BermudaSensorAreaSwitchReason,
@@ -689,6 +691,76 @@ def test_global_entity_device_info():
     """The global entity groups counters under the single BERMUDA_GLOBAL identifier."""
     info = _make_entity(BermudaGlobalEntity).device_info
     assert info["name"] == "Bermuda Global"
+
+
+# --------------------------------------------------------------------------- #
+# BermudaNearbyDevices (discovery / scanner sensor)                            #
+# --------------------------------------------------------------------------- #
+
+
+def _nearby_device(**overrides):
+    """A minimal device stand-in for the nearby-devices sensor."""
+    base = {
+        "is_scanner": False,
+        "last_seen": monotonic_time_coarse(),
+        "address": "aa:bb:cc:dd:ee:ff",
+        "name": "thing",
+        "manufacturer": "Acme",
+        "category": "apple",
+        "area_rssi": -60.0,
+        "area_distance": 2.0,
+        "area_name": "Kitchen",
+        "area_advert": SimpleNamespace(name="proxy1"),
+        "create_sensor": False,
+    }
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def test_nearby_devices_native_value_counts_recent_non_scanners():
+    """State counts only recently-heard, non-scanner devices."""
+    ent = _make_entity(BermudaNearbyDevices)
+    ent.coordinator = MagicMock()
+    ent.coordinator.devices = {
+        "a": _nearby_device(address="a"),
+        "b": _nearby_device(address="b"),
+        "scan": _nearby_device(address="scan", is_scanner=True),  # excluded
+        "old": _nearby_device(address="old", last_seen=monotonic_time_coarse() - 100),  # stale
+    }
+    assert ent.native_value == 2
+
+
+def test_nearby_devices_attributes_ranked_by_rssi():
+    """The devices attribute is ranked strongest-signal first with the expected fields."""
+    ent = _make_entity(BermudaNearbyDevices)
+    ent.coordinator = MagicMock()
+    ent.coordinator.devices = {
+        "weak": _nearby_device(address="11:11:11:11:11:11", area_rssi=-90.0),
+        "strong": _nearby_device(address="22:22:22:22:22:22", area_rssi=-40.0),
+        "none": _nearby_device(address="33:33:33:33:33:33", area_rssi=None),
+    }
+    rows = ent.extra_state_attributes["devices"]
+    assert [r["address"] for r in rows] == [
+        "22:22:22:22:22:22",  # -40 strongest
+        "11:11:11:11:11:11",  # -90
+        "33:33:33:33:33:33",  # no rssi -> last
+    ]
+    assert rows[0]["rssi"] == -40
+    assert rows[0]["manufacturer"] == "Acme"
+    assert rows[0]["category"] == "apple"
+    assert rows[0]["scanner"] == "proxy1"
+    assert rows[0]["tracked"] is False
+
+
+def test_nearby_devices_attributes_capped():
+    """The list is capped at NEARBY_MAX_DEVICES entries."""
+    ent = _make_entity(BermudaNearbyDevices)
+    ent.coordinator = MagicMock()
+    ent.coordinator.devices = {
+        str(i): _nearby_device(address=f"aa:aa:aa:aa:aa:{i:02x}", area_rssi=-float(i))
+        for i in range(NEARBY_MAX_DEVICES + 10)
+    }
+    assert len(ent.extra_state_attributes["devices"]) == NEARBY_MAX_DEVICES
 
 
 # --------------------------------------------------------------------------- #

@@ -172,12 +172,58 @@ class BermudaOptionsFlowHandler(OptionsFlow):
         return self.async_show_menu(
             step_id="init",
             menu_options=[
+                "scan",
                 "globalopts",
                 "selectdevices",
                 "enrol_private",
                 "area_entities",
             ],
             description_placeholders=messages,
+        )
+
+    async def async_step_scan(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """
+        Simple "scan" step: pick from nearby, not-yet-tracked devices to start tracking.
+
+        A deliberately minimal alternative to the full selectdevices step: it only
+        lists devices that are NOT already tracked, strongest signal first, and
+        appends whatever you tick to the tracked list (it never removes anything).
+        """
+        coordinator = self.config_entry.runtime_data.coordinator
+        if user_input is not None:
+            chosen = [a.upper() for a in user_input.get("add", [])]
+            if chosen:
+                current = [a.upper() for a in self.options.get(CONF_DEVICES, []) if isinstance(a, str)]
+                # Append + de-duplicate while preserving order.
+                self.options[CONF_DEVICES] = list(dict.fromkeys(current + chosen))
+            return await self._update_options()
+
+        tracked = {a.upper() for a in self.options.get(CONF_DEVICES, []) if isinstance(a, str)}
+        stale_cutoff = monotonic_time_coarse() - (60 * 60 * 2)  # drop random MACs unseen >2h
+        ranked: list[tuple[float, SelectOptionDict]] = []
+        for device in coordinator.devices.values():
+            addr = device.address.upper()
+            # Skip proxies, self-configuring Private BLE, and anything already tracked.
+            if device.is_scanner or device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
+                continue
+            if addr in tracked or device.create_sensor:
+                continue
+            if device.address_type == BDADDR_TYPE_RANDOM_RESOLVABLE and device.last_seen < stale_cutoff:
+                continue
+            rssi = device.area_rssi
+            manuf = f" · {device.manufacturer}" if device.manufacturer else ""
+            signal = f"{rssi:.0f}dBm" if rssi is not None else "—"
+            label = f"{signal} · {device.name}{manuf} · {addr}"
+            ranked.append((rssi if rssi is not None else -9999.0, SelectOptionDict(value=addr, label=label)))
+
+        ranked.sort(key=lambda r: r[0], reverse=True)  # strongest signal first
+        options_list = [opt for _, opt in ranked]
+        add_selector = SelectSelector(SelectSelectorConfig(options=options_list, multiple=True, sort=False))
+        data_schema = vol.Schema({vol.Optional("add", default=[]): add_selector})
+        return self.async_show_form(
+            step_id="scan",
+            data_schema=data_schema,
+            description_placeholders={"count": str(len(options_list))},
         )
 
     async def async_step_globalopts(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:

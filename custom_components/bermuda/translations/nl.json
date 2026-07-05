@@ -141,6 +141,9 @@
       "micro_location": {
         "name": "Micro-locatie"
       },
+      "nearby_devices": {
+        "name": "Apparaten in de buurt"
+      },
       "nearest_rssi": {
         "name": "Dichtstbijzijnde RSSI"
       },
@@ -274,9 +277,20 @@
           "area_entities": "Aanwezigheidsentiteiten per ruimte",
           "enrol_private": "Privéapparaat registreren (IRK)",
           "globalopts": "Algemene opties",
+          "scan": "Scan naar nieuwe apparaten",
           "selectdevices": "Apparaten selecteren om te volgen"
         },
         "title": "Bermuda configureren"
+      },
+      "scan": {
+        "data": {
+          "add": "Apparaten om te volgen"
+        },
+        "data_description": {
+          "add": "Alleen apparaten die nog niet worden gevolgd, sterkste signaal (dBm) eerst."
+        },
+        "description": "{count} apparaat/apparaten in de buurt die nog niet worden gevolgd, sterkste signaal eerst. Vink aan welke u wilt volgen — ze worden toegevoegd aan uw gevolgde apparaten.",
+        "title": "Scan naar nieuwe apparaten"
       },
       "selectdevices": {
         "data": {

@@ -8,7 +8,7 @@ automations break. These tests pin, byte-for-byte:
 * the per-entity ``unique_id`` suffix scheme (``_floor``, ``_scanner``, ``_rssi``,
   ``_range``, ``_range_raw``, ``_area_switch_reason``, ``_area_last_seen``,
   ``_ref_power``) including the per-scanner ``wifi_mac or address`` fallback,
-* the four fixed global sensor ids,
+* the fixed global sensor ids,
 * the base ``BermudaDevice.unique_id`` derivation (normalised MAC, iBeacon
   ``uuid_major_minor`` and IRK 32-char forms),
 * the ``device_info`` identifiers / connections per device type,
@@ -54,6 +54,7 @@ from custom_components.bermuda.sensor import (
     BermudaSensorScannerRangeRaw,
     BermudaTotalDeviceCount,
     BermudaTotalProxyCount,
+    BermudaNearbyDevices,
     BermudaVisibleDeviceCount,
 )
 
@@ -119,11 +120,12 @@ def test_per_scanner_range_uses_wifi_mac_then_address():
 
 
 def test_global_sensor_unique_ids_are_fixed_literals():
-    """The four global counters use immutable literal ids."""
+    """The global counters use immutable literal ids."""
     assert _make_entity(BermudaTotalProxyCount).unique_id == "BERMUDA_GLOBAL_PROXY_COUNT"
     assert _make_entity(BermudaActiveProxyCount).unique_id == "BERMUDA_GLOBAL_ACTIVE_PROXY_COUNT"
     assert _make_entity(BermudaTotalDeviceCount).unique_id == "BERMUDA_GLOBAL_DEVICE_COUNT"
     assert _make_entity(BermudaVisibleDeviceCount).unique_id == "BERMUDA_GLOBAL_VISIBLE_DEVICE_COUNT"
+    assert _make_entity(BermudaNearbyDevices).unique_id == "BERMUDA_GLOBAL_NEARBY_DEVICES"
 
 
 # --------------------------------------------------------------------------- #
@@ -149,6 +151,7 @@ def test_global_sensor_unique_ids_are_fixed_literals():
         (BermudaActiveProxyCount, "active_proxy_count"),
         (BermudaTotalDeviceCount, "total_device_count"),
         (BermudaVisibleDeviceCount, "visible_device_count"),
+        (BermudaNearbyDevices, "nearby_devices"),
     ],
 )
 def test_translation_keys_are_stable(cls, translation_key):

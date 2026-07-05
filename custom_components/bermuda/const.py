@@ -71,6 +71,14 @@ DISTANCE_INFINITE = 999  # arbitrary distance for infinite/unknown rssi range
 AREA_MAX_AD_AGE: Final = max(DISTANCE_TIMEOUT / 3, UPDATE_INTERVAL * 2)
 # Adverts older than this can not win an area contest.
 
+NEARBY_MAX_AGE: Final = 30.0
+# Seconds within which a device must have been heard to appear in the
+# "Nearby devices" discovery sensor. A little longer than the 10s "active"
+# metric so a device you walk around with does not drop off the list.
+NEARBY_MAX_DEVICES: Final = 20
+# Cap on how many devices the "Nearby devices" sensor lists in its attributes,
+# strongest signal first. Keeps the attribute payload small.
+
 # Beacon-handling constants. Source devices are tracked by MAC-address and are the
 # originators of beacon-like data. We then create a "meta-device" for the beacon's
 # uuid. Other non-static-mac protocols should use this method as well, by adding their

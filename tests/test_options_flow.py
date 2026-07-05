@@ -103,7 +103,7 @@ async def test_options_init_shows_menu_with_all_steps(hass: HomeAssistant, setup
     assert result["step_id"] == "init"
     menu = set(result["menu_options"])
     # Per-scanner calibration moved to subentries, so it is no longer a menu item.
-    assert {"globalopts", "selectdevices", "area_entities"} <= menu
+    assert {"scan", "globalopts", "selectdevices", "area_entities"} <= menu
     # The init step builds status text from coordinator counts.
     placeholders = result.get("description_placeholders") or {}
     assert "status" in placeholders
@@ -301,6 +301,78 @@ async def test_options_selectdevices_random_mac_recent_appears(
     )
     assert result["step_id"] == "selectdevices"
     assert "AA:BB:CC:DD:EE:04" in _devices_selector_values(result)
+
+
+# --------------------------------------------------------------------------- #
+# Options flow: scan (simple "add nearby, not-yet-tracked devices")
+# --------------------------------------------------------------------------- #
+
+
+def _scan_selector_values(result) -> set[str]:
+    """Return the option values offered by the scan step's 'add' selector."""
+    schema = result["data_schema"].schema
+    key = next(k for k in schema if str(k.schema) == "add")
+    return {opt["value"] for opt in schema[key].config["options"]}
+
+
+async def test_options_scan_lists_only_untracked_devices(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):
+    """The scan step hides devices already associated (create_sensor) but shows fresh ones."""
+    coordinator = setup_bermuda_entry.runtime_data.coordinator
+    tracked = _inject_device(coordinator, "AA:BB:CC:DD:EE:11")
+    tracked.create_sensor = True  # already produces an entity == already associated
+    fresh = _inject_device(coordinator, "AA:BB:CC:DD:EE:12")
+
+    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"next_step_id": "scan"})
+    assert result["step_id"] == "scan"
+    offered = _scan_selector_values(result)
+    assert fresh.address.upper() in offered
+    assert tracked.address.upper() not in offered
+
+
+async def test_options_scan_hides_devices_already_in_tracked_list(
+    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry
+):
+    """A device already in CONF_DEVICES is not offered again by the scan step."""
+    tracked_addr = "AA:BB:CC:DD:EE:15"
+    # Set the tracked list first; this reloads the entry (new coordinator).
+    hass.config_entries.async_update_entry(
+        setup_bermuda_entry, options={**dict(setup_bermuda_entry.options), CONF_DEVICES: [tracked_addr]}
+    )
+    await hass.async_block_till_done()
+    coordinator = setup_bermuda_entry.runtime_data.coordinator
+    _inject_device(coordinator, tracked_addr)
+    fresh = _inject_device(coordinator, "AA:BB:CC:DD:EE:16")
+
+    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"next_step_id": "scan"})
+    offered = _scan_selector_values(result)
+    assert fresh.address.upper() in offered
+    assert tracked_addr not in offered
+
+
+async def test_options_scan_appends_without_dropping_existing(
+    hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry
+):
+    """Submitting the scan step adds the ticked devices to the existing tracked list."""
+    existing = "AA:BB:CC:DD:EE:20"
+    # Pre-track a device first; this reloads the entry (new coordinator).
+    hass.config_entries.async_update_entry(
+        setup_bermuda_entry, options={**dict(setup_bermuda_entry.options), CONF_DEVICES: [existing]}
+    )
+    await hass.async_block_till_done()
+    coordinator = setup_bermuda_entry.runtime_data.coordinator
+    new = _inject_device(coordinator, "AA:BB:CC:DD:EE:21")
+
+    result = await hass.config_entries.options.async_init(setup_bermuda_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"next_step_id": "scan"})
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"add": [new.address.upper()]}
+    )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    assert setup_bermuda_entry.options.get(CONF_DEVICES) == [existing, new.address.upper()]
 
 
 async def test_options_area_entities_two_step_flow(hass: HomeAssistant, setup_bermuda_entry: MockConfigEntry):

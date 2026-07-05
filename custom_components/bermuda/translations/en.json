@@ -141,6 +141,9 @@
       "micro_location": {
         "name": "Micro-location"
       },
+      "nearby_devices": {
+        "name": "Nearby devices"
+      },
       "nearest_rssi": {
         "name": "Nearest RSSI"
       },
@@ -274,9 +277,20 @@
           "area_entities": "Area presence entities",
           "enrol_private": "Enrol a private device (IRK)",
           "globalopts": "Global options",
+          "scan": "Scan for new devices",
           "selectdevices": "Select devices to track"
         },
         "title": "Configure Bermuda"
+      },
+      "scan": {
+        "data": {
+          "add": "Devices to start tracking"
+        },
+        "data_description": {
+          "add": "Only devices that are not already tracked are listed, strongest signal (dBm) first."
+        },
+        "description": "{count} nearby device(s) not yet tracked, strongest signal first. Tick the ones to track — they are added to your tracked devices.",
+        "title": "Scan for new devices"
       },
       "selectdevices": {
         "data": {

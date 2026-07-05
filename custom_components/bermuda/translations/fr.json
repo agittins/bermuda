@@ -141,6 +141,9 @@
       "micro_location": {
         "name": "Micro-localisation"
       },
+      "nearby_devices": {
+        "name": "Appareils à proximité"
+      },
       "nearest_rssi": {
         "name": "RSSI le plus proche"
       },
@@ -274,9 +277,20 @@
           "area_entities": "Entités de présence par zone",
           "enrol_private": "Enrôler un appareil privé (IRK)",
           "globalopts": "Options globales",
+          "scan": "Scanner les nouveaux appareils",
           "selectdevices": "Choisir les appareils à suivre"
         },
         "title": "Configurer Bermuda"
+      },
+      "scan": {
+        "data": {
+          "add": "Appareils à suivre"
+        },
+        "data_description": {
+          "add": "Seuls les appareils pas encore suivis sont listés, du signal le plus fort (dBm) au plus faible."
+        },
+        "description": "{count} appareil(s) détecté(s) et pas encore suivi(s), du signal le plus fort au plus faible. Cochez ceux à suivre — ils sont ajoutés à vos appareils suivis.",
+        "title": "Scanner les nouveaux appareils"
       },
       "selectdevices": {
         "data": {
