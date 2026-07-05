@@ -119,6 +119,12 @@ class MobilityPolicy:
     ambiguity_ratio: float = 1.2
     ambiguity_hold_seconds: float = 8.0
     unknown_exit_ratio: float = 1.35
+    # A faint signal must stay below the confidence floor for this long before the
+    # device is called "Unknown", and must then recover past floor+margin to leave
+    # it. Without this debounce a noisy RSSI hovering near the floor flaps the area
+    # to Unknown and back every cycle (~1s). Symmetric to ambiguity_hold_seconds.
+    weak_hold_seconds: float = 6.0
+    weak_exit_margin: float = 4.0
 
 
 @dataclass
@@ -130,6 +136,7 @@ class AreaDecisionState:
     challenger_since: float = 0.0
     ambiguous_since: float = 0.0
     unknown_since: float = 0.0
+    weak_since: float = 0.0
 
 
 def _score_rssi(rssi_filtered: float | None) -> float:
@@ -155,6 +162,8 @@ def _mobility_policy(mobility_type: str) -> MobilityPolicy:
             ambiguity_ratio=1.25,
             ambiguity_hold_seconds=14.0,
             unknown_exit_ratio=1.45,
+            weak_hold_seconds=12.0,
+            weak_exit_margin=5.0,
         )
     return MobilityPolicy()
 
@@ -191,6 +200,34 @@ def _build_contenders(device: BermudaDevice, nowstamp: float, max_radius: float)
     return contenders
 
 
+def _weak_signal_unknown(
+    best: AreaCandidate,
+    policy: MobilityPolicy,
+    state: AreaDecisionState,
+    nowstamp: float,
+) -> bool:
+    """
+    Return True when the best contender's signal is too weak to place the device.
+
+    Entry is debounced (the filtered RSSI must stay below the confidence floor for
+    ``weak_hold_seconds``) and exit is hysteretic (it must recover past
+    ``floor + weak_exit_margin``). A brief RSSI dip near the floor therefore no
+    longer flaps the area between a room and "Unknown" every ~1s cycle.
+    """
+    already_unknown = state.unknown_since > 0
+    # Raise the bar to *leave* weak-Unknown so we don't flip back on the boundary.
+    floor = policy.min_rssi_confidence + (policy.weak_exit_margin if already_unknown else 0.0)
+    if best.rssi_filtered >= floor:
+        state.weak_since = 0.0
+        return False
+    if state.weak_since <= 0:
+        state.weak_since = nowstamp
+    # Sticky once we are already Unknown; otherwise the dip must persist first.
+    if already_unknown:
+        return True
+    return nowstamp - state.weak_since >= policy.weak_hold_seconds
+
+
 def _unknown_reason(
     best: AreaCandidate,
     second: AreaCandidate | None,
@@ -200,7 +237,7 @@ def _unknown_reason(
     max_radius: float,
 ) -> str | None:
     """Decide whether the (non-None) best contender is too weak/ambiguous → 'Unknown'."""
-    if best.rssi_filtered < policy.min_rssi_confidence:
+    if _weak_signal_unknown(best, policy, state, nowstamp):
         return f"weak_rssi({best.rssi_filtered:.1f}dBm)"
 
     reason: str | None = None
@@ -318,6 +355,7 @@ def refresh_area_by_min_distance(device: BermudaDevice, options: dict[str, Any])
         # the explicit "Unknown" area, which we reserve for weak/ambiguous evidence.
         state.unknown_since = 0.0
         state.ambiguous_since = 0.0
+        state.weak_since = 0.0
         state.challenger_scanner = None
         state.challenger_since = 0.0
         device.apply_scanner_selection(None)

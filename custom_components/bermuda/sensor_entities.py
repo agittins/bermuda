@@ -58,6 +58,11 @@ class BermudaSensor(BermudaEntity, SensorEntity):
         # Return not_home when device is not detected, for consistency with device_tracker
         if self._device.area_name is None:
             return STATE_NOT_HOME
+        if self._device.area_is_unknown:
+            # Evidence too weak/ambiguous to place the device. Expose Home
+            # Assistant's native "unknown" state (localised automatically, e.g.
+            # "Inconnu" in French) rather than a hard-coded English "Unknown".
+            return None
         return self._device.area_name
 
     @property

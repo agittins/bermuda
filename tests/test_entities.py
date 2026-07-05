@@ -55,15 +55,22 @@ def _make_entity(cls):
 def test_area_sensor_native_value_returns_area_name():
     """When the device has an area, native_value is that area name."""
     ent = _make_entity(BermudaSensor)
-    ent._device = SimpleNamespace(area_name="Kitchen")
+    ent._device = SimpleNamespace(area_name="Kitchen", area_is_unknown=False)
     assert ent.native_value == "Kitchen"
 
 
 def test_area_sensor_native_value_not_home_when_no_area():
     """When area_name is None, native_value falls back to STATE_NOT_HOME."""
     ent = _make_entity(BermudaSensor)
-    ent._device = SimpleNamespace(area_name=None)
+    ent._device = SimpleNamespace(area_name=None, area_is_unknown=False)
     assert ent.native_value == STATE_NOT_HOME
+
+
+def test_area_sensor_native_value_none_when_unknown():
+    """When placement is too weak/ambiguous, native_value is None (HA renders 'unknown')."""
+    ent = _make_entity(BermudaSensor)
+    ent._device = SimpleNamespace(area_name="Unknown", area_is_unknown=True)
+    assert ent.native_value is None
 
 
 def test_area_sensor_icon_uses_device_area_icon():
