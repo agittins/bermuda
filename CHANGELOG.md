@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1](https://github.com/foXaCe/bermuda/compare/v0.11.0...v0.11.1) (2026-07-05)
+
+
+### Bug Fixes
+
+* **ci:** build and attach the HACS zip asset from the release-please run ([c6d6828](https://github.com/foXaCe/bermuda/commit/c6d6828fa110cdef12ae169eb85ccee24b8fa445))
+* debounce weak-signal 'Unknown' area and localise it ([#82](https://github.com/foXaCe/bermuda/issues/82)) ([d96107a](https://github.com/foXaCe/bermuda/commit/d96107a1421c65a22e523706c6de2a2e67908aae))
+
 ## [0.11.0](https://github.com/foXaCe/bermuda/compare/v0.10.0...v0.11.0) (2026-07-02)
 
 
