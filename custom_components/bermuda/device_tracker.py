@@ -1,15 +1,8 @@
 """Create device_tracker entities for Bermuda devices."""
+from typing import TYPE_CHECKING, Any, override
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any
-
-from homeassistant.components.device_tracker import TrackerEntity
-from homeassistant.components.device_tracker.const import (
-    DeviceTrackerEntityCapabilityAttribute,
-    SourceType,
-    TrackingType,
-)
+from homeassistant.components.device_tracker import BaseScannerEntity
+from homeassistant.components.device_tracker.const import SourceType
 from homeassistant.const import STATE_HOME, STATE_NOT_HOME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -38,8 +31,7 @@ async def async_setup_entry(
 
     @callback
     def device_new(address: str) -> None:
-        """
-        Create entities for newly-found device.
+        """Create entities for newly-found device.
 
         Called from the data co-ordinator when it finds a new device that needs
         to have sensors created. Not called directly, but via the dispatch
@@ -68,24 +60,21 @@ async def async_setup_entry(
     # await coordinator.async_config_entry_first_refresh()
 
 
-class BermudaDeviceTracker(BermudaEntity, TrackerEntity):
+class BermudaDeviceTracker(BermudaEntity, BaseScannerEntity):
     """A trackable Bermuda Device."""
+
+    # We switched from BaseTrackerEntity to BaseScannerEntity for in_zone changes
+    # and also because Tracker now seems more reliant on the lat/long
+    # being present in order to report state correctly).
 
     _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_name = "Bermuda Tracker"
     _attr_source_type = SourceType.BLUETOOTH_LE
-    _attr_capability_attributes = { DeviceTrackerEntityCapabilityAttribute.TRACKING_TYPE: TrackingType.CONNECTION }
-    # don't define location_accuracy. It's tempting to use max_radius or the current
-    # distance, but it could be misleading in larger home zones where a gps might be
-    # more accurate than simply choosing the centre of the zone.
 
     @property
     def unique_id(self):
-        """
-        "Uniquely identify this sensor so that it gets stored in the entity_registry,
-        and can be maintained / renamed etc by the user.
-        """
+        """Uniquely identify this sensor."""
         return self._device.unique_id
 
     @property
@@ -95,19 +84,12 @@ class BermudaDeviceTracker(BermudaEntity, TrackerEntity):
         return {"scanner": _scannername, "area": self._device.area_name}
 
     @property
-    def state(self) -> str:
-        """Return the state of the device."""
-        return self._device.zone
-
-    @property
-    def in_zones(self) -> list[str] | None:
-        """Preserve zone_id if we later support non-home zones."""
-        return [] if self._device.zone == STATE_NOT_HOME else [self._device.zone]
-
-    @property
-    def source_type(self) -> SourceType:
-        """Return the source type, eg gps or router, of the device."""
-        return SourceType.BLUETOOTH_LE
+    def is_connected(self):
+        """Give boolean result for home/not_home."""
+        if self._device.zone is None:
+            return None
+        # if anything other than not home, we are connected.
+        return self._device.zone != STATE_NOT_HOME
 
     @property
     def icon(self) -> str:
