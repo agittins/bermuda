@@ -20,17 +20,17 @@ jobs:
     name: Linting
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           # Install a specific version of uv.
           version: "0.7.9"
           enable-cache: true
 
       - name: Set up Python ${{ env.DEFAULT_PYTHON }}
-        uses: actions/setup-python@v5.6.0
+        uses: actions/setup-python@v6.0.0
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
           cache: "pip"
@@ -51,10 +51,10 @@ jobs:
     name: HACS
     steps:
       - name: Check out the repository
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@v5"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           # Install a specific version of uv.
           version: "0.7.9"
@@ -71,7 +71,7 @@ jobs:
     name: Hassfest
     steps:
       - name: Check out the repository
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@v5"
 
       - name: Hassfest validation
         uses: "home-assistant/actions/hassfest@master"
@@ -81,17 +81,17 @@ jobs:
     name: Run tests
     steps:
       - name: Check out code from GitHub
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@v5"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           # Install a specific version of uv.
           version: "0.7.9"
           enable-cache: true
 
       - name: Setup Python ${{ env.DEFAULT_PYTHON }}
-        uses: "actions/setup-python@v5.6.0"
+        uses: "actions/setup-python@v6.0.0"
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
 

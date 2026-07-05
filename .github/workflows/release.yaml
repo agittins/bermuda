@@ -20,7 +20,7 @@ jobs:
       BERMUDA_ROOT_DIR: "${{ github.workspace }}/custom_components/bermuda"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set release version number in files
         shell: bash
@@ -42,11 +42,11 @@ jobs:
           zip bermuda.zip -r ./
 
       - name: 🔏 Sign release package
-        uses: sigstore/gh-action-sigstore-python@v3.0.1
+        uses: sigstore/gh-action-sigstore-python@v3.1.0
         with:
           inputs: "${{ env.BERMUDA_ROOT_DIR }}/bermuda.zip"
 
       - name: "Upload the ZIP file to the release"
-        uses: softprops/action-gh-release@v2.3.2
+        uses: softprops/action-gh-release@v2.4.1
         with:
           files: ${{ env.BERMUDA_ROOT_DIR }}/bermuda.zip
