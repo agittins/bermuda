@@ -1,21 +1,20 @@
 """Create device_tracker entities for Bermuda devices."""
-from typing import TYPE_CHECKING, Any, override
+
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.device_tracker import BaseScannerEntity
 from homeassistant.components.device_tracker.const import SourceType
 from homeassistant.const import STATE_HOME, STATE_NOT_HOME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from . import BermudaConfigEntry
 from .const import SIGNAL_DEVICE_NEW
 from .entity import BermudaEntity
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
-    from . import BermudaConfigEntry
     from .coordinator import BermudaDataUpdateCoordinator
 
 
