@@ -26,6 +26,6 @@ jobs:
     steps:
       - name: Run release-drafter
         id: draftrelease
-        uses: release-drafter/release-drafter@v6.1.0
+        uses: release-drafter/release-drafter@v7.5.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
