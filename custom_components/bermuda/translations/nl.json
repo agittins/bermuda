@@ -183,7 +183,14 @@
   },
   "issues": {
     "scanner_without_area": {
-      "description": "Bermuda vereist dat alle Bluetooth-proxy's een geldige ruimte toegewezen hebben gekregen om correct te werken. Wijs een ruimte toe door de apparaatpagina van elke proxy te bezoeken (via `Apparaten en services`) en klik op het potloodicoon rechtsboven om een ruimte toe te wijzen. De volgende proxy's hebben geen ruimte toegewezen:\n\n{scannerlist}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "description": "Bermuda kan geen apparaten plaatsen die worden gezien door een proxy zonder gebied. De volgende proxy's hebben geen gebied toegewezen:\n\n{scannerlist}\nWijs een gebied toe door de apparaatpagina van elke proxy te openen (via 'Apparaten en diensten') en op het potloodpictogram rechtsboven te klikken. Dien daarna dit formulier in; Bermuda controleert dan onmiddellijk opnieuw.",
+            "title": "Wijs gebieden toe aan uw Bluetooth-proxy's"
+          }
+        }
+      },
       "title": "Sommige Bluetooth-proxy's hebben geen RUIMTE"
     }
   },
@@ -305,7 +312,7 @@
           "exclude": "Volg deze nooit, zelfs niet als ze overeenkomen met een gevolgde categorie.",
           "track_categories": "Volg automatisch elk apparaat dat overeenkomt met een geselecteerde categorie (bijv. alle iBeacons of alle benoemde apparaten)."
         },
-        "description": "Kies welke apparaten moeten worden gevolgd. Als er geen apparaten hieronder verschijnen, ziet Bermuda geen gegevens van Bluetooth-scanners. Zorg ervoor dat je een esphome ble_proxy-apparaat, Shelly-apparaten met Bluetooth-proxy geconfigureerd of een lokale Bluetooth-adapter hebt.",
+        "description": "Bermuda maakt alleen tracker-entiteiten aan voor de apparaten die u hier selecteert. Als de lijst leeg is, worden er nog geen Bluetooth-apparaten gezien.",
         "title": "Selecteer apparaten"
       }
     }
@@ -351,7 +358,7 @@
       "fields": {
         "addresses": {
           "description": "Een optionele, door spaties gescheiden, lijst met MAC-adressen om informatie over op te halen. Als leeg, worden alle adressen opgehaald.",
-          "name": "Addresses"
+          "name": "Adressen"
         },
         "configured_devices": {
           "description": "Selecteer deze optie om alleen scanners en geconfigureerde apparaten in de uitvoer op te nemen.",
@@ -359,10 +366,10 @@
         },
         "redact": {
           "description": "Stel deze waarde in op `TRUE` om ervoor te zorgen dat MAC-adressen in de uitvoer worden onleesbaar gemaakt vanwege de privacy.",
-          "name": "Redact"
+          "name": "Verbergen"
         }
       },
-      "name": "Dump Devices"
+      "name": "Apparaten exporteren"
     },
     "enrol_private_device": {
       "description": "Volg een privacyapparaat (iPhone, Apple Watch, …) via de IRK ervan. Geeft de sleutel door aan de Private BLE Device-integratie van Home Assistant, die het roterende MAC-adres herleidt; Bermuda volgt het apparaat vervolgens automatisch. Het apparaat moet in de buurt zijn en zenden om de sleutel te laten accepteren.",

@@ -183,7 +183,14 @@
   },
   "issues": {
     "scanner_without_area": {
-      "description": "O Bermuda exige que todos os proxies Bluetooth tenham uma área válida atribuída para funcionar corretamente. Atribua uma área acedendo à página de dispositivo de cada proxy (em `Dispositivos e Serviços`) e clicando no ícone do lápis no canto superior direito para atribuir uma área. Os seguintes proxies não têm área atribuída:\n\n{scannerlist}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "description": "O Bermuda não consegue localizar dispositivos vistos por um proxy sem área. Os seguintes proxies não têm área atribuída:\n\n{scannerlist}\nAtribua uma área abrindo a página de cada proxy (em «Dispositivos e serviços») e clicando no ícone de lápis no canto superior direito. Quando terminar, submeta este formulário e o Bermuda verificará novamente de imediato.",
+            "title": "Atribua áreas aos seus proxies Bluetooth"
+          }
+        }
+      },
       "title": "Alguns proxies Bluetooth não têm ÁREA"
     }
   },
@@ -305,7 +312,7 @@
           "exclude": "Nunca monitorizar estes, mesmo que correspondam a uma categoria monitorizada.",
           "track_categories": "Monitoriza automaticamente todos os dispositivos que correspondam a uma categoria selecionada (por exemplo, todos os iBeacons ou todos os dispositivos com nome)."
         },
-        "description": "Escolha quais dispositivos deseja monitorizar. Se nenhum dispositivo aparecer abaixo, o Bermuda não está a receber dados de scanners Bluetooth. Certifique-se de que possui um dispositivo esphome ble_proxy, dispositivos Shelly configurados como proxy Bluetooth ou um adaptador Bluetooth local.",
+        "description": "O Bermuda só cria entidades de monitorização para os dispositivos que selecionar aqui. Se a lista estiver vazia, ainda não foi detetado nenhum dispositivo Bluetooth.",
         "title": "Selecionar dispositivos"
       }
     }
