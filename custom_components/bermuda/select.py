@@ -35,7 +35,7 @@ async def async_setup_entry(
     def device_new(address: str) -> None:
         """Create the mobility select for a newly tracked device."""
         if address not in created_devices:
-            async_add_devices([BermudaMobilityTypeSelect(coordinator, entry, address)], False)
+            async_add_devices([BermudaMobilityTypeSelect(coordinator, entry, address)], update_before_add=False)
             created_devices.append(address)
         coordinator.select_created(address)
 

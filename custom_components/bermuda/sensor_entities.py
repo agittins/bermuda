@@ -11,6 +11,7 @@ from homeassistant.const import (
     STATE_NOT_HOME,
     STATE_UNAVAILABLE,
     EntityCategory,
+    UnitOfElectricPotential,
     UnitOfLength,
     UnitOfTemperature,
 )
@@ -38,13 +39,8 @@ class BermudaSensor(BermudaEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "area"
 
-    @property
-    def unique_id(self) -> str | None:
-        """
-        "Uniquely identify this sensor so that it gets stored in the entity_registry,
-        and can be maintained / renamed etc by the user.
-        """
-        return self._device.unique_id
+    # unique_id is inherited from BermudaEntity (the bare device address);
+    # subclasses append their own suffix.
 
     @property
     def native_value(self) -> StateType:
@@ -453,7 +449,7 @@ class BermudaSensorIn100Vcc(BermudaSensor):
 
     @property
     def native_unit_of_measurement(self) -> str:
-        return "V"
+        return UnitOfElectricPotential.VOLT
 
     @property
     def state_class(self) -> SensorStateClass:
@@ -516,7 +512,7 @@ class BermudaSensorIn100AdcVoltage(BermudaSensor):
 
     @property
     def native_unit_of_measurement(self) -> str:
-        return "V"
+        return UnitOfElectricPotential.VOLT
 
     @property
     def state_class(self) -> SensorStateClass:
