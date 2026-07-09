@@ -8,7 +8,8 @@ area estimates via RSSI smoothing and a closest-scanner trilateration heuristic.
 
 - **Integration type:** `device` · **IoT class:** `calculated` · single config entry
   (`unique_id == DOMAIN`).
-- **Platforms:** `sensor`, `device_tracker`, `number`, `select`.
+- **Platforms:** `sensor`, `device_tracker` (`BaseScannerEntity`-based, HA ≥ 2026.6:
+  home/not_home semantics plus `in_zones` and user-associable zones), `number`, `select`.
 
 ## Data flow
 
@@ -45,9 +46,14 @@ dynamically as devices/scanners appear, via the `SIGNAL_DEVICE_NEW` /
 | `coordinator_metadevices.py` | Coordinator mixin: iBeacon / Private-BLE metadevice management. |
 | `pruning.py` | Stale-device purge (quota + per-address-type TTLs), called from the update cycle. |
 | `redaction.py` | MAC/IRK/name redaction engine shared by diagnostics and `dump_devices`. |
-| `bermuda_device.py` | `BermudaDevice` — internal state for one tracked device or scanner (address typing, names, area/floor, beacon ids, the ESPresense-style `category` fingerprint, InPlay IN100 `0x0505` telemetry decode). |
+| `bermuda_device.py` | `BermudaDevice` — internal state for one tracked device or scanner (names, area/floor, beacon ids, the ESPresense-style `category` fingerprint); applies the pure parsers/classifiers below. |
+| `address_type.py` | **Pure** address-shape classification (MAC random sub-types, iBeacon `uuid_major_minor`, 32-hex IRK) + `is_irk()`. |
+| `beacon_parsers.py` | **Pure** binary payload parsers: Apple iBeacon frames and InPlay IN100 `0x0505` telemetry. |
 | `bermuda_advert.py` | `BermudaAdvert` — one (device, scanner) relationship; advert history + `calculate_data()`. |
 | `distance_filter.py` | **Pure** smoothing maths (velocity/anti-teleport filter, minimum-hugging average, MAD). |
+| `rssi_filters.py` | **Pure** mobility-aware RSSI filtering (named policies, MAD outlier clamping, EMA, dispersion). |
+| `helpers.py` | **Pure** shared helpers (device-picker eligibility used by the options flow steps). |
+| `repairs.py` | Fix flow for the `scanner_without_area` issue: user assigns areas, confirm forces a roster re-check. |
 | `trilateration.py` | Score-based, mobility-aware area arbitration with adaptive hysteresis + the explicit `Unknown` outcome (`refresh_area_by_min_distance`, `AreaTests`). |
 | `area_entity.py` | Presence-entity area overrides: HA entities whose area, while *on*, competes with BLE at a per-entity "virtual distance" (`BermudaAreaEntityManager`), applied as a coordinator post-pass over the BLE result. |
 | `location_fingerprints.py` | **Pure** RF-fingerprint engine (`Fingerprint`, `FingerprintMatcher`) + `Store`-backed `FingerprintStore` for sub-area micro-locations. |
@@ -58,7 +64,7 @@ dynamically as devices/scanners appear, via the `SIGNAL_DEVICE_NEW` /
 | `entity.py` | `BermudaEntity` / `BermudaGlobalEntity` bases (unique_id, device_info, rate-limiting). |
 | `sensor.py` · `number.py` · `device_tracker.py` · `select.py` | Entity platforms (`select.py` = per-device mobility mode). |
 | `sensor_entities.py` · `sensor_global.py` | Sensor entity classes: 13 per-device classes, 4 global counters. |
-| `options_text.py` | Inline en/fr UI text for the options flow (dynamic markdown outside HA's translation schema). |
+| `options_text.py` | Inline UI text for the options flow in all 6 languages (dynamic markdown outside HA's translation schema). |
 | `config_flow.py` | `BermudaFlowHandler` (config) + registers the options flow and the subentry flows. |
 | `options_flow.py` | `BermudaOptionsFlowHandler` — menu, sectioned global options, device/category tracking, area-entity wizard. |
 | `subentry_flow.py` | Config subentry flows: per-scanner RSSI calibration, and per-device enrolment (name / ref_power / away timeout). |
@@ -67,7 +73,7 @@ dynamically as devices/scanners appear, via the `SIGNAL_DEVICE_NEW` /
 | `system_health.py` | System Health page info callback (proxy/device counts). |
 | `const.py` | All constants (no logic). `util.py` | Pure helpers (mac formatting, rssi→metres, resolvable-address test). |
 | `log_spam_less.py` | Rate-limited logging wrapper. |
-| `quality_scale.yaml` | Quality Scale self-assessment / roadmap (metadata, not yet declared in the manifest). |
+| `quality_scale.yaml` | Quality Scale self-assessment / roadmap (`quality_scale: silver` is declared in the manifest; gold is documentation-gated). |
 
 ## `unique_id` scheme (do NOT change without migration)
 
