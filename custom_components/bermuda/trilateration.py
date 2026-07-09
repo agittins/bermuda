@@ -39,6 +39,10 @@ if TYPE_CHECKING:
     from .bermuda_device import BermudaDevice
 
 
+# Guard against division by zero in score ratios.
+_EPSILON = 1e-9
+
+
 @dataclass
 class AreaTests:
     """
@@ -242,7 +246,7 @@ def _unknown_reason(
 
     reason: str | None = None
     if second is not None:
-        ratio = best.score / max(second.score, 1e-9)
+        ratio = best.score / max(second.score, _EPSILON)
         if ratio < policy.ambiguity_ratio:
             if state.ambiguous_since <= 0:
                 state.ambiguous_since = nowstamp
@@ -265,7 +269,7 @@ def _unknown_reason(
         reason is None
         and state.unknown_since > 0
         and second is not None
-        and (best.score / max(second.score, 1e-9)) < policy.unknown_exit_ratio
+        and (best.score / max(second.score, _EPSILON)) < policy.unknown_exit_ratio
     ):
         reason = "hold_unknown_until_clear"
     return reason
@@ -295,7 +299,7 @@ def _resolve_hysteresis(
         state.challenger_since = 0.0
         return incumbent, "HOLD incumbent_best_score"
 
-    score_ratio = best.score / max(incumbent.score, 1e-9)
+    score_ratio = best.score / max(incumbent.score, _EPSILON)
     # Adaptive thresholds: noisier signals (higher dispersion) demand more evidence.
     max_dispersion = max(best.dispersion, incumbent.dispersion)
     noise_scale = min(max((max_dispersion - 3.0) / 5.0, 0.0), 1.0)

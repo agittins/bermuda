@@ -66,6 +66,17 @@ class BermudaScannerMixin:
         self._scanners.discard(scanner_device)
         async_dispatcher_send(self.hass, SIGNAL_SCANNERS_CHANGED)
 
+    def refresh_scanners(self, *, force: bool = False) -> None:
+        """
+        Public re-check of the scanner roster (used by the repairs fix flow).
+
+        Resets the area-repair memo first so the scanner_without_area issue is
+        re-evaluated from scratch - HA deletes a fixable issue when its flow
+        completes, so the memo would otherwise mask a still-broken state.
+        """
+        self._scanners_without_areas = None
+        self._refresh_scanners(force=force)
+
     def _refresh_scanners(self, *, force: bool = False) -> None:
         """
         Reconcile Bermuda's scanner roster with HA's, rebuilding when it has changed.
@@ -142,14 +153,18 @@ class BermudaScannerMixin:
             ir.async_delete_issue(self.hass, DOMAIN, REPAIR_SCANNER_WITHOUT_AREA)
 
             if self._scanners_without_areas and len(self._scanners_without_areas) != 0:
+                scannerlist_text = "".join(f"- {name}\n" for name in self._scanners_without_areas)
                 ir.async_create_issue(
                     self.hass,
                     DOMAIN,
                     REPAIR_SCANNER_WITHOUT_AREA,
                     translation_key=REPAIR_SCANNER_WITHOUT_AREA,
                     translation_placeholders={
-                        "scannerlist": "".join(f"- {name}\n" for name in self._scanners_without_areas),
+                        "scannerlist": scannerlist_text,
                     },
                     severity=ir.IssueSeverity.ERROR,
-                    is_fixable=False,
+                    # Fixable: the fix flow (see repairs.py) walks the user through
+                    # assigning the missing areas, then forces a roster re-check.
+                    is_fixable=True,
+                    data={"scannerlist": scannerlist_text},
                 )

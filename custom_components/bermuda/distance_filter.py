@@ -13,7 +13,6 @@ always more accurate than a farther one. Both helpers below exploit that.
 from __future__ import annotations
 
 import statistics
-from typing import cast
 
 from .const import DISTANCE_INFINITE
 
@@ -61,18 +60,16 @@ def peak_retreat_velocity(hist_distance: list[float | None], hist_stamp: list[fl
     # If the most recent move is an approach (or flat), that is our answer.
     if peak_velocity >= 0:
         for old_distance, old_stamp in zip(hist_distance[2:], hist_stamp[2:], strict=False):
-            if old_stamp is None:
+            if old_stamp is None or old_distance is None:
+                # Skip gaps in either history (a reading can be None before the
+                # first real distance is computed), consistent with the guard on
+                # the first pair above.
                 continue
             delta_t = velo_newstamp - old_stamp
             if delta_t <= 0:
                 # Skip zero/negative intervals to avoid division by zero.
                 continue
-            # NOTE (mypy strict-typing pass): old_distance is statically float | None
-            # here (hist_distance can hold gaps), but this loop only ever guarded on
-            # old_stamp being non-None, not old_distance. That is a pre-existing gap
-            # (see task report) left as-is to avoid changing runtime behaviour; the
-            # cast documents the (unverified) assumption rather than silently hiding it.
-            velocity = (velo_newdistance - cast("float", old_distance)) / delta_t
+            velocity = (velo_newdistance - old_distance) / delta_t
             # We only care about faster retreats from here on.
             if velocity > peak_velocity:  # noqa: PLR1730
                 peak_velocity = velocity
@@ -90,10 +87,11 @@ def minimum_hugging_average(samples: list[float | None], rssi_distance_raw: floa
     rather than being dragged up by noisy far readings.
 
     ``rssi_distance_raw`` seeds the running minimum (falling back to
-    ``DISTANCE_INFINITE`` when it is ``None`` or zero) and is also returned when
-    there are no samples to average.
+    ``DISTANCE_INFINITE`` when it is ``None``) and is also returned when
+    there are no samples to average. A raw distance of exactly 0.0 is a
+    legitimate closest-possible reading, not a missing one.
     """
-    local_min: float = rssi_distance_raw or DISTANCE_INFINITE
+    local_min: float = rssi_distance_raw if rssi_distance_raw is not None else DISTANCE_INFINITE
     if not samples:
         return local_min
 

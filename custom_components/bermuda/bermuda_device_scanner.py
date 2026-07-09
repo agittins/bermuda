@@ -397,7 +397,7 @@ class BermudaScannerDeviceMixin:
                 return None
             try:
                 return self.stamps[address.upper()]
-            except (KeyError, AttributeError):
+            except KeyError, AttributeError:
                 # No current record, device might have "stale"d out.
                 return None
         # Probably a usb / BlueZ device.

@@ -51,6 +51,9 @@ SIGNAL_SCANNERS_CHANGED = f"{DOMAIN}-scanners-changed"
 MANUFACTURER_ID_INPLAY: Final = 0x0505
 IN100_PAYLOAD_LEN: Final = 5
 
+# Apple Inc's Bluetooth SIG company id (iBeacon frames, FindMy, etc).
+MANUFACTURER_ID_APPLE: Final = 0x004C
+
 UPDATE_INTERVAL = 1.05  # Seconds between bluetooth data processing cycles
 # Note: this is separate from the CONF_UPDATE_INTERVAL which allows the
 # user to indicate how often sensors should update. We need to check bluetooth
@@ -249,6 +252,26 @@ OPT_MIN_SMOOTHING_SAMPLES: Final = 1
 OPT_MIN_ATTENUATION: Final = 0.1
 OPT_REF_POWER_MIN: Final = -127.0
 OPT_REF_POWER_MAX: Final = 0.0
+OPT_RSSI_OFFSET_MIN: Final = -30.0
+OPT_RSSI_OFFSET_MAX: Final = 30.0
+OPT_MAX_DEVTRACK_TIMEOUT: Final = 3600
+
+# BlueZ pushes bogus adverts at this RSSI for paired-but-absent devices.
+RSSI_BLUEZ_BOGUS: Final = -127
+# A device/scanner is considered "active" if heard within this many seconds.
+DEVICE_ACTIVE_AGE: Final = 10
+# Update-cycle duration watchdog thresholds (seconds).
+CYCLE_TIME_WARN: Final = 0.5
+CYCLE_TIME_ERROR: Final = 2.0
+# Cooldown for the coordinator's request_refresh debouncer (seconds).
+DEBOUNCE_COOLDOWN: Final = 1.0
+
+# Device pickers (options flow scan / selectdevices steps): drop random MACs
+# unseen for longer than this - they have almost certainly rotated away.
+PICKER_STALE_AGE: Final = 60 * 60 * 2  # seconds
+# Scanner health table thresholds (age of last advert, seconds).
+SCANNER_AGE_FRESH: Final = 2
+SCANNER_AGE_WORRY: Final = 10
 
 # Area-selection / trilateration tuning (centralised from coordinator).
 # These are experience-tuned; keep values identical when refactoring.

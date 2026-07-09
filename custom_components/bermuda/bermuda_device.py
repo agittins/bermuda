@@ -13,7 +13,6 @@ for them, so we can use them to contribute towards measurements.
 from __future__ import annotations
 
 import binascii
-import re
 from typing import TYPE_CHECKING, Any
 
 from bluetooth_data_tools import monotonic_time_coarse
@@ -24,6 +23,8 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.util import slugify
 
+from .address_type import classify_address
+from .beacon_parsers import parse_ibeacon, parse_in100
 from .bermuda_advert import BermudaAdvert
 from .bermuda_device_scanner import BermudaScannerDeviceMixin
 from .const import (
@@ -32,7 +33,6 @@ from .const import (
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     BDADDR_TYPE_NOT_MAC48,
-    BDADDR_TYPE_OTHER,
     BDADDR_TYPE_RANDOM_RESERVED,
     BDADDR_TYPE_RANDOM_RESOLVABLE,
     BDADDR_TYPE_RANDOM_STATIC,
@@ -50,10 +50,11 @@ from .const import (
     CONF_TRACK_CATEGORIES,
     DEFAULT_DEVTRACK_TIMEOUT,
     DEFAULT_MOBILITY_TYPE,
+    DISTANCE_INFINITE,
     DOMAIN,
     ICON_DEFAULT_AREA,
     ICON_DEFAULT_FLOOR,
-    IN100_PAYLOAD_LEN,
+    MANUFACTURER_ID_APPLE,
     MANUFACTURER_ID_INPLAY,
     METADEVICE_IBEACON_DEVICE,
     METADEVICE_PRIVATE_BLE_DEVICE,
@@ -116,8 +117,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         # Per-device enrolment from a "device" subentry (authoritative at setup; the
         # ref_power number entity may still tweak it live within the session).
         self.name_subentry: str | None = None
-        _dc = getattr(self._coordinator, "device_config", None)
-        _device_cfg = _dc.get(_address.upper()) if isinstance(_dc, dict) else None
+        _device_cfg = self._coordinator.device_config.get(_address.upper())
         if _device_cfg:
             if _device_cfg.get(CONF_REF_POWER):
                 self.ref_power = _device_cfg[CONF_REF_POWER]
@@ -208,80 +208,44 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         """
         Identify the address type (MAC, IRK, iBeacon etc) and perform any setup.
 
-        This will set the self.address_type and metadevice-related properties,
-        as well as register for PBLE updates for IRK resolution.
+        Classification itself is pure (see the address_type module); this method
+        applies the side effects the type implies: metadevice setup and PBLE/IRK
+        callback registration. A given device entry (ie, address) won't change,
+        so we only process it once.
         Note that we don't have an advertisement yet, so we can only do the things
         that we can infer from the address alone.
         """
-        # BLE MAC addresses (https://www.bluetooth.com/specifications/core54-html/) can
-        # be differentiated by the top two MSBs of the 48bit MAC address. At our end at
-        # least, this means the first character of the MAC address in aa:bb:cc:dd:ee:ff
-        # I have no idea what the distinction between public and random is by bitwise ident,
-        # because the random addresstypes cover the entire address-space.
-        #
-        # - ?? Public
-        # - 0b00 (0x00 - 0x3F) Random Private Non-resolvable
-        # - 0b01 (0x40 - 0x7F) Random Private Resolvable (ie, IRK devices)
-        # - 0x10 (0x80 - 0xBF) ~* Reserved *~ (Is this where ALL Publics live?)
-        # - 0x11 (0xC0 - 0xFF) Random Static (may change on power cycle only)
-        #
-        # What we are really interested in tracking is IRK devices, since they rotate
-        # so rapidly (typically )
-        #
-        # A given device entry (ie, address) won't change, so we only update
-        # it once, and also only if it looks like a MAC address
-        #
-        if self.address_type is BDADDR_TYPE_UNKNOWN:
-            if self.address.count(":") != 5:
-                # Doesn't look like an actual MAC address - should be some sort of metadevice.
+        if self.address_type is not BDADDR_TYPE_UNKNOWN:
+            return
+        self.address_type = classify_address(self.address)
 
-                if re.match("^[A-Fa-f0-9]{32}_[A-Fa-f0-9]*_[A-Fa-f0-9]*$", self.address):
-                    # It's an iBeacon uuid_major_minor
-                    self.address_type = ADDR_TYPE_IBEACON
-                    self.metadevice_type.add(METADEVICE_IBEACON_DEVICE)
-                    self.beacon_unique_id = self.address
-                elif re.match("^[A-Fa-f0-9]{32}$", self.address):
-                    # 32-char hex-string is an IRK
-                    self.metadevice_type.add(METADEVICE_PRIVATE_BLE_DEVICE)
-                    self.address_type = ADDR_TYPE_PRIVATE_BLE_DEVICE
-                    self.beacon_unique_id = self.address
-                    # If we've been given a private BLE address, then the integration must be up.
-                    # register to get callbacks for address changes.
-                    _irk_bytes = binascii.unhexlify(self.address)
-                    _pble_coord = pble_coordinator.async_get_coordinator(self._coordinator.hass)
-                    self._coordinator.config_entry.async_on_unload(
-                        _pble_coord.async_track_service_info(self.async_handle_pble_callback, _irk_bytes)
-                    )
-                    # self.address is the raw IRK here; log only a short prefix (key material).
-                    _LOGGER.debug("Private BLE Callback registered for %s (irk %s…)", self.name, self.address[:4])
-                    #
-                    # Also register a callback with our own, which can fake the PBLE callbacks.
-                    self._coordinator.config_entry.async_on_unload(
-                        self._coordinator.irk_manager.register_irk_callback(self.async_handle_pble_callback, _irk_bytes)
-                    )
-                    self._coordinator.irk_manager.add_irk(_irk_bytes)
-                else:
-                    # We have no idea, currently.
-                    # Mark it as such so we don't spend time testing it again.
-                    self.address_type = BDADDR_TYPE_NOT_MAC48
-            elif len(self.address) == 17:
-                top_bits = int(self.address[0:1], 16) >> 2
-                # The two MSBs of the first octet dictate the random type...
-                if (top_bits & 0b11) == 0b00:  # First char will be in [0 1 2 3]
-                    self.address_type = BDADDR_TYPE_RANDOM_UNRESOLVABLE
-                elif (top_bits & 0b11) == 0b01:  # Addresses where the first char will be 4,5,6 or 7
-                    self.address_type = BDADDR_TYPE_RANDOM_RESOLVABLE
-                    self._coordinator.irk_manager.check_mac(self.address)
-                elif (top_bits & 0b11) == 0b10:
-                    self.address_type = BDADDR_TYPE_RANDOM_RESERVED
-                elif (top_bits & 0b11) == 0b11:
-                    self.address_type = BDADDR_TYPE_RANDOM_STATIC
-
-            else:
-                # Fallback for any other colon-form address shape.
-                # (No OUI->manufacturer lookup here: the SIG tables are keyed by
-                # 16-bit company IDs, so a 24-bit OUI prefix never matches.)
-                self.address_type = BDADDR_TYPE_OTHER
+        if self.address_type == ADDR_TYPE_IBEACON:
+            # It's an iBeacon uuid_major_minor
+            self.metadevice_type.add(METADEVICE_IBEACON_DEVICE)
+            self.beacon_unique_id = self.address
+        elif self.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
+            # 32-char hex-string is an IRK
+            self.metadevice_type.add(METADEVICE_PRIVATE_BLE_DEVICE)
+            self.beacon_unique_id = self.address
+            # If we've been given a private BLE address, then the integration must be up.
+            # register to get callbacks for address changes.
+            _irk_bytes = binascii.unhexlify(self.address)
+            _pble_coord = pble_coordinator.async_get_coordinator(self._coordinator.hass)
+            self._coordinator.config_entry.async_on_unload(
+                _pble_coord.async_track_service_info(self.async_handle_pble_callback, _irk_bytes)
+            )
+            # self.address is the raw IRK here; log only a short prefix (key material).
+            _LOGGER.debug("Private BLE Callback registered for %s (irk %s…)", self.name, self.address[:4])
+            #
+            # Also register a callback with our own, which can fake the PBLE callbacks.
+            self._coordinator.config_entry.async_on_unload(
+                self._coordinator.irk_manager.register_irk_callback(self.async_handle_pble_callback, _irk_bytes)
+            )
+            self._coordinator.irk_manager.add_irk(_irk_bytes)
+        elif self.address_type == BDADDR_TYPE_RANDOM_RESOLVABLE:
+            # What we are really interested in tracking is IRK devices, since
+            # their MACs rotate so rapidly.
+            self._coordinator.irk_manager.check_mac(self.address)
 
     @callback
     def async_handle_pble_callback(
@@ -345,7 +309,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         if new_ref_power != self.ref_power:
             # it's actually changed, proceed...
             self.ref_power = new_ref_power
-            nearest_distance: float = 9999  # running tally to find closest scanner
+            nearest_distance: float = DISTANCE_INFINITE  # running tally to find closest scanner
             nearest_scanner = None
             for advert in self.adverts.values():
                 rawdist = advert.set_ref_power(new_ref_power)
@@ -356,7 +320,6 @@ class BermudaDevice(BermudaScannerDeviceMixin):
             # remain none or a given scanner, since the relative distances won't have
             # changed due to ref_power), we still call apply so that the new area_distance
             # gets applied.
-            # if nearest_scanner is not None:
             self.apply_scanner_selection(nearest_scanner)
             # Update the stamp so that the BermudaEntity can clear the cache and show the
             # new measurement(s) immediately.
@@ -486,8 +449,7 @@ class BermudaDevice(BermudaScannerDeviceMixin):
 
         # Update whether this device has been seen recently, for device_tracker.
         # A "device" enrolment subentry may override the global away timeout per-device.
-        _dc = getattr(self._coordinator, "device_config", None)
-        _dev_cfg = _dc.get(self.address.upper(), {}) if isinstance(_dc, dict) else {}
+        _dev_cfg = self._coordinator.device_config.get(self.address.upper(), {})
         _timeout = _dev_cfg.get(CONF_DEVTRACK_TIMEOUT) or self.options.get(
             CONF_DEVTRACK_TIMEOUT, DEFAULT_DEVTRACK_TIMEOUT
         )
@@ -593,45 +555,36 @@ class BermudaDevice(BermudaScannerDeviceMixin):
                     self.manufacturer = name
                     self.manufacturer_id = company_code
 
-                if company_code == 0x004C:  # 76 Apple Inc
-                    if man_data[:1] == b"\x02":  # iBeacon: Almost always 0x0215, but 0x15 is the length part
-                        # iBeacon / UUID Support
+                if company_code == MANUFACTURER_ID_APPLE and (ibeacon := parse_ibeacon(man_data)) is not None:
+                    # iBeacon / UUID Support
+                    #
+                    # Bermuda supports iBeacons by creating a "metadevice", which
+                    # looks just like any other Bermuda device, but its address is
+                    # the iBeacon full uuid_maj_min and it has helpers that gather
+                    # together the advertisements from a set of source_devices - this
+                    # device instance is about to become just such a metadevice.source_device
+                    self.metadevice_type.add(METADEVICE_TYPE_IBEACON_SOURCE)
+                    self.beacon_uuid = ibeacon.uuid
+                    self.beacon_major = ibeacon.major
+                    self.beacon_minor = ibeacon.minor
+                    if ibeacon.power is not None:
+                        self.beacon_power = ibeacon.power
 
-                        # Bermuda supports iBeacons by creating a "metadevice", which
-                        # looks just like any other Bermuda device, but its address is
-                        # the iBeacon full uuid_maj_min and it has helpers that gather
-                        # together the advertisements from a set of source_devices - this
-                        # device instance is about to become just such a metadevice.source_device
+                    # The irony of adding major/minor is that the
+                    # UniversallyUniqueIDentifier is not even unique
+                    # locally, so we need to make one :-)
+                    self.beacon_unique_id = ibeacon.unique_id
+                    # Note: it's possible that a device sends multiple
+                    # beacons. We are only going to process the latest
+                    # one in any single update cycle, so we ignore that
+                    # possibility for now. Given we re-process completely
+                    # each cycle it should *just work*, for the most part.
 
-                        # At least one(!) iBeacon out there sends only 22 bytes (it has no tx_power field)
-                        # which is weird. So Let's just decode what we can that exists, and blindly proceed
-                        # otherwise. We could reject it, but it can still be useful, so...
-                        if len(man_data) >= 22:
-                            # Proper iBeacon packet has 23 bytes.
-                            self.metadevice_type.add(METADEVICE_TYPE_IBEACON_SOURCE)
-                            self.beacon_uuid = man_data[2:18].hex().lower()
-                            self.beacon_major = str(int.from_bytes(man_data[18:20], byteorder="big"))
-                            self.beacon_minor = str(int.from_bytes(man_data[20:22], byteorder="big"))
-                        if len(man_data) >= 23:
-                            # There really is at least one out there that lacks this! See #466
-                            self.beacon_power = int.from_bytes([man_data[22]], signed=True)
-
-                        # The irony of adding major/minor is that the
-                        # UniversallyUniqueIDentifier is not even unique
-                        # locally, so we need to make one :-)
-
-                        self.beacon_unique_id = f"{self.beacon_uuid}_{self.beacon_major}_{self.beacon_minor}"
-                        # Note: it's possible that a device sends multiple
-                        # beacons. We are only going to process the latest
-                        # one in any single update cycle, so we ignore that
-                        # possibility for now. Given we re-process completely
-                        # each cycle it should *just work*, for the most part.
-
-                        # Create a metadevice for this beacon. Metadevices get updated
-                        # after all adverts are processed and distances etc are calculated
-                        # for the sources.
-                        self.make_name()
-                        self._coordinator.register_ibeacon_source(self)
+                    # Create a metadevice for this beacon. Metadevices get updated
+                    # after all adverts are processed and distances etc are calculated
+                    # for the sources.
+                    self.make_name()
+                    self._coordinator.register_ibeacon_source(self)
 
         # Decode InPlay IN100 / DFRobot Fermion telemetry (manufacturer data 0x0505).
         self._parse_in100_telemetry(advert)
@@ -641,36 +594,25 @@ class BermudaDevice(BermudaScannerDeviceMixin):
         Decode InPlay IN100 / DFRobot Fermion telemetry from manufacturer data 0x0505.
 
         Only the latest manufacturer-data entry is considered (telemetry is
-        time-sensitive); the first five bytes encode supply voltage, temperature and an
-        ADC voltage. A short/malformed payload clears the decoded values but still flags
-        the device as detected. Ported/adapted from kamilzierke/bermuda.
+        time-sensitive); decoding lives in the beacon_parsers module. A
+        short/malformed payload clears the decoded values but still flags the
+        device as detected. Ported/adapted from kamilzierke/bermuda.
         """
         latest = advert.manufacturer_data[0] if advert.manufacturer_data else None
         man_data = latest.get(MANUFACTURER_ID_INPLAY) if latest else None
         if man_data is None:
             return
 
-        self.in100_raw_payload_hex = man_data.hex()
-        self.in100_last_payload_len = len(man_data)
+        telemetry = parse_in100(man_data)
+        self.in100_raw_payload_hex = telemetry.raw_payload_hex
+        self.in100_last_payload_len = telemetry.payload_len
         self.in100_detected = True
+        self.in100_vcc = telemetry.vcc
+        self.in100_temp_c = telemetry.temp_c
+        self.in100_adc_voltage = telemetry.adc_voltage
 
-        applied_fallback_name = False
         if self.manufacturer is None:
             self.manufacturer = "InPlay / DFRobot"
-            applied_fallback_name = True
-
-        # Reset the decoded values; a short payload leaves them cleared.
-        self.in100_vcc = None
-        self.in100_temp_c = None
-        self.in100_adc_voltage = None
-
-        if len(man_data) >= IN100_PAYLOAD_LEN:
-            payload = man_data[:IN100_PAYLOAD_LEN]
-            self.in100_vcc = payload[0] / 32.0
-            self.in100_temp_c = int.from_bytes(payload[1:3], byteorder="big", signed=True) / 100.0
-            self.in100_adc_voltage = int.from_bytes(payload[3:5], byteorder="big", signed=False) / 1000.0
-
-        if applied_fallback_name:
             self.make_name()
 
     def to_dict(self) -> dict[str, Any]:

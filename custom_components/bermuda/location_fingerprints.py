@@ -261,7 +261,7 @@ class FingerprintStore:
             for raw in data["fingerprints"]:
                 try:
                     fingerprint = Fingerprint.from_dict(raw)
-                except (KeyError, TypeError, ValueError):
+                except KeyError, TypeError, ValueError:
                     continue
                 self._items[fingerprint.id] = fingerprint
         self._reindex()

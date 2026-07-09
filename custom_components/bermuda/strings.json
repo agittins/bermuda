@@ -107,7 +107,15 @@
   "issues": {
     "scanner_without_area": {
       "description": "Bermuda requires all bluetooth proxies to have a valid area assigned in order to work correctly. Assign an area by visiting each proxy's device page (via `Devices and Services`), and click the pencil icon in the top-right to assign an area. The following proxies are missing an area assignment:\n\n{scannerlist}",
-      "title": "Some Bluetooth Proxies don't have an AREA"
+      "title": "Some Bluetooth Proxies don't have an AREA",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Assign areas to your Bluetooth proxies",
+            "description": "Bermuda cannot place devices seen by a proxy that has no Area. The following proxies are missing an area assignment:\n\n{scannerlist}\nAssign an area by visiting each proxy's device page (via `Devices and Services`) and clicking the pencil icon in the top-right. Once done, submit this form and Bermuda will re-check immediately."
+          }
+        }
+      }
     }
   },
   "options": {

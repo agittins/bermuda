@@ -638,7 +638,7 @@ def test_gather_advert_data_forces_refresh_when_pending() -> None:
     coord._hascanners = set()  # no scanners -> loop body never runs
     coord._refresh_scanners = MagicMock()
 
-    assert coord._async_gather_advert_data() is True
+    coord._async_gather_advert_data()  # returns None; gathering is a side-effect-only pass
     coord._refresh_scanners.assert_called_once_with(force=True)
 
 
@@ -663,7 +663,7 @@ def test_gather_advert_data_processes_fresh_advert() -> None:
     target_device = MagicMock()
     coord._get_or_create_device = MagicMock(return_value=target_device)
 
-    assert coord._async_gather_advert_data() is True
+    coord._async_gather_advert_data()  # returns None; gathering is a side-effect-only pass
 
     scanner_device.async_as_scanner_update.assert_called_once_with(ha_scanner)
     coord._get_or_create_device.assert_called_once_with(ble_device.address)
@@ -687,7 +687,7 @@ def test_gather_advert_data_skips_bogus_rssi() -> None:
     coord._get_device = MagicMock(return_value=scanner_device)
     coord._get_or_create_device = MagicMock()
 
-    assert coord._async_gather_advert_data() is True
+    coord._async_gather_advert_data()  # returns None; gathering is a side-effect-only pass
     coord._get_or_create_device.assert_not_called()
 
 
@@ -709,7 +709,7 @@ def test_gather_advert_data_skips_stale_advert() -> None:
     coord._get_device = MagicMock(return_value=scanner_device)
     coord._get_or_create_device = MagicMock()
 
-    assert coord._async_gather_advert_data() is True
+    coord._async_gather_advert_data()  # returns None; gathering is a side-effect-only pass
     coord._get_or_create_device.assert_not_called()
 
 
@@ -727,7 +727,7 @@ def test_gather_advert_data_recovers_missing_scanner_device() -> None:
     coord._refresh_scanners = MagicMock()
     coord._get_or_create_device = MagicMock()
 
-    assert coord._async_gather_advert_data() is True
+    coord._async_gather_advert_data()  # returns None; gathering is a side-effect-only pass
     # Refresh attempted once when the scanner was first missing.
     coord._refresh_scanners.assert_called_once_with(force=True)
     # No adverts processed for an unresolved scanner.

@@ -84,7 +84,7 @@ async def load_manufacturer_ids(hass: HomeAssistant) -> tuple[dict[int, str], di
             company_content = await f.read()
         company_data = await hass.async_add_executor_job(yaml.safe_load, company_content)
         company_uuids = {member["value"]: member["name"] for member in company_data["company_identifiers"]}
-    except (OSError, KeyError, TypeError, yaml.YAMLError):
+    except OSError, KeyError, TypeError, yaml.YAMLError:
         _LOGGER.debug("Unable to load Bluetooth manufacturer metadata", exc_info=True)
 
     return member_uuids, company_uuids
