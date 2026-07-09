@@ -135,6 +135,7 @@ class FingerprintMatcher:
         extra_penalty: float = DEFAULT_EXTRA_PENALTY,
         std_eps: float = DEFAULT_STD_EPS,
     ) -> None:
+        """Store the scoring/acceptance thresholds used to match a live vector against spots."""
         self.accept_distance = accept_distance
         self.reject_distance = reject_distance
         self.min_margin = min_margin
@@ -245,6 +246,7 @@ class FingerprintStore:
     """
 
     def __init__(self, hass: HomeAssistant) -> None:
+        """Set up the (empty, unloaded) in-memory fingerprint store and its HA Store backend."""
         from homeassistant.helpers.storage import Store  # noqa: PLC0415 (lazy by design)
 
         self.hass = hass

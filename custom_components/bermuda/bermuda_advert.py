@@ -76,6 +76,7 @@ class BermudaAdvert:
         options: dict[str, Any],
         scanner_device: BermudaDevice,  # The scanner device that "saw" it.
     ) -> None:
+        """Link the tracked device to the scanner and process the triggering advertisement."""
         self.scanner_address: Final[str] = scanner_device.address
         self.device_address: Final[str] = parent_device.address
         self._device = parent_device
@@ -118,6 +119,7 @@ class BermudaAdvert:
         self.update_advertisement(advertisementdata, self.scanner_device)
 
     def apply_new_scanner(self, scanner_device: BermudaDevice) -> None:
+        """Rebind this advert to a (possibly replaced) scanner device, refreshing name and area."""
         self.name: str = scanner_device.name  # or scandata.scanner.name
         self.scanner_device = scanner_device  # links to the source device
         if self.scanner_address != scanner_device.address:

@@ -15,6 +15,7 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/foXaCe/bermuda/issues",
   "loggers": ["custom_components.bermuda"],
+  "quality_scale": "silver",
   "requirements": [],
   "version": "0.13.0"
 }

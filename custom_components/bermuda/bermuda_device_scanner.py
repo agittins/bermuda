@@ -70,14 +70,18 @@ class BermudaScannerDeviceMixin:
         floor_level: int | None
         last_seen: float
 
-        def make_name(self) -> str: ...
+        def make_name(self) -> str:
+            """Declared for mypy; implemented by BermudaDevice."""
+            ...
 
     @property
     def is_scanner(self) -> bool:
+        """Whether this device is currently registered as a Home Assistant Bluetooth scanner."""
         return self._is_scanner
 
     @property
     def is_remote_scanner(self) -> bool | None:
+        """Whether this device is a remote scanner that reports explicit advertisement timestamps."""
         return self._is_remote_scanner
 
     def async_as_scanner_nolonger(self) -> None:
@@ -172,7 +176,6 @@ class BermudaScannerDeviceMixin:
         devreg_stringlist = ""  # for debug logging
         for devreg_device in devreg_devices:
             devreg_count += 1
-            # _LOGGER.debug("DevregScanner: %s", devreg_device)
             devreg_stringlist += f"** {devreg_device.name_by_user or devreg_device.name}\n"
             for conn in devreg_device.connections:
                 if conn[0] == "bluetooth":

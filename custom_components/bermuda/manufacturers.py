@@ -9,9 +9,9 @@ better user-facing labels.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-import aiofiles
 import yaml
 
 from .const import _LOGGER, DOMAIN
@@ -60,29 +60,32 @@ def lookup_manufacturer(
     return (None, None)
 
 
+def _read_yaml(path: str) -> Any:
+    """Read and parse a yaml file (sync; run in the executor)."""
+    with Path(path).open(encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
 async def load_manufacturer_ids(hass: HomeAssistant) -> tuple[dict[int, str], dict[int, str]]:
     """
     Load the SIG member/company UUID name tables from the bundled yaml files.
 
     These mappings improve labels only, so any failure is logged at debug and
-    returns empty tables — Bermuda must still load without them.
+    returns empty tables — Bermuda must still load without them. Reading and
+    parsing both happen in the executor (the company table is ~192KB / 11k
+    entries), keeping the event loop free without any extra I/O dependency.
     """
     member_uuids: dict[int, str] = {}
     company_uuids: dict[int, str] = {}
     try:
         # https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/uuids/member_uuids.yaml
-        # The company table is ~192KB / 11k entries, so parse it off the event loop.
         path = hass.config.path(f"custom_components/{DOMAIN}/manufacturer_identification/member_uuids.yaml")
-        async with aiofiles.open(path) as f:
-            member_content = await f.read()
-        member_data = await hass.async_add_executor_job(yaml.safe_load, member_content)
+        member_data = await hass.async_add_executor_job(_read_yaml, path)
         member_uuids = {member["uuid"]: member["name"] for member in member_data["uuids"]}
 
         # https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/company_identifiers/company_identifiers.yaml
         path = hass.config.path(f"custom_components/{DOMAIN}/manufacturer_identification/company_identifiers.yaml")
-        async with aiofiles.open(path) as f:
-            company_content = await f.read()
-        company_data = await hass.async_add_executor_job(yaml.safe_load, company_content)
+        company_data = await hass.async_add_executor_job(_read_yaml, path)
         company_uuids = {member["value"]: member["name"] for member in company_data["company_identifiers"]}
     except OSError, KeyError, TypeError, yaml.YAMLError:
         _LOGGER.debug("Unable to load Bluetooth manufacturer metadata", exc_info=True)

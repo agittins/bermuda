@@ -47,18 +47,22 @@ class BermudaScannerMixin:
 
     @property
     def scanner_list(self) -> set[str]:
+        """The set of MAC addresses of devices currently registered as scanners."""
         return self._scanner_list
 
     @property
     def get_scanners(self) -> set[BermudaDevice]:
+        """The set of BermudaDevice objects currently registered as scanners."""
         return self._scanners
 
     def scanner_list_add(self, scanner_device: BermudaDevice) -> None:
+        """Register a device as an active scanner and notify listeners of the change."""
         self._scanner_list.add(scanner_device.address)
         self._scanners.add(scanner_device)
         async_dispatcher_send(self.hass, SIGNAL_SCANNERS_CHANGED)
 
     def scanner_list_del(self, scanner_device: BermudaDevice) -> None:
+        """Remove a device from the scanner roster and notify listeners of the change."""
         # discard() (not remove()) so demoting a device that was never in the set
         # — e.g. one whose is_scanner flag desynced — can't raise KeyError and abort
         # the whole scanner rebuild mid-loop.

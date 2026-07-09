@@ -3,5 +3,7 @@
 
 # Static typing (mypy --strict, see [tool.mypy] in pyproject.toml)
 mypy
-types-aiofiles
 types-PyYAML
+
+# Linting/formatting (same pin as pre-commit)
+ruff==0.15.20

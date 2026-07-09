@@ -12,12 +12,9 @@ ignore = [
     "D212",    # multi-line-summary-first-line (incompatible with formatter)
     "COM812",  # incompatible with formatter
     "ISC001",  # incompatible with formatter
-    "ERA001",  # commented out code
     "D401",    # First line should be in imperative - let's skip for now
     "D205",    # 1 blank line required between summary line and description
     "PGH004",  # Use specific rule codes for noqa
-    "D102",    # Docstring in public method - should be done later
-    "D107",    # Dosctring in init
     "RUF012",  #Mutable class attributes should be annotated with `typing.ClassVar`
     "FBT002",  #Boolean default positional argument in function definition
     "FBT003",  # Boolean positional value in function call

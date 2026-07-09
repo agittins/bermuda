@@ -30,6 +30,7 @@ class BermudaLogSpamLess:
     _interval: float
 
     def __init__(self, logger: logging.Logger, spam_interval: float) -> None:
+        """Wrap logger, rate-limiting repeated messages sharing a key to spam_interval seconds."""
         self._logger = logger
         self._interval = spam_interval
         # Per-instance cache so multiple instances don't share rate-limit state.

@@ -244,12 +244,6 @@ class BermudaMetadeviceMixin:
                 if source_device is None:
                     # No ads current in the backend for this one. Not an issue, the mac might be old
                     # or now showing up yet.
-                    # _LOGGER_SPAM_LESS.debug(
-                    #     f"metaNoAdsFor_{metadevice.address}_{source_address}",
-                    #     "Metadevice %s: no adverts for source MAC %s found during update_metadevices",
-                    #     metadevice.__repr__(),
-                    #     source_address,
-                    # )
                     continue
 
                 if (

@@ -38,6 +38,7 @@ class BermudaIrkManager:
     """
 
     def __init__(self) -> None:
+        """Set up empty IRK/MAC caches and the per-IRK resolution-callback registry."""
         self._irks: dict[bytes, Cipher[modes.ECB]] = {}
         self._macs: dict[str, ResolvableMAC] = {}
         self._irk_callbacks: dict[bytes, list[BluetoothCallback]] = {}

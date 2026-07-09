@@ -58,6 +58,7 @@ class WhereIsIntentHandler(_BermudaIntentHandler):
     slot_schema = {vol.Required("name"): cv.string}
 
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
+        """Speak the named device's current micro-location, area, or that it can't be located."""
         coordinator = self._require_coordinator(intent_obj.hass)
         slots = self.async_validate_slots(intent_obj.slots)
         name = slots["name"]["value"]
@@ -88,6 +89,7 @@ class CalibrateLocationIntentHandler(_BermudaIntentHandler):
     slot_schema = {vol.Required("device"): cv.string, vol.Required("location"): cv.string}
 
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
+        """Calibrate the named device's current spot as a micro-location and speak the result."""
         coordinator = self._require_coordinator(intent_obj.hass)
         slots = self.async_validate_slots(intent_obj.slots)
         device_name = slots["device"]["value"]
@@ -120,6 +122,7 @@ class ListLocationsIntentHandler(_BermudaIntentHandler):
     slot_schema = {vol.Optional("name"): cv.string}
 
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
+        """Speak the list of saved micro-location names, optionally filtered to one device."""
         coordinator = self._require_coordinator(intent_obj.hass)
         slots = self.async_validate_slots(intent_obj.slots)
         response = intent_obj.create_response()

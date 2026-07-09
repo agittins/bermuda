@@ -40,6 +40,7 @@ class BermudaAreaEntityManager:
     """Manages entity-based area presence indicators."""
 
     def __init__(self, hass: HomeAssistant) -> None:
+        """Set up entity/device/area registry lookups used to resolve triggered entities' areas."""
         self.hass = hass
         self._er = er.async_get(hass)
         self._dr = dr.async_get(hass)

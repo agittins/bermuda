@@ -38,6 +38,7 @@ class BermudaEntity(CoordinatorEntity[BermudaDataUpdateCoordinator]):
         config_entry: BermudaConfigEntry,
         address: str,
     ) -> None:
+        """Bind this entity to its tracked device and set up its rate-limit cache state."""
         super().__init__(coordinator)
         self.config_entry = config_entry
         self.address = address
@@ -169,6 +170,7 @@ class BermudaGlobalEntity(CoordinatorEntity[BermudaDataUpdateCoordinator]):
         coordinator: BermudaDataUpdateCoordinator,
         config_entry: BermudaConfigEntry,
     ) -> None:
+        """Set up the shared rate-limit cache used by Bermuda's global entities."""
         super().__init__(coordinator)
         self.config_entry = config_entry
         self._cache_ratelimit_value = None

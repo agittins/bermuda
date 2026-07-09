@@ -405,15 +405,6 @@ class BermudaDataUpdateCoordinator(
         responding to changing rssi values, but it *is* good for seeding our updates in case
         there are no defined sensors yet (or the defined ones are away).
         """
-        # _LOGGER.debug(
-        #     "New Advert! change: %s, scanner: %s mac: %s name: %s serviceinfo: %s",
-        #     change,
-        #     service_info.source,
-        #     service_info.address,
-        #     service_info.name,
-        #     service_info,
-        # )
-
         # If there are no active entities created after Bermuda's
         # initial setup, then no updates will be triggered on the co-ordinator.
         # So let's check if we haven't updated recently, and do so...

@@ -170,7 +170,6 @@ class BermudaOptionsFlowHandler(OptionsFlow):
             )
         messages["status"] += scanner_table
 
-        # return await self.async_step_globalopts()
         # Menu labels come from translations (options.step.init.menu_options.*),
         # so every menu entry is localised like the rest of the flow.
         return self.async_show_menu(

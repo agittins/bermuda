@@ -73,9 +73,17 @@ class BermudaMicrolocationMixin:
         devices: dict[str, BermudaDevice]
 
         @property
-        def scanner_list(self) -> set[str]: ...
-        def resolve_area_name(self, area_id: str) -> str | None: ...
-        def get_active_scanner_summary(self) -> list[dict[str, Any]]: ...
+        def scanner_list(self) -> set[str]:
+            """Declared for mypy; implemented by BermudaScannerMixin."""
+            ...
+
+        def resolve_area_name(self, area_id: str) -> str | None:
+            """Declared for mypy; implemented by BermudaDataUpdateCoordinator."""
+            ...
+
+        def get_active_scanner_summary(self) -> list[dict[str, Any]]:
+            """Declared for mypy; implemented by BermudaDataUpdateCoordinator."""
+            ...
 
     def _microloc_init(self, hass: HomeAssistant, entry: BermudaConfigEntry) -> None:
         """Set up the fingerprint store/matcher, kick off a background load, and register services."""

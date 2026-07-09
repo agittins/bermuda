@@ -157,6 +157,7 @@ class IrkTypes(Enum):
 
     @classmethod
     def unresolved(cls) -> list[bytes]:
+        """Return the sentinel byte values that mark an IRK as not (yet) resolved."""
         return [bytes(k.value) for k in IrkTypes.__members__.values()]
 
 
@@ -328,6 +329,7 @@ class BermudaSecretFilter(logging.Filter):
     """Logging filter that redacts 32-hex secrets (IRKs) from Bermuda log records."""
 
     def filter(self, record: logging.LogRecord) -> bool:
+        """Redact any 32-hex secret in the record's message in place, then allow it through."""
         message = record.getMessage()
         redacted = redact_secret_hex32(message)
         if redacted != message:
