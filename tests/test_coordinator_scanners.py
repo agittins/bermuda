@@ -454,7 +454,7 @@ def test_discover_private_ble_creates_metadevice_with_source() -> None:
         domain=Platform.DEVICE_TRACKER,
         entity_id="device_tracker.phone",
         device_id="dev1",
-        unique_id="irkvalue_device_tracker",
+        unique_id="00112233445566778899aabbccddeeff_device_tracker",
     )
     coord.er = MagicMock()
     coord.er.entities.get_entries_for_config_entry_id = MagicMock(return_value=[pb_entity])
@@ -468,12 +468,14 @@ def test_discover_private_ble_creates_metadevice_with_source() -> None:
 
     # _get_or_create_device must return distinct objects for the IRK metadevice
     # and the source device.
-    metadevice = _fake_source_device(address="irkvalue", metadevice_sources=[], create_sensor=False)
+    metadevice = _fake_source_device(
+        address="00112233445566778899aabbccddeeff", metadevice_sources=[], create_sensor=False
+    )
     metadevice.make_name = MagicMock()
     source_device = _fake_source_device(address="aa:bb:cc:dd:ee:ff", metadevice_type=set())
 
     def _goc(address):
-        return metadevice if address == "irkvalue" else source_device
+        return metadevice if address == "00112233445566778899aabbccddeeff" else source_device
 
     coord._get_or_create_device = MagicMock(side_effect=_goc)
 
@@ -482,7 +484,7 @@ def test_discover_private_ble_creates_metadevice_with_source() -> None:
     # The init flag must flip so we only run once.
     assert coord._do_private_device_init is False
     # The IRK becomes a tracked metadevice with a sensor.
-    assert "irkvalue" in coord.metadevices
+    assert "00112233445566778899aabbccddeeff" in coord.metadevices
     assert metadevice.create_sensor is True
     metadevice.make_name.assert_called_once_with()
     # State source tracked, source MAC registered against the metadevice.
@@ -504,20 +506,20 @@ def test_discover_private_ble_no_source_when_state_missing() -> None:
         domain=Platform.DEVICE_TRACKER,
         entity_id="device_tracker.phone",
         device_id=None,  # exercise the "no device" branch as well
-        unique_id="irkvalue",
+        unique_id="00112233445566778899aabbccddeeff",
     )
     coord.er = MagicMock()
     coord.er.entities.get_entries_for_config_entry_id = MagicMock(return_value=[pb_entity])
     coord.dr = MagicMock()
     coord.hass.states.get = MagicMock(return_value=None)  # not yet resolved
 
-    metadevice = _fake_source_device(address="irkvalue", metadevice_sources=[])
+    metadevice = _fake_source_device(address="00112233445566778899aabbccddeeff", metadevice_sources=[])
     metadevice.make_name = MagicMock()
     coord._get_or_create_device = MagicMock(return_value=metadevice)
 
     coord.discover_private_ble_metadevices()
 
-    assert "irkvalue" in coord.metadevices
+    assert "00112233445566778899aabbccddeeff" in coord.metadevices
     # pb_state_sources gets a None placeholder, no source MAC.
     assert coord.pb_state_sources["device_tracker.phone"] is None
     assert metadevice.metadevice_sources == []

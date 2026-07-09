@@ -39,6 +39,11 @@ _RANDOM_TYPES_BY_MSBS = {
 }
 
 
+def is_irk(value: str) -> bool:
+    """Whether ``value`` has the shape of an IRK (32-char hex string)."""
+    return _IRK_ADDRESS_RE.match(value) is not None
+
+
 def classify_address(address: str) -> str:
     """
     Classify an address string into one of Bermuda's ADDR/BDADDR types.
