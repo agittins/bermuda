@@ -73,7 +73,7 @@ dynamically as devices/scanners appear, via the `SIGNAL_DEVICE_NEW` /
 | `system_health.py` | System Health page info callback (proxy/device counts). |
 | `const.py` | All constants (no logic). `util.py` | Pure helpers (mac formatting, rssi→metres, resolvable-address test). |
 | `log_spam_less.py` | Rate-limited logging wrapper. |
-| `quality_scale.yaml` | Quality Scale self-assessment / roadmap (`quality_scale: silver` is declared in the manifest; gold is documentation-gated). |
+| `quality_scale.yaml` | Quality Scale self-assessment / roadmap (`quality_scale: gold` is declared in the manifest and hassfest-validated). |
 
 ## `unique_id` scheme (do NOT change without migration)
 
