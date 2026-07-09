@@ -4,6 +4,18 @@
   "include-component-in-tag": false,
   "include-v-in-tag": true,
   "tag-separator": "-",
+  "changelog-sections": [
+    { "type": "feat", "section": "Added", "hidden": false },
+    { "type": "fix", "section": "Fixed", "hidden": false },
+    { "type": "perf", "section": "Changed", "hidden": false },
+    { "type": "refactor", "section": "Changed", "hidden": false },
+    { "type": "docs", "section": "Documentation", "hidden": false },
+    { "type": "test", "section": "Tests", "hidden": true },
+    { "type": "build", "section": "Build", "hidden": true },
+    { "type": "ci", "section": "CI", "hidden": true },
+    { "type": "chore", "section": "Miscellaneous", "hidden": true },
+    { "type": "revert", "section": "Reverted", "hidden": false }
+  ],
   "packages": {
     ".": {
       "package-name": "bermuda",

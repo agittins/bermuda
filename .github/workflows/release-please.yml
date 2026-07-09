@@ -30,26 +30,10 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@v5
         id: release
-        with:
-          release-type: simple
-          package-name: bermuda
-          # bump manifest.json + CHANGELOG.md + tag.
-          # const.py VERSION is bumped at zip-build time by the job below.
-          extra-files: |
-            custom_components/bermuda/manifest.json
-          changelog-types: |
-            [
-              {"type":"feat","section":"Added","hidden":false},
-              {"type":"fix","section":"Fixed","hidden":false},
-              {"type":"perf","section":"Changed","hidden":false},
-              {"type":"refactor","section":"Changed","hidden":false},
-              {"type":"docs","section":"Documentation","hidden":false},
-              {"type":"test","section":"Tests","hidden":true},
-              {"type":"build","section":"Build","hidden":true},
-              {"type":"ci","section":"CI","hidden":true},
-              {"type":"chore","section":"Miscellaneous","hidden":true},
-              {"type":"revert","section":"Reverted","hidden":false}
-            ]
+        # All configuration (release-type, extra-files bumping manifest.json,
+        # changelog sections) lives in release-please-config.json - passing
+        # inline inputs here would silently override and ignore that file.
+        # const.py VERSION is bumped at zip-build time by the job below.
 
   # Tags created by release-please use GITHUB_TOKEN, which never triggers the
   # tag-driven release.yaml workflow (GitHub anti-recursion). So the zip asset
