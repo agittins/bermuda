@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0](https://github.com/foXaCe/bermuda/compare/v0.13.0...v0.14.0) (2026-07-09)
+
+
+### Features
+
+* adopt BaseScannerEntity for device trackers (HA 2026.6) ([331a82d](https://github.com/foXaCe/bermuda/commit/331a82d155d22566496e5beac70cf24ef19d4f84))
+
+
+### Bug Fixes
+
+* complete translations across all 6 languages, hassfest-valid fix flow ([017e363](https://github.com/foXaCe/bermuda/commit/017e36394ce7c328310897f1839c63d0bf0a09e2))
+* harden external couplings in the bluetooth client path ([948b3ef](https://github.com/foXaCe/bermuda/commit/948b3ef31f0f99eb709b860b80f720bbeddbae25))
+
 ## [0.13.0](https://github.com/foXaCe/bermuda/compare/v0.12.0...v0.13.0) (2026-07-05)
 
 
