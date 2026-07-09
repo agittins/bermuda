@@ -4,13 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-try:
-    # Pre-2024.9 HA location. mypy resolves this branch statically against the
-    # installed HA version, where it no longer exports BaseTrackerEntity here, so
-    # this appears unreachable to mypy even though it is live on older cores.
-    from homeassistant.components.device_tracker import BaseTrackerEntity  # type: ignore[attr-defined]
-except ImportError:
-    from homeassistant.components.device_tracker.config_entry import BaseTrackerEntity
+# The top-level module is the canonical import path (the config_entry alias is
+# deprecated for removal in 2027.6), but it re-exports BaseTrackerEntity without
+# listing it in __all__, so mypy needs the attr-defined escape hatch.
+from homeassistant.components.device_tracker import BaseTrackerEntity  # type: ignore[attr-defined]
 from homeassistant.components.device_tracker.const import SourceType
 from homeassistant.const import STATE_HOME
 from homeassistant.core import HomeAssistant, callback
@@ -72,7 +69,7 @@ async def async_setup_entry(
     # await coordinator.async_config_entry_first_refresh()
 
 
-class BermudaDeviceTracker(BermudaEntity, BaseTrackerEntity):  # type: ignore[misc]
+class BermudaDeviceTracker(BermudaEntity, BaseTrackerEntity):
     """A trackable Bermuda Device."""
 
     _attr_should_poll = False

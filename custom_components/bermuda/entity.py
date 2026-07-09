@@ -203,4 +203,6 @@ class BermudaGlobalEntity(CoordinatorEntity[BermudaDataUpdateCoordinator]):
         return dr.DeviceInfo(
             identifiers={(DOMAIN, "BERMUDA_GLOBAL")},
             name="Bermuda Global",
+            manufacturer="Bermuda",
+            entry_type=dr.DeviceEntryType.SERVICE,
         )

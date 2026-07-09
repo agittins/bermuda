@@ -1,6 +1,6 @@
 # Adapted from https://github.com/ludeeus/integration_blueprint/blob/main/.ruff.toml
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 120        # This is all me and not HA - I will die on the hill that 80 is too short
 
 [tool.ruff.lint]
@@ -113,7 +113,7 @@ voluptuous = "vol"
 "homeassistant.util.dt" = "dt_util"
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 strict = true
 files = ["custom_components/bermuda"]
 warn_unused_ignores = true

@@ -96,11 +96,6 @@ if TYPE_CHECKING:
 
 Cancellable = Callable[[], None]
 
-# Using "if" instead of "min/max" triggers PLR1730, but when
-# split over two lines, ruff removes it, then complains again.
-# so we're just disabling it for the whole file.
-# https://github.com/astral-sh/ruff/issues/4244
-
 
 class BermudaDataUpdateCoordinator(
     BermudaScannerMixin, BermudaMetadeviceMixin, BermudaMicrolocationMixin, DataUpdateCoordinator[None]
@@ -125,8 +120,6 @@ class BermudaDataUpdateCoordinator(
         entry: BermudaConfigEntry,
     ) -> None:
         """Initialize."""
-        self.platforms: list[str] = []
-
         self.sensor_interval = entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
 
         # ##### Redaction Data ###
@@ -234,30 +227,27 @@ class BermudaDataUpdateCoordinator(
         self.options[CONF_UPDATE_INTERVAL] = DEFAULT_UPDATE_INTERVAL
         self.options[CONF_RSSI_OFFSETS] = {}
 
-        if hasattr(entry, "options"):
-            # Firstly, on some calls (specifically during reload after settings changes)
-            # we seem to get called with a non-existent config_entry.
-            # Anyway... if we DO have one, convert it to a plain dict so we can
-            # serialise it properly when it goes into the device and scanner classes.
-            for key, val in entry.options.items():
-                if key in (
-                    CONF_ATTENUATION,
-                    CONF_DEVICES,
-                    CONF_DEVTRACK_TIMEOUT,
-                    CONF_MAX_RADIUS,
-                    CONF_MAX_VELOCITY,
-                    CONF_REF_POWER,
-                    CONF_SMOOTHING_SAMPLES,
-                    CONF_RSSI_OFFSETS,
-                ):
-                    self.options[key] = val
+        # Convert the entry's options mapping to a plain dict so it can be
+        # serialised properly when it goes into the device and scanner classes.
+        for key, val in entry.options.items():
+            if key in (
+                CONF_ATTENUATION,
+                CONF_DEVICES,
+                CONF_DEVTRACK_TIMEOUT,
+                CONF_MAX_RADIUS,
+                CONF_MAX_VELOCITY,
+                CONF_REF_POWER,
+                CONF_SMOOTHING_SAMPLES,
+                CONF_RSSI_OFFSETS,
+            ):
+                self.options[key] = val
 
         # Per-scanner RSSI offsets now live in calibration subentries. Mirror them
         # into the runtime options dict so the advert read-path stays unchanged;
         # this is the sole source of offsets once an entry has been migrated to v2.
         self.options[CONF_RSSI_OFFSETS] = {
             se.data[CONF_SCANNER]: se.data[CONF_RSSI_OFFSET]
-            for se in getattr(entry, "subentries", {}).values()
+            for se in entry.subentries.values()
             if se.subentry_type == SUBENTRY_TYPE_CALIBRATION
         }
 
@@ -267,7 +257,7 @@ class BermudaDataUpdateCoordinator(
         # the ref_power number entity remains for live, in-session tweaks.
         self.device_config: dict[str, dict[str, Any]] = {
             se.data[CONF_ADDRESS].upper(): dict(se.data)
-            for se in getattr(entry, "subentries", {}).values()
+            for se in entry.subentries.values()
             if se.subentry_type == SUBENTRY_TYPE_DEVICE and se.data.get(CONF_ADDRESS)
         }
 
@@ -365,12 +355,9 @@ class BermudaDataUpdateCoordinator(
                         for ident_type, ident_id in device_entry.identifiers:
                             if ident_type == DOMAIN:
                                 # One of our sensor devices!
-                                try:
-                                    if _device := self.devices[ident_id.lower()]:
-                                        _device.name_by_user = device_entry.name_by_user
-                                        _device.make_name()
-                                except KeyError:
-                                    pass
+                                if (_device := self.devices.get(ident_id.lower())) is not None:
+                                    _device.name_by_user = device_entry.name_by_user
+                                    _device.make_name()
                         # might be a scanner, so let's refresh those
                         _LOGGER.debug("Trigger updating of Scanner Listings")
                         self._scanner_init_pending = True
