@@ -1,0 +1,146 @@
+BERMUDA — UNIQUE_ID INVENTORY (Phase 1 discovery, read-only, 2026-07-09)
+Repo: /mnt/39c0f0e6-4018-4aa1-8d96-24720083fa77/Codage/GitHub/bermuda hass/bermuda
+Source: grep -rn "unique_id" custom_components/bermuda/*.py + direct read of entity.py,
+device_tracker.py, sensor_entities.py, sensor_global.py, number.py, select.py, __init__.py,
+config_flow.py, subentry_flow.py, bermuda_device.py, bermuda_device_scanner.py.
+Cross-checked against ARCHITECTURE.md ("`unique_id` scheme (do NOT change without migration)"
+section, which documents this exact same scheme) and tests/test_unique_id_regression.py (324
+lines — exists specifically to freeze these patterns).
+
+=====================================================================
+1. BASE SOURCE OF TRUTH — BermudaDevice.unique_id
+=====================================================================
+custom_components/bermuda/bermuda_device.py:125
+    self.unique_id: str | None = _address   # normalised MAC address string
+    -> every entity unique_id below is derived as f"{self._device.unique_id}<suffix>"
+
+custom_components/bermuda/bermuda_device.py:185
+    self.beacon_unique_id: str | None = None  # "combined uuid_major_minor for *really* unique id"
+custom_components/bermuda/bermuda_device.py:242, 247
+    self.beacon_unique_id = self.address   # fallback cases
+custom_components/bermuda/bermuda_device.py:623
+    self.beacon_unique_id = f"{self.beacon_uuid}_{self.beacon_major}_{self.beacon_minor}"
+    -> iBeacon metadevices get id "{uuid}_{major}_{minor}" per ARCHITECTURE.md.
+custom_components/bermuda/bermuda_device.py:321
+    (beacon_unique_id used as a fallback candidate — read-only reference)
+
+custom_components/bermuda/bermuda_device_scanner.py:246
+    self.unique_id = scanner_devreg_mac_address or scanner_devreg_bt_address or self._hascanner.source
+    -> scanner devices are pinned to the ESPHome/Shelly integration's *wifi* MAC (registry),
+       falling back to BT registry MAC, falling back to the HA scanner "source" string.
+       Explicitly NOT the BLE MAC (see comment at line 245).
+
+=====================================================================
+2. ENTITY unique_id PATTERNS BY PLATFORM (file:line -> exact expression)
+=====================================================================
+
+-- device_tracker.py (Platform.DEVICE_TRACKER) --
+custom_components/bermuda/device_tracker.py:83-88   BermudaDeviceTracker
+    return self._device.unique_id                              # base, NO suffix
+
+-- entity.py (base class, inherited unless overridden) --
+custom_components/bermuda/entity.py:106-108          BermudaEntity (base)
+    return self._device.unique_id                              # base, NO suffix
+    (NOTE: sensor_entities.py:42-47 BermudaSensor re-declares an IDENTICAL property —
+     looks like dead/duplicate code inherited from the base class; see anomalies)
+
+-- sensor_entities.py (Platform.SENSOR, per-device, 13 classes) --
+custom_components/bermuda/sensor_entities.py:42-47    BermudaSensor (area, base)
+    return self._device.unique_id                              # base, NO suffix
+custom_components/bermuda/sensor_entities.py:126-127  BermudaSensorFloor
+    return f"{self._device.unique_id}_floor"
+custom_components/bermuda/sensor_entities.py:151-152  BermudaSensorScanner
+    return f"{self._device.unique_id}_scanner"
+custom_components/bermuda/sensor_entities.py:183-185  BermudaSensorRssi
+    return f"{self._device.unique_id}_rssi"
+custom_components/bermuda/sensor_entities.py:211-216  BermudaSensorRange
+    return f"{self._device.unique_id}_range"
+custom_components/bermuda/sensor_entities.py:272-274  BermudaSensorScannerRange
+    return f"{self._device.unique_id}_{self._scanner.address_wifi_mac or self._scanner.address}_range"
+    # comment: "Retaining legacy wifi mac for unique_id"
+custom_components/bermuda/sensor_entities.py:326-330  BermudaSensorScannerRangeRaw
+    return f"{self._device.unique_id}_{self._scanner.address_wifi_mac or self._scanner.address}_range_raw"
+    # comment: legacy because ESPHome switched WIFI MAC->BLE MAC as source addr in 2025.3.0
+custom_components/bermuda/sensor_entities.py:354-355  BermudaSensorAreaSwitchReason
+    return f"{self._device.unique_id}_area_switch_reason"
+custom_components/bermuda/sensor_entities.py:379-380  BermudaSensorAreaLastSeen
+    return f"{self._device.unique_id}_area_last_seen"
+custom_components/bermuda/sensor_entities.py:408-409  BermudaSensorMicroLocation
+    return f"{self._device.unique_id}_micro_location"
+custom_components/bermuda/sensor_entities.py:443-444  BermudaSensorIn100Vcc
+    return f"{self._device.unique_id}_in100_vcc"
+custom_components/bermuda/sensor_entities.py:474-475  BermudaSensorIn100Temperature
+    return f"{self._device.unique_id}_in100_temperature"
+custom_components/bermuda/sensor_entities.py:506-507  BermudaSensorIn100AdcVoltage
+    return f"{self._device.unique_id}_in100_adc_voltage"
+
+-- sensor_global.py (Platform.SENSOR, hub-wide singletons, fixed literals — NOT device-derived) --
+custom_components/bermuda/sensor_global.py:34-39      BermudaTotalProxyCount
+    return "BERMUDA_GLOBAL_PROXY_COUNT"
+custom_components/bermuda/sensor_global.py:55-60      BermudaActiveProxyCount
+    return "BERMUDA_GLOBAL_ACTIVE_PROXY_COUNT"
+custom_components/bermuda/sensor_global.py:100-105    BermudaTotalDeviceCount
+    return "BERMUDA_GLOBAL_DEVICE_COUNT"
+custom_components/bermuda/sensor_global.py:121-126    BermudaVisibleDeviceCount
+    return "BERMUDA_GLOBAL_VISIBLE_DEVICE_COUNT"
+custom_components/bermuda/sensor_global.py:153-155    BermudaNearbyDevices
+    return "BERMUDA_GLOBAL_NEARBY_DEVICES"
+
+-- number.py (Platform.NUMBER) --
+custom_components/bermuda/number.py:111-116           BermudaNumber
+    return f"{self._device.unique_id}_ref_power"
+
+-- select.py (Platform.SELECT) --
+custom_components/bermuda/select.py:61-63             BermudaMobilityTypeSelect
+    return f"{self._device.unique_id}_mobility"
+
+=====================================================================
+3. CONFIG ENTRY / SUBENTRY unique_id (not entity registry, but same namespace concern)
+=====================================================================
+custom_components/bermuda/config_flow.py:50-51
+    await self.async_set_unique_id(DOMAIN)
+    self._abort_if_unique_id_configured(reload_on_update=False)
+    -> the config entry itself has unique_id == "bermuda" (single-instance enforcement)
+
+custom_components/bermuda/__init__.py:154   (async_migrate_entry, v1->v2 migration)
+    ConfigSubentry(..., subentry_type=SUBENTRY_TYPE_CALIBRATION, unique_id=scanner)
+
+custom_components/bermuda/subentry_flow.py:79   BermudaCalibrationSubentryFlow
+    unique_id=scanner    # per-scanner RSSI calibration subentry
+
+custom_components/bermuda/subentry_flow.py:179  BermudaDeviceSubentryFlow
+    unique_id=addr        # per-device enrolment subentry
+
+=====================================================================
+4. SUMMARY — DISTINCT unique_id FORMAT PATTERNS: 13 total
+=====================================================================
+  1. {mac}                                            device_tracker, base sensor (area), BermudaEntity base
+  2. {mac}_floor                                      sensor
+  3. {mac}_scanner                                    sensor
+  4. {mac}_rssi                                        sensor
+  5. {mac}_range                                       sensor
+  6. {mac}_{scanner_wifi_or_ble_mac}_range             sensor (per-scanner)
+  7. {mac}_{scanner_wifi_or_ble_mac}_range_raw         sensor (per-scanner)
+  8. {mac}_area_switch_reason                          sensor (diagnostic, disabled by default)
+  9. {mac}_area_last_seen                              sensor
+ 10. {mac}_micro_location                              sensor
+ 11. {mac}_in100_vcc / _in100_temperature / _in100_adc_voltage   sensor (3 variants, IN100-only devices)
+ 12. {mac}_ref_power                                   number
+ 13. {mac}_mobility                                    select
+  + 5 fixed-literal globals: BERMUDA_GLOBAL_{PROXY_COUNT,ACTIVE_PROXY_COUNT,DEVICE_COUNT,
+    VISIBLE_DEVICE_COUNT,NEARBY_DEVICES}
+  + special device-address forms feeding {mac}: plain MAC, "{uuid}_{major}_{minor}" (iBeacon),
+    32-char IRK hex (private BLE), scanner wifi/BT-registry MAC.
+
+Where "{mac}" = self._device.unique_id, which is itself derived from the (possibly special-form,
+see section 1) BermudaDevice.address/beacon_unique_id at device-creation time.
+
+ANOMALY NOTED: entity.py:106-108 (BermudaEntity.unique_id) and sensor_entities.py:42-47
+(BermudaSensor.unique_id, which subclasses BermudaEntity) are byte-for-byte identical
+overrides (`return self._device.unique_id`). The override in sensor_entities.py is redundant
+unless it exists purely for the docstring — worth flagging as dead/duplicate code in the debt
+inventory.
+
+Regression coverage: tests/test_unique_id_regression.py (324 lines) exists specifically to pin
+every one of the patterns above — any refactor of unique_id logic MUST keep that suite green,
+per ARCHITECTURE.md's explicit "(do NOT change without migration)" warning.
