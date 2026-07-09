@@ -49,6 +49,7 @@ def make_coordinator():
     """
     coordinator = MagicMock()
     coordinator.options = {}
+    coordinator.device_config = {}
     coordinator.irk_manager = MagicMock()
     coordinator.get_manufacturer_from_id.return_value = (None, None)
     return coordinator

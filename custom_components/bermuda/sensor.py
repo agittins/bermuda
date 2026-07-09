@@ -102,15 +102,10 @@ async def async_setup_entry(
             entities.append(BermudaSensorAreaSwitchReason(coordinator, entry, address))
             entities.append(BermudaSensorMicroLocation(coordinator, entry, address))
 
-            # _LOGGER.debug("Sensor received new_device signal for %s", address)
-            # We set update before add to False because we are being
-            # call(back(ed)) from the update, so causing it to call another would be... bad.
-            async_add_entities(entities, False)
+            # update_before_add=False because we are being call(back(ed))
+            # from the update, so causing it to call another would be... bad.
+            async_add_entities(entities, update_before_add=False)
             created_devices.append(address)
-        else:
-            # We've already created this one.
-            # _LOGGER.debug("Ignoring duplicate creation request for %s", address)
-            pass
         # Get the per-scanner entities set up to match
         create_scanner_entities()
         # tell the co-ord we've done it.
@@ -137,7 +132,7 @@ async def async_setup_entry(
                     created_scanners.setdefault(scanner.address, []).append(address)
         # We set update-before-add to False because we are being called back from
         # the update loop; triggering another update here would be bad.
-        async_add_entities(entities, False)
+        async_add_entities(entities, update_before_add=False)
 
     @callback
     def scanners_changed() -> None:

@@ -5,7 +5,7 @@
     },
     "step": {
       "user": {
-        "description": "Hvis du trenger hjep til konfigurasjon ta en titt her: {github_url}",
+        "description": "Hvis du trenger hjelp til konfigurasjonen, ta en titt på vår [GitHub-side]({github_url})",
         "title": "Bermuda BLE Trilateration"
       }
     }
@@ -183,7 +183,14 @@
   },
   "issues": {
     "scanner_without_area": {
-      "description": "Bermuda krever at alle Bluetooth-proxyer har et gyldig område tildelt for å fungere riktig. Tildel et område ved å gå til hver proxys enhetsside (via `Enheter og tjenester`), og klikk på blyantikonet øverst til høyre for å tildele et område. Følgende proxyer mangler et tildelt område:\n\n{scannerlist}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "description": "Bermuda kan ikke plassere enheter som ses av en proxy uten område. Følgende proxyer mangler områdetildeling:\n\n{scannerlist}\nTildel et område ved å åpne enhetssiden til hver proxy (via «Enheter og tjenester») og klikke på blyantikonet øverst til høyre. Når du er ferdig, send inn dette skjemaet, så sjekker Bermuda på nytt umiddelbart.",
+            "title": "Tildel områder til Bluetooth-proxyene dine"
+          }
+        }
+      },
       "title": "Enkelte Bluetooth-proxyer har ikke et OMRÅDE"
     }
   },

@@ -11,6 +11,7 @@ from homeassistant.const import (
     STATE_NOT_HOME,
     STATE_UNAVAILABLE,
     EntityCategory,
+    UnitOfElectricPotential,
     UnitOfLength,
     UnitOfTemperature,
 )
@@ -38,13 +39,8 @@ class BermudaSensor(BermudaEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "area"
 
-    @property
-    def unique_id(self) -> str | None:
-        """
-        "Uniquely identify this sensor so that it gets stored in the entity_registry,
-        and can be maintained / renamed etc by the user.
-        """
-        return self._device.unique_id
+    # unique_id is inherited from BermudaEntity (the bare device address);
+    # subclasses append their own suffix.
 
     @property
     def native_value(self) -> StateType:
@@ -100,7 +96,6 @@ class BermudaSensor(BermudaEntity, SensorEntity):
 
         # Limit how many attributes we list - prefer new sensors instead
         # since oft-changing attribs cause more db writes than sensors
-        # "last_seen": self.coordinator.dt_mono_to_datetime(self._device.last_seen),
         attribs: dict[str, Any] = {}
         if self._attr_translation_key in ("area", "floor"):
             attribs["area_id"] = self._device.area_id
@@ -124,6 +119,7 @@ class BermudaSensorFloor(BermudaSensor):
 
     @property
     def unique_id(self) -> str:
+        """Unique id: the device address suffixed with _floor."""
         return f"{self._device.unique_id}_floor"
 
     @property
@@ -133,6 +129,7 @@ class BermudaSensorFloor(BermudaSensor):
 
     @property
     def native_value(self) -> str:
+        """Name of the floor the device was located on, or not_home."""
         # Don't use area_scanner.name because it comes from the advert
         # entry. Instead refer to the BermudaDevice, which takes trouble
         # to use user-given names etc.
@@ -149,10 +146,12 @@ class BermudaSensorScanner(BermudaSensor):
 
     @property
     def unique_id(self) -> str:
+        """Unique id: the device address suffixed with _scanner."""
         return f"{self._device.unique_id}_scanner"
 
     @property
     def native_value(self) -> str:
+        """Name of the nearest scanner currently seeing this device, or not_home."""
         # Don't use area_scanner.name because it comes from the advert
         # entry. Instead refer to the BermudaDevice, which takes trouble
         # to use user-given names etc.
@@ -186,14 +185,17 @@ class BermudaSensorRssi(BermudaSensor):
 
     @property
     def native_value(self) -> float | None:
+        """Rate-limited RSSI (dBm) of the closest scanner's advertisement."""
         return self._cached_ratelimit(self._device.area_rssi, fast_falling=False, fast_rising=True)
 
     @property
     def device_class(self) -> SensorDeviceClass:
+        """Signal-strength device class for the nearest-RSSI sensor."""
         return SensorDeviceClass.SIGNAL_STRENGTH
 
     @property
     def native_unit_of_measurement(self) -> str:
+        """Unit for RSSI: dBm."""
         return SIGNAL_STRENGTH_DECIBELS_MILLIWATT
 
     @property
@@ -225,6 +227,7 @@ class BermudaSensorRange(BermudaSensor):
 
     @property
     def device_class(self) -> SensorDeviceClass:
+        """Distance device class for the nearest-area range sensor."""
         return SensorDeviceClass.DISTANCE
 
     @property
@@ -250,6 +253,7 @@ class BermudaSensorScannerRange(BermudaSensorRange):
         address: str,
         scanner_address: str,
     ) -> None:
+        """Bind this per-scanner range sensor to the given scanner device, raising if unknown."""
         super().__init__(coordinator, config_entry, address)
         self.coordinator = coordinator
         self.config_entry = config_entry
@@ -270,6 +274,7 @@ class BermudaSensorScannerRange(BermudaSensorRange):
 
     @property
     def unique_id(self) -> str:
+        """Unique id: device id + scanner's (legacy wifi) MAC, suffixed with _range."""
         # Retaining legacy wifi mac for unique_id
         return f"{self._device.unique_id}_{self._scanner.address_wifi_mac or self._scanner.address}_range"
 
@@ -324,6 +329,7 @@ class BermudaSensorScannerRangeRaw(BermudaSensorScannerRange):
 
     @property
     def unique_id(self) -> str:
+        """Unique id: device id + scanner's (legacy wifi) MAC, suffixed with _range_raw."""
         # Using address_wifi_mac as a legacy action, because esphome changed from
         # sending WIFI MAC to BLE MAC as its source address, in ESPHome 2025.3.0
         #
@@ -352,6 +358,7 @@ class BermudaSensorAreaSwitchReason(BermudaSensor):
 
     @property
     def unique_id(self) -> str:
+        """Unique id: the device address suffixed with _area_switch_reason."""
         return f"{self._device.unique_id}_area_switch_reason"
 
     @property
@@ -377,6 +384,7 @@ class BermudaSensorAreaLastSeen(BermudaSensor, RestoreSensor):
 
     @property
     def unique_id(self) -> str:
+        """Unique id: the device address suffixed with _area_last_seen."""
         return f"{self._device.unique_id}_area_last_seen"
 
     @property
@@ -386,6 +394,7 @@ class BermudaSensorAreaLastSeen(BermudaSensor, RestoreSensor):
 
     @property
     def native_value(self) -> str | None:
+        """Name of the area the device was most recently seen in."""
         return self._device.area_last_seen
 
     async def async_added_to_hass(self) -> None:
@@ -406,6 +415,7 @@ class BermudaSensorMicroLocation(BermudaSensor):
 
     @property
     def unique_id(self) -> str:
+        """Unique id: the device address suffixed with _micro_location."""
         return f"{self._device.unique_id}_micro_location"
 
     @property
@@ -415,6 +425,7 @@ class BermudaSensorMicroLocation(BermudaSensor):
 
     @property
     def icon(self) -> str:
+        """Icon for the micro-location sensor."""
         return ICON_MICROLOCATION
 
     @property
@@ -441,22 +452,27 @@ class BermudaSensorIn100Vcc(BermudaSensor):
 
     @property
     def unique_id(self) -> str:
+        """Unique id: the device address suffixed with _in100_vcc."""
         return f"{self._device.unique_id}_in100_vcc"
 
     @property
     def native_value(self) -> float | None:
+        """Supply voltage (VCC) reported by the IN100/Fermion beacon, in volts."""
         return self._device.in100_vcc
 
     @property
     def device_class(self) -> SensorDeviceClass:
+        """Voltage device class for the VCC sensor."""
         return SensorDeviceClass.VOLTAGE
 
     @property
     def native_unit_of_measurement(self) -> str:
-        return "V"
+        """Unit for VCC: volts."""
+        return UnitOfElectricPotential.VOLT
 
     @property
     def state_class(self) -> SensorStateClass:
+        """Measurement state class for the VCC sensor."""
         return SensorStateClass.MEASUREMENT
 
     @property
@@ -472,22 +488,27 @@ class BermudaSensorIn100Temperature(BermudaSensor):
 
     @property
     def unique_id(self) -> str:
+        """Unique id: the device address suffixed with _in100_temperature."""
         return f"{self._device.unique_id}_in100_temperature"
 
     @property
     def native_value(self) -> float | None:
+        """Temperature reported by the IN100/Fermion beacon, in degrees Celsius."""
         return self._device.in100_temp_c
 
     @property
     def device_class(self) -> SensorDeviceClass:
+        """Temperature device class for the temperature sensor."""
         return SensorDeviceClass.TEMPERATURE
 
     @property
     def native_unit_of_measurement(self) -> str:
+        """Unit for temperature: degrees Celsius."""
         return UnitOfTemperature.CELSIUS
 
     @property
     def state_class(self) -> SensorStateClass:
+        """Measurement state class for the temperature sensor."""
         return SensorStateClass.MEASUREMENT
 
     @property
@@ -504,22 +525,27 @@ class BermudaSensorIn100AdcVoltage(BermudaSensor):
 
     @property
     def unique_id(self) -> str:
+        """Unique id: the device address suffixed with _in100_adc_voltage."""
         return f"{self._device.unique_id}_in100_adc_voltage"
 
     @property
     def native_value(self) -> float | None:
+        """Raw ADC voltage reported by the IN100/Fermion beacon, in volts."""
         return self._device.in100_adc_voltage
 
     @property
     def device_class(self) -> SensorDeviceClass:
+        """Voltage device class for the ADC voltage sensor."""
         return SensorDeviceClass.VOLTAGE
 
     @property
     def native_unit_of_measurement(self) -> str:
-        return "V"
+        """Unit for ADC voltage: volts."""
+        return UnitOfElectricPotential.VOLT
 
     @property
     def state_class(self) -> SensorStateClass:
+        """Measurement state class for the ADC voltage sensor."""
         return SensorStateClass.MEASUREMENT
 
     @property

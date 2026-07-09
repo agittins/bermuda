@@ -10,8 +10,10 @@ from typing import TYPE_CHECKING
 
 from homeassistant.const import Platform
 
+from .address_type import is_irk
 from .const import (
     _LOGGER,
+    _LOGGER_SPAM_LESS,
     CONF_DEVICES,
     DOMAIN_PRIVATE_BLE_DEVICE,
     METADEVICE_IBEACON_DEVICE,
@@ -98,8 +100,19 @@ class BermudaMetadeviceMixin:
                         # for the metadevice.
                         # As of 2024.4.0b4 Private_ble appends _device_tracker to the
                         # unique_id of the entity, while we really want to know
-                        # the actual IRK, so handle either case by splitting it:
+                        # the actual IRK, so handle either case by splitting it.
+                        # This leans on private_ble_device's internal unique_id
+                        # format, so validate the result actually looks like an
+                        # IRK in case that format changes again.
                         _irk = pb_entity.unique_id.split("_")[0]
+                        if not is_irk(_irk):
+                            _LOGGER_SPAM_LESS.warning(
+                                f"pble_uid_format_{pb_entity.entity_id}",
+                                "Could not extract IRK from Private BLE Device unique_id"
+                                " (entity %s); its format may have changed - skipping.",
+                                pb_entity.entity_id,
+                            )
+                            continue
 
                         # Create our Meta-Device and tag it up...
                         metadevice = self._get_or_create_device(_irk)
@@ -231,12 +244,6 @@ class BermudaMetadeviceMixin:
                 if source_device is None:
                     # No ads current in the backend for this one. Not an issue, the mac might be old
                     # or now showing up yet.
-                    # _LOGGER_SPAM_LESS.debug(
-                    #     f"metaNoAdsFor_{metadevice.address}_{source_address}",
-                    #     "Metadevice %s: no adverts for source MAC %s found during update_metadevices",
-                    #     metadevice.__repr__(),
-                    #     source_address,
-                    # )
                     continue
 
                 if (

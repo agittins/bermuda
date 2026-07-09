@@ -47,24 +47,39 @@ class BermudaScannerMixin:
 
     @property
     def scanner_list(self) -> set[str]:
+        """The set of MAC addresses of devices currently registered as scanners."""
         return self._scanner_list
 
     @property
     def get_scanners(self) -> set[BermudaDevice]:
+        """The set of BermudaDevice objects currently registered as scanners."""
         return self._scanners
 
     def scanner_list_add(self, scanner_device: BermudaDevice) -> None:
+        """Register a device as an active scanner and notify listeners of the change."""
         self._scanner_list.add(scanner_device.address)
         self._scanners.add(scanner_device)
         async_dispatcher_send(self.hass, SIGNAL_SCANNERS_CHANGED)
 
     def scanner_list_del(self, scanner_device: BermudaDevice) -> None:
+        """Remove a device from the scanner roster and notify listeners of the change."""
         # discard() (not remove()) so demoting a device that was never in the set
         # — e.g. one whose is_scanner flag desynced — can't raise KeyError and abort
         # the whole scanner rebuild mid-loop.
         self._scanner_list.discard(scanner_device.address)
         self._scanners.discard(scanner_device)
         async_dispatcher_send(self.hass, SIGNAL_SCANNERS_CHANGED)
+
+    def refresh_scanners(self, *, force: bool = False) -> None:
+        """
+        Public re-check of the scanner roster (used by the repairs fix flow).
+
+        Resets the area-repair memo first so the scanner_without_area issue is
+        re-evaluated from scratch - HA deletes a fixable issue when its flow
+        completes, so the memo would otherwise mask a still-broken state.
+        """
+        self._scanners_without_areas = None
+        self._refresh_scanners(force=force)
 
     def _refresh_scanners(self, *, force: bool = False) -> None:
         """
@@ -142,14 +157,18 @@ class BermudaScannerMixin:
             ir.async_delete_issue(self.hass, DOMAIN, REPAIR_SCANNER_WITHOUT_AREA)
 
             if self._scanners_without_areas and len(self._scanners_without_areas) != 0:
+                scannerlist_text = "".join(f"- {name}\n" for name in self._scanners_without_areas)
                 ir.async_create_issue(
                     self.hass,
                     DOMAIN,
                     REPAIR_SCANNER_WITHOUT_AREA,
                     translation_key=REPAIR_SCANNER_WITHOUT_AREA,
                     translation_placeholders={
-                        "scannerlist": "".join(f"- {name}\n" for name in self._scanners_without_areas),
+                        "scannerlist": scannerlist_text,
                     },
                     severity=ir.IssueSeverity.ERROR,
-                    is_fixable=False,
+                    # Fixable: the fix flow (see repairs.py) walks the user through
+                    # assigning the missing areas, then forces a roster re-check.
+                    is_fixable=True,
+                    data={"scannerlist": scannerlist_text},
                 )

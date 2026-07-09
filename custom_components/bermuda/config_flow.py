@@ -71,6 +71,7 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:  # noqa: ARG004
+        """Return a new options flow handler for this config entry."""
         return BermudaOptionsFlowHandler()
 
     @classmethod

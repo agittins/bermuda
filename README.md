@@ -112,6 +112,157 @@ for any person/user.
 
 ![Assign a Bermuda sensor for Person tracking](img/screenshots/person-tracker.png)
 
+## Supported devices
+
+**Anything that advertises Bluetooth Low Energy can be tracked**, including:
+
+- **Plain BLE devices** (fixed MAC): beacon tiles, thermometers, watches, headphones…
+- **iBeacons**, including senders with randomised MACs (e.g. Android phones running the
+  HA Companion App). Bermuda tracks the iBeacon identity (`uuid_major_minor`), not the MAC.
+- **Private BLE devices** (iPhone/iPad/Watch, IRK-based): via the core
+  [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/)
+  integration; enrol directly from Bermuda's options menu or the `bermuda.enrol_private_device` action.
+- **Item trackers recognised by advert signature**: AirTag, AirPods, Samsung SmartTag,
+  Tile, TrackR, Nut, Google Find My Device network tags — labelled in the discovery pickers.
+- **InPlay IN100 / DFRobot Fermion beacons**: their `0x0505` telemetry (supply voltage,
+  temperature, ADC voltage) is decoded into dedicated sensors automatically.
+- **Whole categories** (ESPresense-style): track every `apple`, `ibeacon`, `irk`, `named`… device at once.
+
+**As receivers (scanners)**: ESPHome `bluetooth_proxy` nodes, Shelly Plus (Gen2+) proxies,
+or a local USB Bluetooth adaptor (best-effort: USB adaptors don't timestamp adverts).
+
+## Entities provided
+
+Per tracked device: a `device_tracker` (home/not_home; on HA ≥ 2026.6 it can be associated
+with any zone and reports `in_zones`), an **Area** sensor, **Floor**, **Nearest scanner**,
+**Micro-location**, **Distance** and **RSSI** sensors, per-scanner **Distance to <scanner>**
+(+ unfiltered variant) sensors, an **Area last seen** sensor, a diagnostic
+**Area switch reason** sensor (disabled by default), a **Reference power** number and a
+**Mobility mode** select (moving/stationary, tunes the smoothing). IN100 beacons also get
+voltage/temperature/ADC sensors. A **Bermuda Global** service device carries fleet-wide
+counters (proxies, active proxies, devices, visible devices, nearby-devices list).
+
+## How data updates work
+
+Bermuda is a **calculated, 100 % local** integration: it makes no network requests and has
+no external dependencies. Home Assistant's Bluetooth stack pushes advertisements from all
+your proxies as they arrive; Bermuda also runs a light processing cycle (about once per
+second) that smooths RSSI, converts it to distance estimates, arbitrates the winning Area
+per device, and prunes stale devices. Sensor updates are rate-limited (`update_interval`
+option) to reduce recorder churn without sacrificing latency — a closing distance always
+updates immediately.
+
+## Configuration options
+
+The initial setup has **no parameters** (single instance, just confirm). Everything is
+tuned afterwards via **Configure**:
+
+| Option | Default | What it does |
+|---|---|---|
+| `configured_devices` | — | Individual devices to track (the *Scan* step lists nearby, not-yet-tracked devices, strongest first). |
+| `track_categories` | — | Track whole categories (ESPresense-style fingerprints) instead of/alongside individual devices. |
+| `exclude_devices` | — | Denylist that always wins over category tracking. |
+| `ref_power` | −55 dBm | Expected RSSI at 1 m; the global distance calibration. |
+| `attenuation` | 3 | Environmental path-loss factor. |
+| `max_area_radius` | 20 m | Beyond this distance a scanner can't claim the device for its Area. |
+| `devtracker_nothome_timeout` | 30 s | How long unseen before the device_tracker flips to not_home. |
+| `update_interval` | 10 s | Sensor rate-limit interval (internal processing stays ~1 s). |
+| `smoothing_samples` | 20 | Window of the distance-smoothing average. |
+| `max_velocity` | 3 m/s | Readings implying faster retreat are rejected as noise. |
+| Area presence entities | — | Motion/contact/etc. entities whose Area, while *on*, competes with BLE at a per-entity "virtual distance". |
+
+Per-scanner **RSSI offset calibration** and per-device **enrolment** (name, ref_power,
+away-timeout) are managed as config **subentries** on the integration page.
+
+## Actions (services)
+
+| Action | Purpose |
+|---|---|
+| `bermuda.dump_devices` | Full JSON dump of internal state (optionally filtered by `addresses`, optionally `redact`ed). |
+| `bermuda.enrol_private_device` | Hand an IRK to the Private BLE Device integration so Bermuda tracks an iPhone/Watch. |
+| `bermuda.calibrate_location` / `where_is` / `list_locations` / `remove_location` / `rename_location` | Manage micro-locations (also exposed as Assist intents). |
+| `bermuda.track_device` / `untrack_device` | Add/remove a tracked device without opening the UI. |
+| `bermuda.set_global_calibration` / `set_scanner_offset` / `get_config` | MCP-friendly configuration API. |
+
+## Use cases
+
+- **Room-level presence**: drive lights/climate per room from *which Area a person's watch
+  or phone is in*, not just home/away.
+- **Find my keys**: put a tag on the keys, calibrate micro-locations ("key hook",
+  "jacket pocket"), then ask Assist *"where are my keys?"*.
+- **Leaving-home guard**: notify if the backpack's tag is still in the Bedroom when the
+  front door opens.
+- **Presence-hardened automations**: combine BLE with motion sensors via the area-entity
+  override so a triggered motion sensor can win the Area for stationary devices.
+
+## Example automations
+
+Turn on the office lights when your watch enters the Office:
+
+```yaml
+automation:
+  - alias: "Office lights follow my watch"
+    triggers:
+      - trigger: state
+        entity_id: sensor.my_watch_area   # Bermuda Area sensor
+        to: "Office"
+    actions:
+      - action: light.turn_on
+        target:
+          area_id: office
+```
+
+Warn when leaving without the keys:
+
+```yaml
+automation:
+  - alias: "Forgot the keys"
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.front_door
+        to: "on"
+    conditions:
+      - condition: state
+        entity_id: device_tracker.keys_tag
+        state: "home"
+    actions:
+      - action: notify.mobile_app_phone
+        data:
+          message: "Door opened but the keys are still {{ states('sensor.keys_tag_area') }}!"
+```
+
+## Known limitations
+
+- **BLE distance is an estimate.** RSSI varies with walls, bodies and antenna orientation;
+  expect metre-scale accuracy at best. Bermuda optimises *which room*, not coordinates —
+  there is no x/y map positioning (yet).
+- **Area changes are damped on purpose.** The mobility-aware hysteresis trades a few
+  seconds of latency for stability; a device sitting between two rooms may legitimately
+  read as either.
+- **Proxies need an Area.** Devices seen only by area-less proxies can't be placed
+  (a repair issue guides you through fixing this).
+- **USB adaptors are second-class**: no advert timestamps, so distances are coarser.
+- **Randomised MACs without IRK/iBeacon identity can't be tracked long-term** (they rotate);
+  use Private BLE Device (IRK) or an iBeacon-capable app instead.
+- **Assist intent replies are English-only** (custom intents have no HA translation
+  mechanism; voice assistants and MCP clients typically rephrase in your language).
+
+## Troubleshooting
+
+- **"No scanners" in the options menu status**: no Bluetooth proxies are feeding HA. Check
+  your ESPHome `bluetooth_proxy`/Shelly configuration; the scanner table in that same menu
+  shows each proxy's last-advert age (✔ fresh / ⚠ slow / ☠ silent).
+- **Repair: "Some Bluetooth Proxies don't have an AREA"**: assign an Area on each proxy's
+  device page, then press *Submit* on the repair — Bermuda re-checks immediately.
+- **Distances look wrong**: calibrate `ref_power` globally (device at exactly 1 m from a
+  proxy), then per-scanner RSSI offsets via the calibration subentries.
+- **Device flip-flops between rooms**: set its **Mobility mode** select to *stationary*
+  (steadier smoothing), add/move a proxy, or lower `max_area_radius`.
+- **Everything is "unavailable" after HA 2026.6**: the Bluetooth *Auto* scanning mode cut
+  radio duty-cycles; if a proxy went quiet, check it still appears in the scanner table.
+- **Deep diagnosis**: call `bermuda.dump_devices` (with `redact: true` when sharing) and
+  attach it to your issue, plus the integration's Diagnostics download.
+
 ## FAQ
 
 See [The FAQ](https://github.com/foXaCe/bermuda/wiki/FAQ) in the Wiki!

@@ -7,14 +7,23 @@
       "manufacturer_id": 76
     }
   ],
-  "codeowners": ["@foXaCe"],
+  "codeowners": [
+    "@foXaCe"
+  ],
   "config_flow": true,
-  "dependencies": ["bluetooth_adapters", "device_tracker", "private_ble_device"],
+  "dependencies": [
+    "bluetooth_adapters",
+    "device_tracker",
+    "private_ble_device"
+  ],
   "documentation": "https://github.com/foXaCe/bermuda",
   "integration_type": "device",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/foXaCe/bermuda/issues",
-  "loggers": ["custom_components.bermuda"],
+  "loggers": [
+    "custom_components.bermuda"
+  ],
+  "quality_scale": "gold",
   "requirements": [],
-  "version": "0.10.0"
+  "version": "0.13.0"
 }

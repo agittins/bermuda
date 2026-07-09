@@ -1,11 +1,15 @@
-aiofiles
-aiousbwatcher
-colorlog==6.10.1
+# Bermuda has NO external runtime dependencies (manifest "requirements": []).
+# Everything below provisions the dev/test environment only.
+
+# Home Assistant itself, for the dev/test host.
 homeassistant>=2026.6.4
 pip>=26.1.2,<26.2
-ruff==0.15.20
-pyudev
-pyserial-asyncio==0.6
-pyserial==3.5
-serialx
+
+# Pulled in by HA components that the bluetooth/usb/esphome test fixtures load
+# during the pytest suite - not used by Bermuda's own code.
 aioesphomeapi
+aiousbwatcher
+pyudev
+pyserial==3.5
+pyserial-asyncio==0.6
+serialx

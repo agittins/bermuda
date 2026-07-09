@@ -8,6 +8,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from custom_components.bermuda.bermuda_advert import BermudaAdvert
 from custom_components.bermuda.bermuda_device import BermudaDevice
+from custom_components.bermuda.rssi_filters import RSSI_POLICY_MOVING, RSSI_POLICY_STATIONARY
 from bleak.backends.scanner import AdvertisementData
 
 
@@ -99,9 +100,13 @@ def test_rssi_filter_policy_depends_on_mobility(bermuda_advert):
     """Stationary devices use a longer/steadier RSSI window than moving ones."""
     ba = bermuda_advert
     ba._device.get_mobility_type = lambda: "stationary"
-    assert ba._rssi_filter_policy() == (13, 0.22, 12.0)
+    policy = ba._rssi_filter_policy()
+    assert policy is RSSI_POLICY_STATIONARY
+    assert (policy.window, policy.ema_alpha, policy.base_outlier_db) == (13, 0.22, 12.0)
     ba._device.get_mobility_type = lambda: "moving"
-    assert ba._rssi_filter_policy() == (9, 0.45, 15.0)
+    policy = ba._rssi_filter_policy()
+    assert policy is RSSI_POLICY_MOVING
+    assert (policy.window, policy.ema_alpha, policy.base_outlier_db) == (9, 0.45, 15.0)
 
 
 def test_apply_new_scanner(bermuda_advert, mock_scanner_device):

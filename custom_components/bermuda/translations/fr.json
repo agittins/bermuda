@@ -183,7 +183,14 @@
   },
   "issues": {
     "scanner_without_area": {
-      "description": "Bermuda nécessite que tous les proxys Bluetooth aient une zone valide assignée pour fonctionner correctement. Assignez une zone en visitant la page de chaque proxy (via `Appareils et services`), et cliquez sur l'icône crayon en haut à droite pour assigner une zone. Les proxys suivants n'ont pas de zone assignée :\n\n{scannerlist}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "description": "Bermuda ne peut pas localiser les appareils vus par un proxy sans zone. Les proxys suivants n'ont pas de zone attribuée :\n\n{scannerlist}\nAttribuez une zone en ouvrant la page de chaque proxy (via « Appareils et services ») puis en cliquant sur l'icône crayon en haut à droite. Une fois terminé, validez ce formulaire : Bermuda revérifiera immédiatement.",
+            "title": "Attribuez des zones à vos proxys Bluetooth"
+          }
+        }
+      },
       "title": "Certains proxys Bluetooth n'ont pas de ZONE"
     }
   },
@@ -224,7 +231,7 @@
           "irk": "Collez la clé en 32 caractères hexadécimaux, ou en base64 (finissant par « = »). Un préfixe « irk: » est accepté.",
           "name": "Un nom convivial pour l'appareil suivi. Laissez vide pour utiliser le nom de l'appareil."
         },
-        "description": "Suivez un iPhone, une Apple Watch ou un autre appareil à vie privée via son **IRK** (Identity Resolving Key). Home Assistant résout sa MAC tournante et Bermuda le suit ensuite automatiquement.\n\n**Où trouver l'IRK**\n- **iOS / watchOS** (nécessite un Mac connecté au même iCloud) : ouvrez *Trousseaux d'accès* → *Éléments locaux* → recherchez `Bluetooth` → sélectionnez l'enregistrement correspondant à la MAC de l'appareil (Réglages › Général › Informations) → *Afficher le mot de passe* → copiez le champ **Remote IRK** (base64).\n- **Android** (rooté) : dans `/data/misc/bluedroid/bt_config.conf`, lisez `LE_LOCAL_KEY_IRK` (inversez l'ordre des octets).\n\nL'appareil doit être à proximité et émettre maintenant, sinon la clé est rejetée.",
+        "description": "Suivez un iPhone, une Apple Watch ou un autre appareil privé via son **IRK** (Identity Resolving Key). Home Assistant résout sa MAC tournante et Bermuda le suit ensuite automatiquement.\n\n**Où trouver l'IRK**\n- **iOS / watchOS** (nécessite un Mac connecté au même iCloud) : ouvrez *Trousseaux d'accès* → *Éléments locaux* → recherchez `Bluetooth` → sélectionnez l'enregistrement correspondant à la MAC de l'appareil (Réglages › Général › Informations) → *Afficher le mot de passe* → copiez le champ **Remote IRK** (base64).\n- **Android** (rooté) : dans `/data/misc/bluedroid/bt_config.conf`, lisez `LE_LOCAL_KEY_IRK` (inversez l'ordre des octets).\n\nL'appareil doit être à proximité et émettre maintenant, sinon la clé est rejetée.",
         "title": "Enrôler un appareil privé (IRK)"
       },
       "globalopts": {
@@ -365,7 +372,7 @@
       "name": "Exporter les appareils"
     },
     "enrol_private_device": {
-      "description": "Suivez un appareil à vie privée (iPhone, Apple Watch, …) via son IRK. Transmet la clé à l'intégration Private BLE Device de Home Assistant, qui résout la MAC tournante ; Bermuda le suit ensuite automatiquement. L'appareil doit être à proximité et émettre pour que la clé soit acceptée.",
+      "description": "Suivez un appareil privé (iPhone, Apple Watch, …) via son IRK. Transmet la clé à l'intégration Private BLE Device de Home Assistant, qui résout la MAC tournante ; Bermuda le suit ensuite automatiquement. L'appareil doit être à proximité et émettre pour que la clé soit acceptée.",
       "fields": {
         "irk": {
           "description": "Identity Resolving Key, en 32 caractères hexadécimaux ou base64 (finissant par « = »).",

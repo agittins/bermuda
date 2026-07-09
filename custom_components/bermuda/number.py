@@ -51,7 +51,7 @@ async def async_setup_entry(
             entities.append(BermudaNumber(coordinator, entry, address))
             # We set update before add to False because we are being
             # call(back(ed)) from the update, so causing it to call another would be... bad.
-            async_add_devices(entities, False)
+            async_add_devices(entities, update_before_add=False)
             created_devices.append(address)
         # tell the co-ord we've done it.
         coordinator.number_created(address)
@@ -68,7 +68,6 @@ class BermudaNumber(BermudaEntity, RestoreNumber):
     _attr_translation_key = "ref_power"
     _attr_device_class = NumberDeviceClass.SIGNAL_STRENGTH
     _attr_entity_category = EntityCategory.CONFIG
-    # _attr_entity_registry_enabled_default = False
     _attr_native_min_value = -127
     _attr_native_max_value = 0
     _attr_native_step = 1

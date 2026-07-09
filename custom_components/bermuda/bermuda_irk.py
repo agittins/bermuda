@@ -38,6 +38,7 @@ class BermudaIrkManager:
     """
 
     def __init__(self) -> None:
+        """Set up empty IRK/MAC caches and the per-IRK resolution-callback registry."""
         self._irks: dict[bytes, Cipher[modes.ECB]] = {}
         self._macs: dict[str, ResolvableMAC] = {}
         self._irk_callbacks: dict[bytes, list[BluetoothCallback]] = {}
@@ -186,9 +187,24 @@ class BermudaIrkManager:
         so that we can fake the PrivateBleDevice callbacks for an easy win.
         """
         # Create bare-shell classes to satisfy the callback signature
-        # (bleak >= 1.0, i.e. HA >= 2025.8: BLEDevice takes 3 params, no rssi)
+        # (bleak >= 1.0, i.e. HA >= 2025.8: BLEDevice takes 3 params, no rssi).
+        # Keyword construction on purpose: the positional form silently broke
+        # once already when upstream inserted a parameter mid-signature.
         bledevice = BLEDevice(mac, "", None)
-        service_info = BluetoothServiceInfoBleak("", mac, 0, {}, {}, [], DOMAIN, bledevice, None, False, False, 0)
+        service_info = BluetoothServiceInfoBleak(
+            name="",
+            address=mac,
+            rssi=0,
+            manufacturer_data={},
+            service_data={},
+            service_uuids=[],
+            source=DOMAIN,
+            device=bledevice,
+            advertisement=None,
+            connectable=False,
+            time=0.0,
+            tx_power=None,
+        )
 
         if callbacks := self._irk_callbacks.get(irk):
             for cb in callbacks:

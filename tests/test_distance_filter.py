@@ -61,7 +61,10 @@ class TestMinimumHuggingAverage:
 
     def test_empty_returns_seed_or_infinite(self):
         assert minimum_hugging_average([], 4.0) == 4.0
-        assert minimum_hugging_average([], 0) == DISTANCE_INFINITE
+        # A raw distance of exactly 0.0 is a legitimate closest-possible
+        # reading, not a missing one (an `or` fallback used to falsely map
+        # it to DISTANCE_INFINITE before the 2026-07 overhaul).
+        assert minimum_hugging_average([], 0) == 0
         assert minimum_hugging_average([], None) == DISTANCE_INFINITE
 
     def test_hugs_running_minimum(self):

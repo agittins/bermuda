@@ -41,7 +41,7 @@ def parse_irk(irk: str) -> bytes | None:
             raw = bytes(reversed(base64.b64decode(irk)))
         else:
             raw = binascii.unhexlify(irk)
-    except (binascii.Error, ValueError):
+    except binascii.Error, ValueError:
         return None
     return raw if len(raw) == 16 else None
 

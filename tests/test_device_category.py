@@ -22,6 +22,7 @@ from custom_components.bermuda.const import (
 def device():
     coordinator = MagicMock()
     coordinator.options = {}
+    coordinator.device_config = {}
     return BermudaDevice(address="AA:BB:CC:DD:EE:FF", coordinator=coordinator)
 
 
@@ -78,6 +79,7 @@ def test_vendor_takes_precedence_over_named(device):
 def _device(options: dict) -> BermudaDevice:
     coordinator = MagicMock()
     coordinator.options = options
+    coordinator.device_config = {}
     dev = BermudaDevice(address="AA:BB:CC:DD:EE:FF", coordinator=coordinator)
     dev.address_type = BDADDR_TYPE_OTHER
     return dev

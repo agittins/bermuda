@@ -14,7 +14,6 @@ to the combination of the scanner and the device it is reporting.
 
 from __future__ import annotations
 
-import statistics
 from typing import TYPE_CHECKING, Any, Final
 
 from bluetooth_data_tools import monotonic_time_coarse
@@ -32,7 +31,15 @@ from .const import (
     HIST_KEEP_COUNT,
     MOBILITY_STATIONARY,
 )
-from .distance_filter import median_abs_deviation, minimum_hugging_average, peak_retreat_velocity
+from .distance_filter import minimum_hugging_average, peak_retreat_velocity
+from .rssi_filters import (
+    RSSI_POLICY_MOVING,
+    RSSI_POLICY_STATIONARY,
+    RssiFilterPolicy,
+    clamp_outlier,
+    ema,
+    rssi_dispersion,
+)
 from .util import clean_charbuf, rssi_to_metres
 
 if TYPE_CHECKING:
@@ -69,6 +76,7 @@ class BermudaAdvert:
         options: dict[str, Any],
         scanner_device: BermudaDevice,  # The scanner device that "saw" it.
     ) -> None:
+        """Link the tracked device to the scanner and process the triggering advertisement."""
         self.scanner_address: Final[str] = scanner_device.address
         self.device_address: Final[str] = parent_device.address
         self._device = parent_device
@@ -111,6 +119,7 @@ class BermudaAdvert:
         self.update_advertisement(advertisementdata, self.scanner_device)
 
     def apply_new_scanner(self, scanner_device: BermudaDevice) -> None:
+        """Rebind this advert to a (possibly replaced) scanner device, refreshing name and area."""
         self.name: str = scanner_device.name  # or scandata.scanner.name
         self.scanner_device = scanner_device  # links to the source device
         if self.scanner_address != scanner_device.address:
@@ -198,19 +207,6 @@ class BermudaAdvert:
             self.stamp = new_stamp or 0
             self.hist_stamp.insert(0, self.stamp)
 
-        # if self.tx_power is not None and scandata.advertisement.tx_power != self.tx_power:
-        #     # Not really an error, we just don't account for this happening -
-        #     # I want to know if it does.
-        #     # AJG 2024-01-11: This does happen. Looks like maybe apple devices?
-        #     # Changing from warning to debug to quiet users' logs.
-        #     # Also happens with esphome set with long beacon interval tx, as it alternates
-        #     # between sending some generic advert and the iBeacon advert. ie, it's bogus for that
-        #     # case.
-        #     _LOGGER.debug(
-        #         "Device changed TX-POWER! That was unexpected: %s %sdB",
-        #         self.parent_device_address,
-        #         scandata.advertisement.tx_power,
-        #     )
         self.tx_power = advertisementdata.tx_power
 
         # Store each of the extra advertisement fields in historical lists.
@@ -262,11 +258,11 @@ class BermudaAdvert:
         # Finally, save the new advert timestamp.
         self.new_stamp = new_stamp
 
-    def _rssi_filter_policy(self) -> tuple[int, float, float]:
-        """Return mobility-aware RSSI filter params: (window, ema_alpha, base_outlier_db)."""
+    def _rssi_filter_policy(self) -> RssiFilterPolicy:
+        """Return the mobility-aware RSSI filter parameters for the parent device."""
         if self._device.get_mobility_type() == MOBILITY_STATIONARY:
-            return (13, 0.22, 12.0)
-        return (9, 0.45, 15.0)
+            return RSSI_POLICY_STATIONARY
+        return RSSI_POLICY_MOVING
 
     def _update_filtered_rssi(self, adjusted_rssi: float) -> float:
         """
@@ -274,32 +270,19 @@ class BermudaAdvert:
 
         Clamps a spike to the recent median when it exceeds a MAD-derived threshold,
         then exponentially smooths it, and refreshes the dispersion (jitter) estimate.
-        The window/alpha/threshold come from the device's mobility mode.
+        The window/alpha/threshold come from the device's mobility mode (see the
+        rssi_filters module for the pure maths).
         """
-        window, alpha, outlier_db = self._rssi_filter_policy()
-        prior = self.hist_rssi_adjusted[:window]
-        sample = adjusted_rssi
-
-        if len(prior) >= 3:
-            med = statistics.median(prior)
-            mad = median_abs_deviation(prior, med)
-            robust_sigma = max(mad * 1.4826, 1.0)
-            threshold = max(outlier_db, robust_sigma * 3.0)
-            if abs(sample - med) > threshold:
-                sample = med
-
-        if self.rssi_filtered is None:
-            self.rssi_filtered = sample
-        else:
-            self.rssi_filtered = (alpha * sample) + ((1 - alpha) * self.rssi_filtered)
+        policy = self._rssi_filter_policy()
+        sample = clamp_outlier(adjusted_rssi, self.hist_rssi_adjusted[: policy.window], policy.base_outlier_db)
+        self.rssi_filtered = ema(self.rssi_filtered, sample, policy.ema_alpha)
 
         self.hist_rssi_adjusted.insert(0, sample)
         self.hist_rssi_filtered.insert(0, self.rssi_filtered)
         del self.hist_rssi_adjusted[HIST_KEEP_COUNT:]
         del self.hist_rssi_filtered[HIST_KEEP_COUNT:]
 
-        filt_window = self.hist_rssi_filtered[:window]
-        self.rssi_dispersion = median_abs_deviation(filt_window) * 1.4826 if len(filt_window) >= 3 else 0.0
+        self.rssi_dispersion = rssi_dispersion(self.hist_rssi_filtered[: policy.window])
 
         return self.rssi_filtered
 

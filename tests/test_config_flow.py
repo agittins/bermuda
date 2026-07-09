@@ -95,3 +95,47 @@ async def test_options_flow(hass: HomeAssistant, setup_bermuda_entry: MockConfig
 
     # Verify that the options were updated
     assert setup_bermuda_entry.options == MOCK_OPTIONS_GLOBALS
+
+
+async def test_bluetooth_discovery_aborts_without_reload_when_configured(
+    hass: HomeAssistant, setup_bermuda_entry
+) -> None:
+    """
+    Regression anchor for the HA 2026.6 reload deprecation.
+
+    Bermuda combines an entry update listener with config-flow unique-id
+    matching; that combination is only legal because the flow passes
+    reload_on_update=False. If someone re-enables reload-on-update, this
+    discovery must not schedule a reload of the existing entry (double-reload
+    race, hard error from HA 2026.12).
+    """
+    from unittest.mock import MagicMock, patch
+
+    from habluetooth import BluetoothServiceInfoBleak
+    from bleak.backends.device import BLEDevice
+
+    service_info = BluetoothServiceInfoBleak(
+        name="test",
+        address="aa:bb:cc:dd:ee:ff",
+        rssi=-60,
+        manufacturer_data={},
+        service_data={},
+        service_uuids=[],
+        source="local",
+        device=BLEDevice("aa:bb:cc:dd:ee:ff", "test", None),
+        advertisement=None,
+        connectable=False,
+        time=0.0,
+        tx_power=None,
+    )
+
+    with patch.object(hass.config_entries, "async_schedule_reload", MagicMock()) as mock_reload:
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_BLUETOOTH},
+            data=service_info,
+        )
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] in ("single_instance_allowed", "already_configured")
+    mock_reload.assert_not_called()

@@ -8,7 +8,13 @@
     ".": {
       "package-name": "bermuda",
       "release-type": "simple",
-      "extra-files": ["custom_components/bermuda/manifest.json"]
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "custom_components/bermuda/manifest.json",
+          "jsonpath": "$.version"
+        }
+      ]
     }
   }
 }

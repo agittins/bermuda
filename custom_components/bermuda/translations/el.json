@@ -183,7 +183,14 @@
   },
   "issues": {
     "scanner_without_area": {
-      "description": "Το Bermuda απαιτεί όλα τα proxy Bluetooth να έχουν μια έγκυρη περιοχή ορισμένη για να λειτουργήσει σωστά. Ορίστε μια περιοχή επισκεπτόμενοι τη σελίδα συσκευής κάθε proxy (μέσω `Συσκευές και Υπηρεσίες`), και κάντε κλικ στο εικονίδιο μολυβιού πάνω δεξιά για να ορίσετε περιοχή. Τα ακόλουθα proxy δεν έχουν ορισμένη περιοχή:\n\n{scannerlist}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "description": "Το Bermuda δεν μπορεί να τοποθετήσει συσκευές που εντοπίζονται από διαμεσολαβητή χωρίς περιοχή. Οι παρακάτω διαμεσολαβητές δεν έχουν αντιστοιχισμένη περιοχή:\n\n{scannerlist}\nΑντιστοιχίστε μια περιοχή ανοίγοντας τη σελίδα κάθε διαμεσολαβητή (μέσω «Συσκευές και υπηρεσίες») και πατώντας το εικονίδιο μολυβιού πάνω δεξιά. Μόλις ολοκληρώσετε, υποβάλετε αυτή τη φόρμα και το Bermuda θα ελέγξει ξανά αμέσως.",
+            "title": "Αντιστοιχίστε περιοχές στους διαμεσολαβητές Bluetooth"
+          }
+        }
+      },
       "title": "Ορισμένα Bluetooth Proxy δεν έχουν ΠΕΡΙΟΧΗ"
     }
   },
@@ -193,9 +200,9 @@
       "err_scanner_no_record": "Ο επιλεγμένος ανιχνευτής δεν έχει δει (ακόμα) αυτήν τη συσκευή.",
       "irk_not_found": "Δεν είναι ορατή αυτή τη στιγμή καμία συσκευή που να ταιριάζει με αυτό το IRK. Βεβαιωθείτε ότι είναι κοντά, ενεργοποιημένη και ότι το Bluetooth είναι ενεργό.",
       "irk_not_valid": "Αυτό δεν μοιάζει με έγκυρο IRK (χρειάζονται 16 byte: 32 δεκαεξαδικοί χαρακτήρες, ή base64 που καταλήγει σε '=').",
-      "no_devices": "No bluetooth devices are actively being reported from your scanners. \nYou will need to solve this before Bermuda can be of much help.",
-      "no_scanners": "You need to configure some bluetooth scanners before Bermuda will have anything to work with. \nAny one of esphome bluetooth_proxy, Shelly bluetooth proxy or local bluetooth adaptor should get you started.",
-      "some_active": "You have at least some active devices, this is good.",
+      "no_devices": "Δεν αναφέρονται ενεργά συσκευές Bluetooth από τους σαρωτές σας. \nΘα πρέπει να το επιλύσετε πριν το Bermuda μπορέσει να φανεί χρήσιμο.",
+      "no_scanners": "Πρέπει να διαμορφώσετε κάποιους σαρωτές Bluetooth πριν το Bermuda έχει κάτι να επεξεργαστεί. \nΈνα esphome bluetooth_proxy, ένας διαμεσολαβητής Bluetooth Shelly ή ένας τοπικός προσαρμογέας Bluetooth αρκεί για να ξεκινήσετε.",
+      "some_active": "Έχετε τουλάχιστον κάποιες ενεργές συσκευές, αυτό είναι καλό.",
       "unknown": "Δεν ήταν δυνατή η καταχώρηση της συσκευής. Ελέγξτε το IRK και δοκιμάστε ξανά."
     },
     "step": {
@@ -269,7 +276,7 @@
             "name": "Παρακολούθηση συσκευών"
           }
         },
-        "title": "Global settings"
+        "title": "Γενικές ρυθμίσεις"
       },
       "init": {
         "description": "Το Bermuda βλέπει επί του παρόντος:\n- {device_counter_active} ενεργή στις {device_counter_devices} συσκευές Bluetooth.\n- {scanner_counter_active} ενεργή στις {scanner_counter_scanners} συσκευές ανιχνευτή Bluetooth.\n\n{status}",
@@ -280,7 +287,7 @@
           "scan": "Σάρωση για νέες συσκευές",
           "selectdevices": "Επιλογή συσκευών προς παρακολούθηση"
         },
-        "title": "Bermuda configuration"
+        "title": "Διαμόρφωση Bermuda"
       },
       "scan": {
         "data": {
@@ -305,7 +312,7 @@
           "exclude": "Ποτέ μην παρακολουθείτε αυτές, ακόμα κι αν ταιριάζουν με μια παρακολουθούμενη κατηγορία.",
           "track_categories": "Αυτόματη παρακολούθηση κάθε συσκευής που ταιριάζει με μια επιλεγμένη κατηγορία (π.χ. όλα τα iBeacons ή όλες οι επώνυμες συσκευές)."
         },
-        "description": "Επιλέξτε ποιες συσκευές θέλετε να παρακολουθήσετε. Αν δεν εμφανίζονται συσκευές παρακάτω, τότε το Bermuda δεν βλέπει δεδομένα που έρχονται από ανιχνευτές Bluetooth. Βεβαιωθείτε ότι έχετε μια συσκευή esphome ble_proxy, συσκευές Shelly με διαμορφωμένη proxy Bluetooth ή έναν τοπικό προσαρμογέα Bluetooth.",
+        "description": "Το Bermuda δημιουργεί οντότητες παρακολούθησης μόνο για τις συσκευές που επιλέγετε εδώ. Αν η λίστα είναι κενή, δεν εντοπίζονται ακόμη συσκευές Bluetooth.",
         "title": "Επιλέξτε Συσκευές"
       }
     }

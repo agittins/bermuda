@@ -32,8 +32,7 @@ from homeassistant.helpers.selector import (
 from homeassistant.helpers.translation import async_get_translations
 
 from .const import (
-    ADDR_TYPE_PRIVATE_BLE_DEVICE,
-    BDADDR_TYPE_RANDOM_RESOLVABLE,
+    _LOGGER,
     CONF_AREA_ENTITIES,
     CONF_AREA_ENTITY_DISTANCE,
     CONF_AREA_ENTITY_DISTANCES,
@@ -67,8 +66,12 @@ from .const import (
     OPT_MIN_UPDATE_INTERVAL,
     OPT_REF_POWER_MAX,
     OPT_REF_POWER_MIN,
+    PICKER_STALE_AGE,
+    SCANNER_AGE_FRESH,
+    SCANNER_AGE_WORRY,
     TRACK_CATEGORIES,
 )
+from .helpers import is_device_selectable
 from .options_text import _DESCRIPTION_TEXTS
 from .private_enrol import async_enrol_private_device
 from .util import mac_redact
@@ -152,10 +155,10 @@ class BermudaOptionsFlowHandler(OptionsFlow):
         scanner_table = f"\n\n{t_title}\n\n|{t_col_scanner}|{t_col_address}|{t_col_last_ad}|\n|---|---|---:|\n"
         # Use emoji to indicate if age is "good"
         for scanner in self.coordinator.get_active_scanner_summary():
-            age = int(scanner.get("last_stamp_age", 999))
-            if age < 2:
+            age = int(scanner.get("last_stamp_age", DISTANCE_INFINITE))
+            if age < SCANNER_AGE_FRESH:
                 status = '<ha-icon icon="mdi:check-circle-outline"></ha-icon>'
-            elif age < 10:
+            elif age < SCANNER_AGE_WORRY:
                 status = '<ha-icon icon="mdi:alert-outline"></ha-icon>'
             else:
                 status = '<ha-icon icon="mdi:skull-crossbones"></ha-icon>'
@@ -167,7 +170,6 @@ class BermudaOptionsFlowHandler(OptionsFlow):
             )
         messages["status"] += scanner_table
 
-        # return await self.async_step_globalopts()
         # Menu labels come from translations (options.step.init.menu_options.*),
         # so every menu entry is localised like the rest of the flow.
         return self.async_show_menu(
@@ -201,16 +203,15 @@ class BermudaOptionsFlowHandler(OptionsFlow):
             return await self._update_options()
 
         tracked = {a.upper() for a in self.options.get(CONF_DEVICES, []) if isinstance(a, str)}
-        stale_cutoff = monotonic_time_coarse() - (60 * 60 * 2)  # drop random MACs unseen >2h
+        stale_cutoff = monotonic_time_coarse() - PICKER_STALE_AGE
         ranked: list[tuple[float, SelectOptionDict]] = []
         for device in coordinator.devices.values():
             addr = device.address.upper()
-            # Skip proxies, self-configuring Private BLE, and anything already tracked.
-            if device.is_scanner or device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
+            # Skip proxies, self-configuring Private BLE, stale random MACs,
+            # and anything already tracked.
+            if not is_device_selectable(device, stale_cutoff):
                 continue
             if addr in tracked or device.create_sensor:
-                continue
-            if device.address_type == BDADDR_TYPE_RANDOM_RESOLVABLE and device.last_seen < stale_cutoff:
                 continue
             rssi = device.area_rssi
             manuf = f" · {device.manufacturer}" if device.manufacturer else ""
@@ -312,15 +313,12 @@ class BermudaOptionsFlowHandler(OptionsFlow):
             return await self._update_options()
 
         self.devices = self.config_entry.runtime_data.coordinator.devices
+        stale_cutoff = monotonic_time_coarse() - PICKER_STALE_AGE
         options_list: list[SelectOptionDict] = []
         for device in self.devices.values():
-            # Scanners aren't tracked; Private BLE devices configure themselves.
-            if device.is_scanner or device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
-                continue
-            # A random MAC unseen for >2h is not useful.
-            if device.address_type == BDADDR_TYPE_RANDOM_RESOLVABLE and device.last_seen < monotonic_time_coarse() - (
-                60 * 60 * 2
-            ):
+            # Scanners aren't tracked; Private BLE devices configure themselves;
+            # a random MAC unseen for too long is not useful.
+            if not is_device_selectable(device, stale_cutoff):
                 continue
             addr = device.address.upper()
             manuf = f" · {device.manufacturer}" if device.manufacturer else ""
@@ -377,8 +375,12 @@ class BermudaOptionsFlowHandler(OptionsFlow):
             error = await async_enrol_private_device(self.hass, user_input[CONF_IRK], user_input.get(CONF_NAME, ""))
             if not error:
                 # Nudge the coordinator so the new private device shows up promptly.
-                with contextlib.suppress(Exception):
+                # Best-effort only: enrolment already succeeded, so a refresh
+                # hiccup must not fail the flow.
+                try:
                     await self.coordinator.async_request_refresh()
+                except Exception:  # noqa: BLE001
+                    _LOGGER.debug("Post-enrolment refresh failed; device will appear on the next cycle")
                 return await self._update_options()
             errors["base" if error == "bluetooth_not_available" else CONF_IRK] = error
 

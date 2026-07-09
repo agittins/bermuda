@@ -7,7 +7,7 @@ import re
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.components import bluetooth
@@ -39,16 +39,13 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util.dt import get_age, now
 
-from .area_entity import BermudaAreaEntityManager
+from .area_entity import BermudaAreaEntityManager, apply_area_entity_overrides
 from .bermuda_device import BermudaDevice
 from .bermuda_irk import BermudaIrkManager
 from .const import (
     _LOGGER,
     _LOGGER_SPAM_LESS,
     CONF_ADDRESS,
-    CONF_AREA_ENTITIES,
-    CONF_AREA_ENTITY_DISTANCE,
-    CONF_AREA_ENTITY_DISTANCES,
     CONF_ATTENUATION,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
@@ -60,7 +57,9 @@ from .const import (
     CONF_SCANNER,
     CONF_SMOOTHING_SAMPLES,
     CONF_UPDATE_INTERVAL,
-    DEFAULT_AREA_ENTITY_DISTANCE,
+    CYCLE_TIME_ERROR,
+    CYCLE_TIME_WARN,
+    DEBOUNCE_COOLDOWN,
     DEFAULT_ATTENUATION,
     DEFAULT_DEVTRACK_TIMEOUT,
     DEFAULT_MAX_RADIUS,
@@ -68,8 +67,10 @@ from .const import (
     DEFAULT_REF_POWER,
     DEFAULT_SMOOTHING_SAMPLES,
     DEFAULT_UPDATE_INTERVAL,
+    DEVICE_ACTIVE_AGE,
     DOMAIN,
     PRUNE_TIME_REDACTIONS,
+    RSSI_BLUEZ_BOGUS,
     SAVEOUT_COOLDOWN,
     SIGNAL_DEVICE_IN100_NEW,
     SIGNAL_DEVICE_NEW,
@@ -96,11 +97,6 @@ if TYPE_CHECKING:
 
 Cancellable = Callable[[], None]
 
-# Using "if" instead of "min/max" triggers PLR1730, but when
-# split over two lines, ruff removes it, then complains again.
-# so we're just disabling it for the whole file.
-# https://github.com/astral-sh/ruff/issues/4244
-
 
 class BermudaDataUpdateCoordinator(
     BermudaScannerMixin, BermudaMetadeviceMixin, BermudaMicrolocationMixin, DataUpdateCoordinator[None]
@@ -125,8 +121,6 @@ class BermudaDataUpdateCoordinator(
         entry: BermudaConfigEntry,
     ) -> None:
         """Initialize."""
-        self.platforms: list[str] = []
-
         self.sensor_interval = entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
 
         # ##### Redaction Data ###
@@ -159,7 +153,7 @@ class BermudaDataUpdateCoordinator(
             request_refresh_debouncer=Debouncer(
                 hass,
                 _LOGGER,
-                cooldown=1.0,
+                cooldown=DEBOUNCE_COOLDOWN,
                 immediate=False,
             ),
         )
@@ -210,8 +204,6 @@ class BermudaDataUpdateCoordinator(
         # forcing a scan of the captured info.
         self._scanner_init_pending = True
 
-        self._seed_configured_devices_done = False
-
         # First time go through the private ble devices to see if there's
         # any there for us to track.
         self._do_private_device_init = True
@@ -234,30 +226,27 @@ class BermudaDataUpdateCoordinator(
         self.options[CONF_UPDATE_INTERVAL] = DEFAULT_UPDATE_INTERVAL
         self.options[CONF_RSSI_OFFSETS] = {}
 
-        if hasattr(entry, "options"):
-            # Firstly, on some calls (specifically during reload after settings changes)
-            # we seem to get called with a non-existent config_entry.
-            # Anyway... if we DO have one, convert it to a plain dict so we can
-            # serialise it properly when it goes into the device and scanner classes.
-            for key, val in entry.options.items():
-                if key in (
-                    CONF_ATTENUATION,
-                    CONF_DEVICES,
-                    CONF_DEVTRACK_TIMEOUT,
-                    CONF_MAX_RADIUS,
-                    CONF_MAX_VELOCITY,
-                    CONF_REF_POWER,
-                    CONF_SMOOTHING_SAMPLES,
-                    CONF_RSSI_OFFSETS,
-                ):
-                    self.options[key] = val
+        # Convert the entry's options mapping to a plain dict so it can be
+        # serialised properly when it goes into the device and scanner classes.
+        for key, val in entry.options.items():
+            if key in (
+                CONF_ATTENUATION,
+                CONF_DEVICES,
+                CONF_DEVTRACK_TIMEOUT,
+                CONF_MAX_RADIUS,
+                CONF_MAX_VELOCITY,
+                CONF_REF_POWER,
+                CONF_SMOOTHING_SAMPLES,
+                CONF_RSSI_OFFSETS,
+            ):
+                self.options[key] = val
 
         # Per-scanner RSSI offsets now live in calibration subentries. Mirror them
         # into the runtime options dict so the advert read-path stays unchanged;
         # this is the sole source of offsets once an entry has been migrated to v2.
         self.options[CONF_RSSI_OFFSETS] = {
             se.data[CONF_SCANNER]: se.data[CONF_RSSI_OFFSET]
-            for se in getattr(entry, "subentries", {}).values()
+            for se in entry.subentries.values()
             if se.subentry_type == SUBENTRY_TYPE_CALIBRATION
         }
 
@@ -267,7 +256,7 @@ class BermudaDataUpdateCoordinator(
         # the ref_power number entity remains for live, in-session tweaks.
         self.device_config: dict[str, dict[str, Any]] = {
             se.data[CONF_ADDRESS].upper(): dict(se.data)
-            for se in getattr(entry, "subentries", {}).values()
+            for se in entry.subentries.values()
             if se.subentry_type == SUBENTRY_TYPE_DEVICE and se.data.get(CONF_ADDRESS)
         }
 
@@ -365,12 +354,9 @@ class BermudaDataUpdateCoordinator(
                         for ident_type, ident_id in device_entry.identifiers:
                             if ident_type == DOMAIN:
                                 # One of our sensor devices!
-                                try:
-                                    if _device := self.devices[ident_id.lower()]:
-                                        _device.name_by_user = device_entry.name_by_user
-                                        _device.make_name()
-                                except KeyError:
-                                    pass
+                                if (_device := self.devices.get(ident_id.lower())) is not None:
+                                    _device.name_by_user = device_entry.name_by_user
+                                    _device.make_name()
                         # might be a scanner, so let's refresh those
                         _LOGGER.debug("Trigger updating of Scanner Listings")
                         self._scanner_init_pending = True
@@ -419,15 +405,6 @@ class BermudaDataUpdateCoordinator(
         responding to changing rssi values, but it *is* good for seeding our updates in case
         there are no defined sensors yet (or the defined ones are away).
         """
-        # _LOGGER.debug(
-        #     "New Advert! change: %s, scanner: %s mac: %s name: %s serviceinfo: %s",
-        #     change,
-        #     service_info.source,
-        #     service_info.address,
-        #     service_info.name,
-        #     service_info,
-        # )
-
         # If there are no active entities created after Bermuda's
         # initial setup, then no updates will be triggered on the co-ordinator.
         # So let's check if we haven't updated recently, and do so...
@@ -452,37 +429,36 @@ class BermudaDataUpdateCoordinator(
             ):
                 dev.create_all_done = True
 
-    def sensor_created(self, address: str) -> None:
-        """Allows sensor platform to report back that sensors have been set up."""
+    def _mark_platform_created(
+        self,
+        address: str,
+        flag_attr: Literal["create_sensor_done", "create_tracker_done", "create_number_done", "create_select_done"],
+        *,
+        warn_unknown: bool = False,
+    ) -> None:
+        """Record a platform's entities-created report and re-check completion."""
         dev = self._get_device(address)
         if dev is not None:
-            dev.create_sensor_done = True
-        else:
-            _LOGGER.warning("Very odd, we got sensor_created for non-tracked device")
+            setattr(dev, flag_attr, True)
+        elif warn_unknown:
+            _LOGGER.warning("Very odd, we got %s report for non-tracked device %s", flag_attr, address)
         self._check_all_platforms_created(address)
+
+    def sensor_created(self, address: str) -> None:
+        """Allows sensor platform to report back that sensors have been set up."""
+        self._mark_platform_created(address, "create_sensor_done", warn_unknown=True)
 
     def device_tracker_created(self, address: str) -> None:
         """Allows device_tracker platform to report back that sensors have been set up."""
-        dev = self._get_device(address)
-        if dev is not None:
-            dev.create_tracker_done = True
-        else:
-            _LOGGER.warning("Very odd, we got device_tracker_created for non-tracked device")
-        self._check_all_platforms_created(address)
+        self._mark_platform_created(address, "create_tracker_done", warn_unknown=True)
 
     def number_created(self, address: str) -> None:
         """Receives report from number platform that sensors have been set up."""
-        dev = self._get_device(address)
-        if dev is not None:
-            dev.create_number_done = True
-        self._check_all_platforms_created(address)
+        self._mark_platform_created(address, "create_number_done")
 
     def select_created(self, address: str) -> None:
         """Receives report from the select platform that entities have been set up."""
-        dev = self._get_device(address)
-        if dev is not None:
-            dev.create_select_done = True
-        self._check_all_platforms_created(address)
+        self._mark_platform_created(address, "create_select_done")
 
     def in100_sensors_created(self, address: str) -> None:
         """
@@ -501,14 +477,14 @@ class BermudaDataUpdateCoordinator(
 
         Useful as a general indicator of health
         """
-        stamp = monotonic_time_coarse() - 10  # seconds
+        stamp = monotonic_time_coarse() - DEVICE_ACTIVE_AGE  # seconds
         fresh_count = 0
         for device in self.devices.values():
             if device.last_seen > stamp:
                 fresh_count += 1
         return fresh_count
 
-    def count_active_scanners(self, max_age: float = 10) -> int:
+    def count_active_scanners(self, max_age: float = DEVICE_ACTIVE_AGE) -> int:
         """Returns count of scanners that have recently sent updates."""
         stamp = monotonic_time_coarse() - max_age  # seconds
         fresh_count = 0
@@ -590,7 +566,7 @@ class BermudaDataUpdateCoordinator(
 
         try:  # so we can still clean up update_in_progress
             # Phase 1: Gather adverts from the backend
-            result_gather_adverts = self._async_gather_advert_data()
+            self._async_gather_advert_data()
             await asyncio.sleep(0)
 
             # Phase 2: Update metadevices
@@ -627,14 +603,12 @@ class BermudaDataUpdateCoordinator(
             # are not currently visible, and will instead show as "Unknown" for
             # sensors and "Away" for device_trackers).
             #
-            # This isn't working right if it runs once. Bodge it for now (cost is low)
-            # and sort it out when moving to device-based restoration (ie using DR/ER
-            # to decide what devices to track and deprecating CONF_DEVICES)
-            #
-            # if not self._seed_configured_devices_done:
+            # This isn't working right if it runs only once, so it deliberately
+            # re-runs every cycle (cost is low); sort it out when moving to
+            # device-based restoration (ie using DR/ER to decide what devices
+            # to track and deprecating CONF_DEVICES).
             for _source_address in self.options.get(CONF_DEVICES, []):
                 self._get_or_create_device(_source_address)
-            self._seed_configured_devices_done = True
 
             # Trigger creation of any new entities
             #
@@ -674,22 +648,22 @@ class BermudaDataUpdateCoordinator(
 
         # Monitor cycle duration
         cycle_elapsed = time.monotonic() - cycle_start
-        if cycle_elapsed > 2.0:
+        if cycle_elapsed > CYCLE_TIME_ERROR:
             _LOGGER.error(
                 "Update cycle took %.2fs (devices: %d) — event loop may have been starved",
                 cycle_elapsed,
                 len(self.devices),
             )
-        elif cycle_elapsed > 0.5:
+        elif cycle_elapsed > CYCLE_TIME_WARN:
             _LOGGER.warning(
                 "Update cycle took %.2fs (devices: %d)",
                 cycle_elapsed,
                 len(self.devices),
             )
 
-        return result_gather_adverts
+        return True
 
-    def _async_gather_advert_data(self) -> bool:
+    def _async_gather_advert_data(self) -> None:
         """Perform the gathering of backend Bluetooth Data and updating scanners and devices."""
         # Initialise ha_scanners if we haven't already
         if self._scanner_init_pending:
@@ -724,7 +698,7 @@ class BermudaDataUpdateCoordinator(
                     if adstamp < self.stamp_last_update_started - 3:
                         # skip older adverts that should already have been processed
                         continue
-                if advertisementdata.rssi == -127:
+                if advertisementdata.rssi == RSSI_BLUEZ_BOGUS:
                     # BlueZ is pushing bogus adverts for paired but absent devices.
                     continue
 
@@ -732,7 +706,6 @@ class BermudaDataUpdateCoordinator(
                 device.process_advertisement(scanner_device, advertisementdata)
 
         # end of for ha_scanner loop
-        return True
 
     def prune_devices(self, *, force_pruning: bool = False) -> None:
         """Remove stale devices to keep the device dict bounded (see pruning module)."""
@@ -774,60 +747,8 @@ class BermudaDataUpdateCoordinator(
         refresh_area_by_min_distance(device, self.options)
 
     def _apply_area_entity_overrides(self) -> None:
-        """
-        Override a device's area when a triggered presence entity wins on virtual distance.
-
-        Runs after BLE area selection: each configured HA entity that is "on" makes its
-        area a candidate at a (small) virtual distance; if that beats the device's
-        BLE-derived area_distance (or the device has no / Unknown area), the device is
-        moved into the entity's area. Lets motion/contact sensors reinforce or override
-        BLE presence. Ported from knoop7/bermuda-intent.
-        """
-        configured = self.options.get(CONF_AREA_ENTITIES, [])
-        if not configured:
-            return
-        default_dist = self.options.get(CONF_AREA_ENTITY_DISTANCE, DEFAULT_AREA_ENTITY_DISTANCE)
-        per_entity_dists = self.options.get(CONF_AREA_ENTITY_DISTANCES, {})
-        triggered_areas = self.area_entity_manager.get_triggered_areas_with_distances(
-            configured, per_entity_dists, default_dist
-        )
-        if not triggered_areas:
-            return
-
-        for device in self.devices.values():
-            if not device.create_sensor:
-                continue
-            current_distance = device.area_distance
-            current_area_id = device.area_id
-
-            # Kept as a single Optional pair (rather than two separately-Optional
-            # variables) so the "we have a winner" narrowing below covers both at once.
-            best: tuple[str, float] | None = None
-            for area_id, (_area_name, virtual_dist) in triggered_areas.items():
-                if current_area_id == area_id:
-                    # Already here via BLE: the entity only "wins" if it is virtually closer.
-                    if current_distance is not None and current_distance <= virtual_dist:
-                        continue
-                    best = (area_id, virtual_dist)
-                    break
-                if (current_distance is None or virtual_dist < current_distance) and (
-                    best is None or virtual_dist < best[1]
-                ):
-                    best = (area_id, virtual_dist)
-
-            if best is not None:
-                best_area_id, best_distance = best
-                old_area = device.area_name
-                device.apply_area_override(best_area_id, best_distance)
-                if old_area != device.area_name:
-                    _LOGGER.debug(
-                        "Area entity override: %s moved %s -> %s (virtual %.2fm beat BLE %s)",
-                        device.name,
-                        old_area or "none",
-                        device.area_name,
-                        best_distance,
-                        f"{current_distance:.1f}m" if current_distance is not None else "none",
-                    )
+        """Let triggered presence entities win a device's area (see the area_entity module)."""
+        apply_area_entity_overrides(self.area_entity_manager, self.devices.values(), self.options)
 
     async def service_dump_devices(self, call: ServiceCall) -> ServiceResponse:
         """Return a dump of beacon advertisements by receiver."""

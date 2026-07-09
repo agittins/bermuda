@@ -4,13 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-try:
-    # Pre-2024.9 HA location. mypy resolves this branch statically against the
-    # installed HA version, where it no longer exports BaseTrackerEntity here, so
-    # this appears unreachable to mypy even though it is live on older cores.
-    from homeassistant.components.device_tracker import BaseTrackerEntity  # type: ignore[attr-defined]
-except ImportError:
-    from homeassistant.components.device_tracker.config_entry import BaseTrackerEntity
+# The top-level module is the canonical import path (the config_entry alias is
+# deprecated for removal in 2027.6), but it re-exports BaseScannerEntity without
+# listing it in __all__, so mypy needs the attr-defined escape hatch.
+from homeassistant.components.device_tracker import BaseScannerEntity  # type: ignore[attr-defined]
 from homeassistant.components.device_tracker.const import SourceType
 from homeassistant.const import STATE_HOME
 from homeassistant.core import HomeAssistant, callback
@@ -51,41 +48,33 @@ async def async_setup_entry(
         Make sure you have a full list of scanners ready before calling this.
         """
         if address not in created_devices:
-            entities = []
-            entities.append(BermudaDeviceTracker(coordinator, entry, address))
-            # We set update before add to False because we are being
-            # call(back(ed)) from the update, so causing it to call another would be... bad.
-            async_add_devices(entities, False)
+            # update_before_add=False because we are being call(back(ed)) from
+            # the update, so causing it to call another would be... bad.
+            async_add_devices([BermudaDeviceTracker(coordinator, entry, address)], update_before_add=False)
             created_devices.append(address)
-        else:
-            # _LOGGER.debug(
-            #     "Ignoring create request for existing dev_tracker %s", address
-            # )
-            pass
         # tell the co-ord we've done it.
         coordinator.device_tracker_created(address)
 
     # Connect device_new to a signal so the coordinator can call it
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, device_new))
 
-    # Now we must tell the co-ord to do initial refresh, so that it will call our callback.
-    # await coordinator.async_config_entry_first_refresh()
 
+class BermudaDeviceTracker(BermudaEntity, BaseScannerEntity):
+    """
+    A trackable Bermuda Device.
 
-class BermudaDeviceTracker(BermudaEntity, BaseTrackerEntity):  # type: ignore[misc]
-    """A trackable Bermuda Device."""
+    BaseScannerEntity (HA 2026.6+) is the base HA recommends for BLE beacon
+    trackers: the default state stays home/not_home (identical to the previous
+    BaseTrackerEntity behaviour), and users gain the in_zones attribute plus
+    the ability to associate the tracker with any zone, not just home.
+    """
 
     _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_translation_key = "bermuda_tracker"
+    _attr_source_type = SourceType.BLUETOOTH_LE
 
-    @property
-    def unique_id(self) -> str | None:
-        """
-        "Uniquely identify this sensor so that it gets stored in the entity_registry,
-        and can be maintained / renamed etc by the user.
-        """
-        return self._device.unique_id
+    # unique_id: inherited from BermudaEntity (the bare device address).
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any]:
@@ -94,14 +83,9 @@ class BermudaDeviceTracker(BermudaEntity, BaseTrackerEntity):  # type: ignore[mi
         return {"scanner": _scannername, "area": self._device.area_name}
 
     @property
-    def state(self) -> str:
-        """Return the state of the device."""
-        return self._device.zone
-
-    @property
-    def source_type(self) -> SourceType:
-        """Return the source type, eg gps or router, of the device."""
-        return SourceType.BLUETOOTH_LE
+    def is_connected(self) -> bool:
+        """Whether the device has been seen recently (drives home/not_home)."""
+        return self._device.zone == STATE_HOME
 
     @property
     def icon(self) -> str:

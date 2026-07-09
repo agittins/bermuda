@@ -1,6 +1,6 @@
 # Adapted from https://github.com/ludeeus/integration_blueprint/blob/main/.ruff.toml
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 120        # This is all me and not HA - I will die on the hill that 80 is too short
 
 [tool.ruff.lint]
@@ -12,12 +12,9 @@ ignore = [
     "D212",    # multi-line-summary-first-line (incompatible with formatter)
     "COM812",  # incompatible with formatter
     "ISC001",  # incompatible with formatter
-    "ERA001",  # commented out code
     "D401",    # First line should be in imperative - let's skip for now
     "D205",    # 1 blank line required between summary line and description
     "PGH004",  # Use specific rule codes for noqa
-    "D102",    # Docstring in public method - should be done later
-    "D107",    # Dosctring in init
     "RUF012",  #Mutable class attributes should be annotated with `typing.ClassVar`
     "FBT002",  #Boolean default positional argument in function definition
     "FBT003",  # Boolean positional value in function call
@@ -113,7 +110,7 @@ voluptuous = "vol"
 "homeassistant.util.dt" = "dt_util"
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 strict = true
 files = ["custom_components/bermuda"]
 warn_unused_ignores = true

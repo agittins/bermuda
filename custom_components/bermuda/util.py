@@ -56,7 +56,7 @@ def mac_norm(mac: str) -> str:
         to_test = to_test.replace(".", "")
 
     if len(to_test) == 12:
-        # no : included
+        # 12 bare hex chars: a MAC without separators.
         return ":".join(to_test.lower()[i : i + 2] for i in range(0, 12, 2))
 
     # Not sure how formatted, return original

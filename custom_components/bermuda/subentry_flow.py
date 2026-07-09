@@ -33,9 +33,12 @@ from .const import (
     CONF_SCANNER,
     DEFAULT_DEVTRACK_TIMEOUT,
     DEFAULT_REF_POWER,
+    OPT_MAX_DEVTRACK_TIMEOUT,
     OPT_MIN_DEVTRACK_TIMEOUT,
     OPT_REF_POWER_MAX,
     OPT_REF_POWER_MIN,
+    OPT_RSSI_OFFSET_MAX,
+    OPT_RSSI_OFFSET_MIN,
     SUBENTRY_TYPE_CALIBRATION,
     SUBENTRY_TYPE_DEVICE,
 )
@@ -44,7 +47,13 @@ from .const import (
 def _offset_selector() -> NumberSelector:
     """A bounded RSSI offset picker (dB)."""
     return NumberSelector(
-        NumberSelectorConfig(min=-30, max=30, step=0.1, mode=NumberSelectorMode.BOX, unit_of_measurement="dB")
+        NumberSelectorConfig(
+            min=OPT_RSSI_OFFSET_MIN,
+            max=OPT_RSSI_OFFSET_MAX,
+            step=0.1,
+            mode=NumberSelectorMode.BOX,
+            unit_of_measurement="dB",
+        )
     )
 
 
@@ -128,7 +137,11 @@ def _timeout_selector() -> NumberSelector:
     """A per-device away timeout picker (seconds)."""
     return NumberSelector(
         NumberSelectorConfig(
-            min=OPT_MIN_DEVTRACK_TIMEOUT, max=3600, step=1, mode=NumberSelectorMode.BOX, unit_of_measurement="s"
+            min=OPT_MIN_DEVTRACK_TIMEOUT,
+            max=OPT_MAX_DEVTRACK_TIMEOUT,
+            step=1,
+            mode=NumberSelectorMode.BOX,
+            unit_of_measurement="s",
         )
     )
 
