@@ -65,7 +65,7 @@ jobs:
           inputs: "${{ env.BERMUDA_ROOT_DIR }}/bermuda.zip"
 
       - name: "Publish the release with the ZIP file"
-        uses: softprops/action-gh-release@v3.0.1
+        uses: softprops/action-gh-release@v3.0.2
         with:
           files: ${{ env.BERMUDA_ROOT_DIR }}/bermuda.zip
           tag_name: ${{ github.ref_name }}
