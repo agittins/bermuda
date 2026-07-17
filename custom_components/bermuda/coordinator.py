@@ -438,7 +438,20 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         # this was probably us, nothing else to do
                         pass
                     else:
-                        for ident_type, ident_id in device_entry.identifiers:
+                        for identifier in device_entry.identifiers:
+                            # HA device identifiers are expected to be
+                            # (domain, id) tuples, but a buggy integration can
+                            # register a malformed one (e.g. a bare string that
+                            # unpacks into many values). Skip those rather than
+                            # letting a ValueError crash the whole handler.
+                            if len(identifier) != 2:
+                                _LOGGER.debug(
+                                    "Ignoring malformed device identifier on %s: %s",
+                                    ev.data["device_id"],
+                                    identifier,
+                                )
+                                continue
+                            ident_type, ident_id = identifier
                             if ident_type == DOMAIN:
                                 # One of our sensor devices!
                                 try:
