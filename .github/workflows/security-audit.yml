@@ -48,9 +48,10 @@ jobs:
           done
 
       - name: Audit requirements files
-        # --ignore-vuln PYSEC-2026-17[5-9]: PyJWT 2.12.1 is pinned exactly by
-        # homeassistant core itself (PyJWT==2.12.1 in 2026.7.0), so we cannot
-        # bump it here. Remove these ignores once HA ships PyJWT>=2.13.0.
+        # Ignored vulns are in packages pinned exactly by homeassistant core
+        # itself, so we cannot bump them here. Remove once HA ships a fix:
+        #   PYSEC-2026-17[5-9]                    -> PyJWT  2.12.1 (fixed in 2.13.0)
+        #   PYSEC-2026-225[3-7], PYSEC-2026-345[1-3] -> Pillow 12.2.0 (fixed in 12.3.0)
         run: |
           for r in requirements.txt requirements_test.txt requirements_dev.txt; do
             if [ -f "$r" ]; then
@@ -60,7 +61,15 @@ jobs:
                 --ignore-vuln PYSEC-2026-176 \
                 --ignore-vuln PYSEC-2026-177 \
                 --ignore-vuln PYSEC-2026-178 \
-                --ignore-vuln PYSEC-2026-179
+                --ignore-vuln PYSEC-2026-179 \
+                --ignore-vuln PYSEC-2026-2253 \
+                --ignore-vuln PYSEC-2026-2254 \
+                --ignore-vuln PYSEC-2026-2255 \
+                --ignore-vuln PYSEC-2026-2256 \
+                --ignore-vuln PYSEC-2026-2257 \
+                --ignore-vuln PYSEC-2026-3451 \
+                --ignore-vuln PYSEC-2026-3452 \
+                --ignore-vuln PYSEC-2026-3453
               echo "::endgroup::"
             fi
           done

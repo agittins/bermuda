@@ -1,0 +1,17 @@
+# Gitleaks configuration — extends the default ruleset with allowlists for
+# known false positives in this repo.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Bermuda false positives: HA translation keys and translated UI strings"
+regexTarget = "line"
+regexes = [
+    # Home Assistant entity translation keys look like generic API keys to
+    # the entropy-based rule, but they are just i18n identifiers.
+    '''_attr_translation_key\s*=''',
+]
+paths = [
+    # Translated UI strings ("auth": "... is verkeerd.", etc.) are not secrets.
+    '''custom_components/bermuda/translations/.+\.json''',
+]
