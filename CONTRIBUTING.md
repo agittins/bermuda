@@ -60,6 +60,11 @@ Home Assistant instance running and already configured with the included
 [`.devcontainer.json`](./.devcontainer.json)
 file.
 
+Once the development instance is running, the only action required to get a working copy
+of the Bermuda integration is to perform the HA UI step of adding the
+`Bermuda BLE Trilateration` integration (`Configuration` -> `Integrations` -> `+`).
+This is the same step 7 that is documented in the README's manual installation section.
+
 You can use the `pre-commit` settings implemented in this repository to have
 linting tool checking your contributions (see dedicated section below).
 

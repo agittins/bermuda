@@ -11,7 +11,7 @@
       "args": [
         "--debug",
         "-c",
-        "/workspaces/homeassistant-core/config"
+        "${workspaceFolder}/config"
       ],
       "autoReload": {
         "enable": true,
