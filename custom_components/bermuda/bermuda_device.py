@@ -139,6 +139,7 @@ class BermudaDevice(dict):
         self.create_all_done: bool = False  # All platform entities are done and ready.
         self.last_seen: float = 0  # stamp from most recent scanner spotting. monotonic_time_coarse
         self.diag_area_switch: str | None = None  # saves output of AreaTests
+        self.diag_area_switch_reason: str | None = None  # saves reason for swtich from AreaTests
         self.adverts: dict[
             tuple[str, str], BermudaAdvert
         ] = {}  # str will be a scanner address OR a deviceaddress__scanneraddress
