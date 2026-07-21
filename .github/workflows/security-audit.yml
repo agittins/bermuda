@@ -48,31 +48,37 @@ jobs:
           done
 
       - name: Audit requirements files
-        # Ignored vulns are in packages pinned exactly by homeassistant core
-        # itself, so we cannot bump them here. Remove once HA ships a fix:
-        #   PYSEC-2026-17[5-9]                    -> PyJWT  2.12.1 (fixed in 2.13.0)
-        #   PYSEC-2026-225[3-7], PYSEC-2026-345[1-3] -> Pillow 12.2.0 (fixed in 12.3.0)
+        # PyJWT and Pillow are pinned exactly by homeassistant core, so their
+        # vulns cannot be fixed here — and new CVE/GHSA aliases for the same
+        # flaws keep being published, which breaks any ID-based ignore list.
+        # Exclude those two packages by NAME until HA bumps them (they are
+        # dev/test-env-only deps: Bermuda itself has no runtime requirements).
+        # Any vulnerability in any other package still fails the job.
         run: |
+          HA_PINNED='["pillow", "pyjwt"]'
+          FAILED=0
           for r in requirements.txt requirements_test.txt requirements_dev.txt; do
-            if [ -f "$r" ]; then
-              echo "::group::pip-audit $r"
-              pip-audit --requirement "$r" --strict \
-                --ignore-vuln PYSEC-2026-175 \
-                --ignore-vuln PYSEC-2026-176 \
-                --ignore-vuln PYSEC-2026-177 \
-                --ignore-vuln PYSEC-2026-178 \
-                --ignore-vuln PYSEC-2026-179 \
-                --ignore-vuln PYSEC-2026-2253 \
-                --ignore-vuln PYSEC-2026-2254 \
-                --ignore-vuln PYSEC-2026-2255 \
-                --ignore-vuln PYSEC-2026-2256 \
-                --ignore-vuln PYSEC-2026-2257 \
-                --ignore-vuln PYSEC-2026-3451 \
-                --ignore-vuln PYSEC-2026-3452 \
-                --ignore-vuln PYSEC-2026-3453
-              echo "::endgroup::"
+            [ -f "$r" ] || continue
+            echo "::group::pip-audit $r"
+            pip-audit --requirement "$r" --strict --format json --output /tmp/audit.json || true
+            # A missing/invalid report means pip-audit itself failed (e.g.
+            # dependency resolution error) — fail loudly in that case.
+            jq -e 'has("dependencies")' /tmp/audit.json > /dev/null
+            jq --argjson skip "$HA_PINNED" -r \
+              '.dependencies[] | select((.vulns | length) > 0) | select(.name as $n | $skip | index($n)) |
+               "::notice::\(.name) \(.version): \(.vulns | length) known vulns ignored (pinned by homeassistant core)"' \
+              /tmp/audit.json
+            REAL=$(jq --argjson skip "$HA_PINNED" \
+              '[.dependencies[] | select((.vulns | length) > 0) | select(.name as $n | $skip | index($n) | not)]' \
+              /tmp/audit.json)
+            if [ "$(echo "$REAL" | jq 'length')" -gt 0 ]; then
+              echo "$REAL" | jq .
+              echo "::error::pip-audit found vulnerabilities in $r (outside HA-pinned pillow/pyjwt)"
+              FAILED=1
             fi
+            echo "::endgroup::"
           done
+          exit $FAILED
 
   # NOTE: the former OSV-Scanner job was removed on purpose. On unlocked
   # requirements files it speculatively resolves phantom versions that are
