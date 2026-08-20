@@ -33,6 +33,7 @@ Bermuda aims to let you track any bluetooth device, and have Home Assistant tell
 - Creates sensors for Area and Distance for devices you choose
 - Supports iBeacon devices, including those with randomised MAC addresses (like Android phones running HA Companion App)
 - Supports IRK (resolvable keys) via the [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) core component. Once your iOS device (or Android!) is set up in Private BLE Device, it will automatically receive Bermuda sensors as well!
+- Supports official AirTags with rolling addresses via local detections from the [FindMy integration](https://github.com/malmeloo/hass-FindMy). FindMy devices with a confirmed local address automatically receive Bermuda area, distance, and presence entities.
 - Creates `device_tracker` entities for chosen devices, which can be linked to "Person"s for Home/Not Home tracking
 - Configurable settings for rssi reference level, environmental attenuation, max tracking radius
 - Provides a comprehensive json/yaml dump of devices and their distances from each bluetooth
