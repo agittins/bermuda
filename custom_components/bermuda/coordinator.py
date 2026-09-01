@@ -1360,9 +1360,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 continue
 
             # If we are too far away or don't have an area, we cannot win...
+            # A scanner may define its own tighter max_radius (per-scanner override
+            # of the global CONF_MAX_RADIUS; 0 = use global) so that an over-reading
+            # proxy cannot claim a device that is really beyond its useful range.
+            challenger_max_radius = challenger.scanner_device.max_radius or _max_radius
             if (
                 challenger.rssi_distance is None
-                or challenger.rssi_distance > _max_radius
+                or challenger.rssi_distance > challenger_max_radius
                 or challenger.area_id is None
             ):
                 continue
