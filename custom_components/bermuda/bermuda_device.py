@@ -624,7 +624,7 @@ class BermudaDevice(dict):
             # new measurement(s) immediately.
             self.ref_power_changed = monotonic_time_coarse()
 
-    def set_create_occupancy(self, value: bool) -> None:
+    def set_create_occupancy(self, value: bool) -> None:  # noqa: FBT001
         """Set whether this device should be counted for area-occupancy purposes."""
         self.create_occupancy = bool(value)
 

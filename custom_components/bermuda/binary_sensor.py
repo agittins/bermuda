@@ -76,6 +76,4 @@ class BermudaAreaOccupancyBinarySensor(BermudaGlobalEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool:
         """Return true if any occupancy-flagged device is currently in this area."""
-        return any(
-            dev.create_occupancy and dev.area_id == self.area_id for dev in self.coordinator.devices.values()
-        )
+        return any(dev.create_occupancy and dev.area_id == self.area_id for dev in self.coordinator.devices.values())
