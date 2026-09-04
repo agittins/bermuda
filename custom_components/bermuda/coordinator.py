@@ -90,6 +90,7 @@ from .const import (
     PRUNE_TIME_UNKNOWN_IRK,
     REPAIR_SCANNER_WITHOUT_AREA,
     SAVEOUT_COOLDOWN,
+    SIGNAL_AREAS_CHANGED,
     SIGNAL_DEVICE_NEW,
     SIGNAL_SCANNERS_CHANGED,
     UPDATE_INTERVAL,
@@ -197,6 +198,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         self.have_floors: bool = self.init_floors()
 
         self._scanners_without_areas: list[str] | None = None  # Tracks any proxies that don't have an area assigned.
+        self._areas_in_use: set[str] = set()  # area_ids that currently have at least one scanner assigned
 
         # Track the list of Private BLE devices, noting their entity id
         # and current "last address".
@@ -302,6 +304,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
     @property
     def get_scanners(self) -> set[BermudaDevice]:
         return self._scanners
+
+    @property
+    def areas_in_use(self) -> set[str]:
+        return self._areas_in_use
 
     def init_floors(self) -> bool:
         """Check if the system has floors configured, and enable sensors."""
@@ -533,6 +539,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     dev.create_sensor_done,
                     dev.create_tracker_done,
                     dev.create_number_done,
+                    dev.create_switch_done,
                 ]
             ):
                 dev.create_all_done = True
@@ -562,6 +569,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         dev = self._get_device(address)
         if dev is not None:
             dev.create_number_done = True
+        self._check_all_platforms_created(address)
+
+    def switch_created(self, address):
+        """Allows switch platform to report back that switches have been set up."""
+        dev = self._get_device(address)
+        if dev is not None:
+            dev.create_switch_done = True
         self._check_all_platforms_created(address)
 
     # def button_created(self, address):
@@ -673,6 +687,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 device.calculate_data()
 
             self._refresh_areas_by_min_distance()
+            self._refresh_areas_in_use()
 
             # We might need to freshen deliberately on first start if no new scanners
             # were discovered in the first scan update. This is likely if nothing has changed
@@ -1251,6 +1266,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # or device.metadevice_type in METADEVICE_SOURCETYPES  # and any source devices for PBLE, ibeacon etc
             ):
                 self._refresh_area_by_min_distance(device)
+
+    def _refresh_areas_in_use(self):
+        """Recompute the set of areas with an assigned scanner, dispatching a signal if it changed."""
+        new_areas = {s.area_id for s in self.get_scanners if s.area_id is not None}
+        if new_areas != self._areas_in_use:
+            self._areas_in_use = new_areas
+            async_dispatcher_send(self.hass, SIGNAL_AREAS_CHANGED)
 
     @dataclass
     class AreaTests:
