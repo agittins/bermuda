@@ -116,6 +116,7 @@ async def async_remove_config_entry_device(
     if address is not None:
         try:
             coordinator.devices[mac_norm(address)].create_sensor = False
+            coordinator.devices[mac_norm(address)].create_occupancy = False
         except KeyError:
             _LOGGER.warning("Failed to locate device entry for %s", address)
         return True
