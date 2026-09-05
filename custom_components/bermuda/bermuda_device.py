@@ -136,7 +136,10 @@ class BermudaDevice(dict):
         self.create_tracker_done: bool = False  # device_tracker should now exist
         self.create_number_done: bool = False
         self.create_button_done: bool = False
+        self.create_switch_done: bool = False
         self.create_all_done: bool = False  # All platform entities are done and ready.
+
+        self.create_occupancy: bool = False  # User opt-in: count this device for area occupancy
         self.last_seen: float = 0  # stamp from most recent scanner spotting. monotonic_time_coarse
         self.diag_area_switch: str | None = None  # saves output of AreaTests
         self.adverts: dict[
@@ -620,6 +623,10 @@ class BermudaDevice(dict):
             # Update the stamp so that the BermudaEntity can clear the cache and show the
             # new measurement(s) immediately.
             self.ref_power_changed = monotonic_time_coarse()
+
+    def set_create_occupancy(self, value: bool) -> None:  # noqa: FBT001
+        """Set whether this device should be counted for area-occupancy purposes."""
+        self.create_occupancy = bool(value)
 
     def apply_scanner_selection(self, bermuda_advert: BermudaAdvert | None):
         """

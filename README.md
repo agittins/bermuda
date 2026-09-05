@@ -34,6 +34,7 @@ Bermuda aims to let you track any bluetooth device, and have Home Assistant tell
 - Supports iBeacon devices, including those with randomised MAC addresses (like Android phones running HA Companion App)
 - Supports IRK (resolvable keys) via the [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) core component. Once your iOS device (or Android!) is set up in Private BLE Device, it will automatically receive Bermuda sensors as well!
 - Creates `device_tracker` entities for chosen devices, which can be linked to "Person"s for Home/Not Home tracking
+- Optional per-area occupancy tracking: enable the "Use for occupancy" switch on any device (off by default, so pets, tags etc. don't trigger it) and a `binary_sensor` for each area will turn on whenever an occupancy-enabled device is detected there
 - Configurable settings for rssi reference level, environmental attenuation, max tracking radius
 - Provides a comprehensive json/yaml dump of devices and their distances from each bluetooth
   receiver, via the `bermuda.dump_devices` service.
@@ -71,9 +72,11 @@ will add them to the configured devices list and creating sensor entities for th
 
 ![Bermuda integration configuration option flow](img/screenshots/configuration.png)
 
-Choosing the device screen shows the current sensors and other info. Note that there are extra sensors in the "not shown" section that are disabled by default (the screenshot shows several of these enabled already). You can edit the properties of these to enable them for more detailed data on your device locations. This is primarily intended for troubleshooting or development, though.
+Choosing the device screen shows the current sensors and other info. Note that there are extra sensors in the "not shown" section that are disabled by default (the screenshot shows several of these enabled already). You can edit the properties of these to enable them for more detailed data on your device locations. This is primarily intended for troubleshooting or development, though. Under `Configuration` you'll also find a "Use for occupancy" toggle (off by default) for including that device in its area's occupancy `binary_sensor`.
 
 ![Screenshot of device information view](img/screenshots/deviceinfo.png)
+
+![Screenshot of device configuration showing the Use for occupancy toggle](img/screenshots/deviceinfo-occupancy.png)
 
 The sensor information also includes attributes area name and id, relevant MAC addresses
 etc.

@@ -1,52 +1,65 @@
-"""Test Bermuda BLE Trilateration switch."""
+"""Test Bermuda BLE Trilateration occupancy switch."""
 
 from __future__ import annotations
 
-# from homeassistant.components.switch import SERVICE_TURN_OFF
-# from homeassistant.components.switch import SERVICE_TURN_ON
-# from homeassistant.const import ATTR_ENTITY_ID
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_send
+from pytest_homeassistant_custom_component.common import mock_restore_cache
+from homeassistant.core import State
+
+from custom_components.bermuda.const import DOMAIN, SIGNAL_DEVICE_NEW
 
 
-# from custom_components.bermuda.const import DEFAULT_NAME
+def _occupancy_entity_id(hass: HomeAssistant, unique_id: str) -> str | None:
+    return er.async_get(hass).async_get_entity_id("switch", DOMAIN, unique_id)
 
 
-# from unittest.mock import call
-# from unittest.mock import patch
+async def test_occupancy_switch_created_and_defaults_off(hass: HomeAssistant, bypass_get_data, setup_bermuda_entry):
+    """A tracked device should get an occupancy switch, defaulting off."""
+    coordinator = setup_bermuda_entry.runtime_data.coordinator
+    device = coordinator._get_or_create_device("aa:bb:cc:dd:ee:ff")
+    device.create_sensor = True
+
+    async_dispatcher_send(hass, SIGNAL_DEVICE_NEW, device.address)
+    await hass.async_block_till_done()
+
+    entity_id = _occupancy_entity_id(hass, f"{device.unique_id}_occupancy")
+    assert entity_id is not None
+    assert hass.states.get(entity_id).state == "off"
+    assert device.create_occupancy is False
 
 
-# from custom_components.bermuda.const import SWITCH
+async def test_occupancy_switch_turn_on_off_sets_device_flag(hass: HomeAssistant, bypass_get_data, setup_bermuda_entry):
+    """Toggling the switch should mutate the underlying BermudaDevice flag."""
+    coordinator = setup_bermuda_entry.runtime_data.coordinator
+    device = coordinator._get_or_create_device("aa:bb:cc:dd:ee:ff")
+    device.create_sensor = True
 
-# Not currently used - commenting out
-# async def test_switch_services(hass: HomeAssistant):
-#     """Test switch services."""
-#     # Create a mock entry so we don't have to go through config flow
-#     config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_CONFIG, entry_id="test")
-#     assert await async_setup_entry(hass, config_entry)
-#     await hass.async_block_till_done()
+    async_dispatcher_send(hass, SIGNAL_DEVICE_NEW, device.address)
+    await hass.async_block_till_done()
 
-# Functions/objects can be patched directly
-# in test code as well and can be used to test
-# additional things, like whether a function
-# was called or what arguments it was called with
-# with patch(
-#     "custom_components.bermuda.BermudaDataUpdateCoordinator.async_set_title"
-# ) as title_func:
-#     await hass.services.async_call(
-#         SWITCH,
-#         SERVICE_TURN_OFF,
-#         service_data={ATTR_ENTITY_ID: f"{SWITCH}.{DEFAULT_NAME}_{SWITCH}"},
-#         blocking=True,
-#     )
-#     assert title_func.called
-#     assert title_func.call_args == call("foo")
+    entity_id = _occupancy_entity_id(hass, f"{device.unique_id}_occupancy")
 
-#     title_func.reset_mock()
+    await hass.services.async_call("switch", "turn_on", {"entity_id": entity_id}, blocking=True)
+    assert device.create_occupancy is True
+    assert hass.states.get(entity_id).state == "on"
 
-#     await hass.services.async_call(
-#         SWITCH,
-#         SERVICE_TURN_ON,
-#         service_data={ATTR_ENTITY_ID: f"{SWITCH}.{DEFAULT_NAME}_{SWITCH}"},
-#         blocking=True,
-#     )
-#     assert title_func.called
-#     assert title_func.call_args == call("bar")
+    await hass.services.async_call("switch", "turn_off", {"entity_id": entity_id}, blocking=True)
+    assert device.create_occupancy is False
+    assert hass.states.get(entity_id).state == "off"
+
+
+async def test_occupancy_switch_restores_state_on_startup(hass: HomeAssistant, bypass_get_data, setup_bermuda_entry):
+    """A previously-on switch should restore create_occupancy=True without user interaction."""
+    coordinator = setup_bermuda_entry.runtime_data.coordinator
+    device = coordinator._get_or_create_device("aa:bb:cc:dd:ee:ff")
+    device.create_sensor = True
+
+    registry_entry = er.async_get(hass).async_get_or_create("switch", DOMAIN, f"{device.unique_id}_occupancy")
+    mock_restore_cache(hass, [State(registry_entry.entity_id, "on")])
+
+    async_dispatcher_send(hass, SIGNAL_DEVICE_NEW, device.address)
+    await hass.async_block_till_done()
+
+    assert device.create_occupancy is True

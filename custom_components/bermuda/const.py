@@ -39,9 +39,9 @@ PLATFORMS = [
     Platform.SENSOR,
     Platform.DEVICE_TRACKER,
     Platform.NUMBER,
+    Platform.SWITCH,
+    Platform.BINARY_SENSOR,
     # Platform.BUTTON,
-    # Platform.SWITCH,
-    # Platform.BINARY_SENSOR
 ]
 
 # Should probably retreive this from the component, but it's in "DOMAIN" *shrug*
@@ -50,6 +50,7 @@ DOMAIN_PRIVATE_BLE_DEVICE = "private_ble_device"
 # Signal names we are using:
 SIGNAL_DEVICE_NEW = f"{DOMAIN}-device-new"
 SIGNAL_SCANNERS_CHANGED = f"{DOMAIN}-scanners-changed"
+SIGNAL_AREAS_CHANGED = f"{DOMAIN}-areas-changed"
 
 UPDATE_INTERVAL = 1.05  # Seconds between bluetooth data processing cycles
 # Note: this is separate from the CONF_UPDATE_INTERVAL which allows the

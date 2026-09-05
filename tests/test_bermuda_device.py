@@ -123,3 +123,16 @@ def test_repr(bermuda_device):
     """Test __repr__ method."""
     repr_str = repr(bermuda_device)
     assert repr_str == f"{bermuda_device.name} [{bermuda_device.address}]"
+
+
+def test_create_occupancy_defaults_false(bermuda_device):
+    """Test create_occupancy defaults to False."""
+    assert bermuda_device.create_occupancy is False
+
+
+def test_set_create_occupancy(bermuda_device):
+    """Test set_create_occupancy toggles the flag."""
+    bermuda_device.set_create_occupancy(True)
+    assert bermuda_device.create_occupancy is True
+    bermuda_device.set_create_occupancy(False)
+    assert bermuda_device.create_occupancy is False
