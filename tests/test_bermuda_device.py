@@ -2,9 +2,11 @@
 Tests for BermudaDevice class in bermuda_device.py.
 """
 
+import json
 import pytest
 from unittest.mock import MagicMock, patch
 from homeassistant.components.bluetooth import BaseHaScanner, BaseHaRemoteScanner
+from homeassistant.helpers.json import JSONEncoder
 from custom_components.bermuda.bermuda_device import BermudaDevice
 from custom_components.bermuda.const import ICON_DEFAULT_AREA, ICON_DEFAULT_FLOOR
 
@@ -117,6 +119,34 @@ def test_to_dict(bermuda_device):
     device_dict = bermuda_device.to_dict()
     assert isinstance(device_dict, dict)
     assert device_dict["address"] == "aa:bb:cc:dd:ee:ff"
+
+
+def test_to_dict_is_json_serialisable_with_area_advert(bermuda_device, bermuda_scanner):
+    """to_dict() output must be JSON-serialisable, including area_advert.
+
+    Regression test: to_dict() passed the area_advert BermudaAdvert object
+    through unconverted. That happened to survive JSON encoding only because
+    BermudaAdvert subclassed dict (it serialised as a useless empty {}).
+    Once that unused dict base was removed, the dump_devices service call and
+    the config-entry diagnostics download - which both serialise this output -
+    failed outright with "Unable to serialize to JSON. Bad data found at
+    $.service_response.<device>.area_advert".
+    """
+    advertisement_data = MagicMock()
+    bermuda_device.process_advertisement(bermuda_scanner, advertisement_data)
+    advert = next(iter(bermuda_device.adverts.values()))
+    bermuda_device.area_advert = advert
+
+    device_dict = bermuda_device.to_dict()
+
+    # The advert must be reduced to an identifying string, not passed through
+    # as a BermudaAdvert object (which the JSON encoder cannot handle, and
+    # which the old dict-subclass behaviour silently rendered as an empty {}).
+    assert isinstance(device_dict["area_advert"], str)
+    assert device_dict["area_advert"] == repr(advert)
+
+    # That field must survive the encoder HA serialises service responses with.
+    json.dumps(device_dict["area_advert"], cls=JSONEncoder)
 
 
 def test_repr(bermuda_device):

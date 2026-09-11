@@ -852,6 +852,12 @@ class BermudaDevice:
                     advertout[f"{advert.device_address}__{advert.scanner_address}"] = advert.to_dict()
                 out[var] = advertout
                 continue
+            if val is self.area_advert:
+                # A BermudaAdvert, which is not JSON-serialisable. It is already
+                # dumped in full under `adverts` above, so emit just its
+                # identifying repr here to show which one won the area.
+                out[var] = val.__repr__()
+                continue
             out[var] = val
         return out
 
