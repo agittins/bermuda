@@ -86,6 +86,7 @@ def async_get_advert_snapshot(
             "<device address>": {
               "name": str,
               "slug": str,          # matches Bermuda's entity naming
+              "tracked": bool,      # user has Bermuda tracking this device
               "address_type": str,
               "area_id": str | None,
               "area_name": str | None,
@@ -183,6 +184,12 @@ def async_get_advert_snapshot(
             "name": device.name,
             "slug": slugify(device.name),
             "unique_id": getattr(device, "unique_id", None),
+            # True for devices the user has configured Bermuda to track. This
+            # is exactly the set Bermuda creates sensors (including the
+            # per-scanner distance_to entities) for, so a consumer that used to
+            # discover trackable devices by enumerating those entities can use
+            # this instead and get the same answer with them all disabled.
+            "tracked": bool(getattr(device, "create_sensor", False)),
             "address_type": device.address_type,
             "area_id": device.area_id,
             "area_name": device.area_name,
