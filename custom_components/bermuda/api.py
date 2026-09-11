@@ -162,6 +162,13 @@ def async_get_advert_snapshot(
                 # still registered - and then key off the address below.
                 "slug": slugify(scanner_name),
                 "address": advert.scanner_address,
+                # Bermuda builds its per-scanner entity unique_ids as
+                # f"{device.unique_id}_{scanner.address_wifi_mac or scanner.address}_range",
+                # so a consumer resolving stored entity slugs via the entity
+                # registry needs these to join on. Exposing both avoids the
+                # consumer having to know that wifi-mac fallback rule.
+                "unique_id": getattr(scanner_device, "unique_id", None),
+                "address_wifi_mac": getattr(scanner_device, "address_wifi_mac", None),
                 "area_id": advert.area_id,
                 "area_name": advert.area_name,
                 "distance": advert.rssi_distance,
@@ -175,6 +182,7 @@ def async_get_advert_snapshot(
         devices[address] = {
             "name": device.name,
             "slug": slugify(device.name),
+            "unique_id": getattr(device, "unique_id", None),
             "address_type": device.address_type,
             "area_id": device.area_id,
             "area_name": device.area_name,

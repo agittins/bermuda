@@ -103,6 +103,40 @@ def test_scanner_slug_tracks_current_name_and_address_is_the_join_key():
     assert scanner["address"] == "f1:74:64:00:00:01"
 
 
+def test_snapshot_exposes_ids_needed_to_join_the_entity_registry():
+    """A consumer migrating off entity scraping has to map its stored
+    `_distance_to_<slug>` ids to scanners. Bermuda builds those entities'
+    unique_ids as f"{device.unique_id}_{scanner.address_wifi_mac or
+    scanner.address}_range", so the snapshot must surface both ids - otherwise
+    the consumer has to hard-code Bermuda's wifi-mac fallback rule itself.
+    """
+    coordinator = _make_coordinator()
+    scanner_addr = "f1:74:64:00:00:01"
+    coordinator.devices[scanner_addr] = SimpleNamespace(
+        name="Master Bedroom esp32c5 f17464",
+        last_seen=1000.0,
+        adverts={},
+        address_type="bd_addr_other",
+        area_id=None,
+        area_name=None,
+        # ESPHome proxies report a BLE mac but Bermuda keeps the wifi mac as
+        # unique_id for entity-id stability, so these legitimately differ.
+        unique_id="aa:11:22:33:44:55",
+        address_wifi_mac="aa:11:22:33:44:55",
+    )
+
+    snapshot = async_get_advert_snapshot(_make_hass(coordinator))
+    device = snapshot["devices"]["aa:bb:cc:dd:ee:ff"]
+    scanner = device["scanners"][scanner_addr]
+
+    assert scanner["unique_id"] == "aa:11:22:33:44:55"
+    assert scanner["address_wifi_mac"] == "aa:11:22:33:44:55"
+    # ...and it is NOT the same as the advert's scanner address, which is the
+    # exact trap this field exists to avoid.
+    assert scanner["unique_id"] != scanner["address"]
+    assert "unique_id" in device
+
+
 def test_scanner_name_comes_from_the_scanner_device_not_the_advert():
     """advert.name is a copy taken when the advert was created and goes stale
     when the scanner is renamed - Bermuda's own sensor.py deliberately avoids
