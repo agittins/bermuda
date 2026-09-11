@@ -1187,15 +1187,20 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # anything that isn't already set to something interesting, overwrite
                 # it with the new device's data.
-                for key, val in source_device.items():
-                    if val is any(
-                        [
-                            source_device.name_bt_local_name,
-                            source_device.name_bt_serviceinfo,
-                            source_device.manufacturer,
-                        ]
-                    ) and metadevice[key] in [None, False]:
-                        metadevice[key] = val
+                #
+                # NOTE: This used to be written as a generic `for key, val in
+                # source_device.items(): ...` loop with `val is any([...])`, on the
+                # assumption that BermudaDevice's dict-subclassing made attribute
+                # access available via .items()/[key]. It doesn't - BermudaDevice
+                # stores everything as plain instance attributes, so .items() was
+                # always empty and this block was silently a no-op. `is any([...])`
+                # was also wrong (any() returns a bool; that's an identity check
+                # against True/False, not a membership test). Iterate the specific
+                # attributes we actually mean to copy instead.
+                for attr in ("name_bt_local_name", "name_bt_serviceinfo", "manufacturer"):
+                    val = getattr(source_device, attr)
+                    if val not in (None, False) and getattr(metadevice, attr) in (None, False):
+                        setattr(metadevice, attr, val)
                         _want_name_update = True
 
                 if _want_name_update:
@@ -1203,17 +1208,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # Anything that's VERY interesting, overwrite it regardless of what's already there:
                 # INTERESTING:
-                for key, val in source_device.items():
-                    if val is any(
-                        [
-                            source_device.beacon_major,
-                            source_device.beacon_minor,
-                            source_device.beacon_power,
-                            source_device.beacon_unique_id,
-                            source_device.beacon_uuid,
-                        ]
-                    ):
-                        metadevice[key] = val
+                for attr in ("beacon_major", "beacon_minor", "beacon_power", "beacon_unique_id", "beacon_uuid"):
+                    val = getattr(source_device, attr)
+                    if val not in (None, False):
+                        setattr(metadevice, attr, val)
                         # _want_name_update = True
             # Done iterating sources, remove any to be dropped
             for source in _sources_to_remove:
