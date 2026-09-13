@@ -605,6 +605,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         Returns a list of dicts suitable for seeing which scanners
         are configured in the system and how long it has been since
         each has returned an advertisement.
+
+        Sorted by scanner name, so the list is stable and easy to scan by eye.
         """
         stamp = monotonic_time_coarse()
         return [
@@ -614,7 +616,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 "last_stamp": scannerdev.last_seen,
                 "last_stamp_age": stamp - scannerdev.last_seen,
             }
-            for scannerdev in self.get_scanners
+            for scannerdev in sorted(self.get_scanners, key=lambda scanner: str(scanner.name).casefold())
         ]
 
     def _get_device(self, address: str) -> BermudaDevice | None:
