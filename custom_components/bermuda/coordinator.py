@@ -26,6 +26,7 @@ from homeassistant.core import (
     SupportsResponse,
     callback,
 )
+from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import (
     area_registry as ar,
 )
@@ -1595,6 +1596,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def service_dump_devices(self, call: ServiceCall) -> ServiceResponse:  # pylint: disable=unused-argument;
         """Return a dump of beacon advertisements by receiver."""
+        # The dump lists every address this installation has heard, with names,
+        # areas and timings. Home Assistant lets any signed-in user call any
+        # service, so a call that carries a user (from the websocket or REST
+        # API) must come from an administrator. Automations, scripts and the
+        # diagnostics download carry no user and are unaffected.
+        if (user_id := call.context.user_id) is not None:
+            user = await self.hass.auth.async_get_user(user_id)
+            if user is None or not user.is_admin:
+                raise Unauthorized(context=call.context)
         out = {}
         addresses_input = call.data.get("addresses", "")
         redact = call.data.get("redact", False)
