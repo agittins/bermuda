@@ -317,8 +317,12 @@ class BermudaDevice(dict):
                 connlist.add(("mac", altmac))
                 maclist.add(altmac)
 
-        # Requires 2025.3
-        devreg_devices = self._coordinator.dr.devices.get_entries(None, connections=connlist)
+        if hasattr(self._coordinator.dr, "async_get_devices"):
+            devreg_devices = self._coordinator.dr.async_get_devices(connections=connlist)
+        else:
+            # Compatibility with older HA versions (minimum 2025.3), before
+            # the public multi-device lookup replaced direct container access.
+            devreg_devices = self._coordinator.dr.devices.get_entries(None, connections=connlist)
         devreg_count = 0  # can't len() an iterable.
         devreg_stringlist = ""  # for debug logging
         for devreg_device in devreg_devices:

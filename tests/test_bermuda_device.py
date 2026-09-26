@@ -3,6 +3,7 @@ Tests for BermudaDevice class in bermuda_device.py.
 """
 
 import pytest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from homeassistant.components.bluetooth import BaseHaScanner, BaseHaRemoteScanner
 from custom_components.bermuda.bermuda_device import BermudaDevice
@@ -123,3 +124,85 @@ def test_repr(bermuda_device):
     """Test __repr__ method."""
     repr_str = repr(bermuda_device)
     assert repr_str == f"{bermuda_device.name} [{bermuda_device.address}]"
+
+
+@pytest.mark.parametrize("modern_registry", [True, False])
+@pytest.mark.parametrize("device_types", [("bluetooth",), ("mac",), ("bluetooth", "mac"), ()])
+def test_scanner_resolves_all_device_entries(
+    bermuda_scanner, mock_coordinator, mock_scanner, modern_registry, device_types
+):
+    """Preserve scanner identity and metadata with both registry lookup APIs."""
+    entries = {
+        "bluetooth": SimpleNamespace(
+            id="bluetooth_device",
+            connections={("bluetooth", "11:22:33:44:55:66")},
+            name="Bluetooth scanner",
+            name_by_user="Bluetooth user name",
+            area_id="bluetooth_area",
+        ),
+        "mac": SimpleNamespace(
+            id="network_device",
+            connections={("mac", "11:22:33:44:55:64")},
+            name="ESPHome scanner",
+            name_by_user="ESPHome user name",
+            area_id="network_area",
+        ),
+    }
+    lookup = MagicMock(return_value=[entries[key] for key in device_types])
+    if modern_registry:
+        # No devices attribute: any deprecated container access must fail.
+        registry = SimpleNamespace(async_get_devices=lookup)
+    else:
+        registry = SimpleNamespace(devices=SimpleNamespace(get_entries=lookup))
+    mock_coordinator.dr = registry
+    bermuda_scanner._hascanner = mock_scanner
+
+    with patch.object(bermuda_scanner, "_update_area_and_floor") as update_area:
+        bermuda_scanner.async_as_scanner_resolve_device_entries()
+
+    expected_connections = {
+        (kind, f"11:22:33:44:55:{suffix:02x}") for kind in ("bluetooth", "mac") for suffix in range(0x63, 0x69)
+    }
+    if modern_registry:
+        lookup.assert_called_once_with(connections=expected_connections)
+    else:
+        lookup.assert_called_once_with(None, connections=expected_connections)
+    if not device_types:
+        update_area.assert_not_called()
+        return
+
+    preferred = entries["bluetooth" if "bluetooth" in device_types else "mac"]
+    update_area.assert_called_once_with(preferred.area_id)
+    assert bermuda_scanner.entry_id == preferred.id
+    assert bermuda_scanner.name_by_user == preferred.name_by_user
+    assert bermuda_scanner.name_devreg == entries["mac" if "mac" in device_types else "bluetooth"].name
+    assert bermuda_scanner.unique_id == ("11:22:33:44:55:64" if "mac" in device_types else "11:22:33:44:55:66")
+    assert bermuda_scanner.address_ble_mac == (
+        "11:22:33:44:55:66" if "bluetooth" in device_types else "11:22:33:44:55:64"
+    )
+    assert bermuda_scanner.address_wifi_mac == ("11:22:33:44:55:64" if "mac" in device_types else None)
+
+
+async def test_scanner_resolves_real_registry(
+    hass, device_registry, bermuda_scanner, mock_coordinator, mock_scanner, caplog
+):
+    """Resolve separate Bluetooth and ESPHome devices through HA's registry."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    for domain, address in (("bluetooth", "11:22:33:44:55:66"), ("esphome", "11:22:33:44:55:64")):
+        entry = MockConfigEntry(domain=domain)
+        entry.add_to_hass(hass)
+        device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            connections={("bluetooth" if domain == "bluetooth" else "mac", address)},
+            name=domain,
+        )
+
+    mock_coordinator.dr = device_registry
+    bermuda_scanner._hascanner = mock_scanner
+    bermuda_scanner.async_as_scanner_resolve_device_entries()
+
+    assert bermuda_scanner.unique_id == "11:22:33:44:55:64"
+    assert bermuda_scanner.address_ble_mac == "11:22:33:44:55:66"
+    assert bermuda_scanner.name_devreg == "esphome"
+    assert "uses `device_registry.devices`" not in caplog.text
