@@ -475,9 +475,10 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             if user_input[CONF_SAVE_AND_CLOSE]:
                 # Convert the name-based dict to use MAC addresses
                 rssi_offset_by_address = {}
+                scanner_labels = self._scanner_display_labels()
                 for address in self.coordinator.scanner_list:
-                    scanner_name = self.coordinator.devices[address].name
-                    val = user_input[CONF_SCANNER_INFO][scanner_name]
+                    scanner_label = scanner_labels[address]
+                    val = user_input[CONF_SCANNER_INFO][scanner_label]
                     # Clip to keep in sensible range, fixes #497
                     rssi_offset_by_address[address] = max(min(val, 127), -127)
 
@@ -500,10 +501,11 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
 
         saved_rssi_offsets = self.options.get(CONF_RSSI_OFFSETS, {})
         rssi_offset_dict = {}
+        scanner_labels = self._scanner_display_labels()
 
         for scanner in self.coordinator.scanner_list:
-            scanner_name = self.coordinator.devices[scanner].name
-            rssi_offset_dict[scanner_name] = saved_rssi_offsets.get(scanner, 0)
+            scanner_label = scanner_labels[scanner]
+            rssi_offset_dict[scanner_label] = saved_rssi_offsets.get(scanner, 0)
         data_schema = {
             vol.Required(
                 CONF_DEVICES,
@@ -528,10 +530,10 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             results = {}
             # Gather new estimates for distances using rssi hist and the new offset.
             for scanner in self.coordinator.scanner_list:
-                scanner_name = self.coordinator.devices[scanner].name
-                cur_offset = self._last_scanner_info.get(scanner_name, 0)
+                scanner_label = scanner_labels[scanner]
+                cur_offset = self._last_scanner_info.get(scanner_label, 0)
                 if (scanneradvert := device.get_scanner(scanner)) is not None:
-                    results[scanner_name] = [
+                    results[scanner_label] = [
                         rssi_to_metres(
                             historical_rssi + cur_offset,
                             self.options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
@@ -556,6 +558,40 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             data_schema=vol.Schema(data_schema),
             description_placeholders={"suffix": results_str},
         )
+
+    def _scanner_display_labels(self) -> dict[str, str]:
+        """Return unique names for scanner fields in the calibration form."""
+        addresses = sorted(self.coordinator.scanner_list)
+        names = {address: str(self.coordinator.devices[address].name) for address in addresses}
+        name_counts: dict[str, int] = {}
+        for name in names.values():
+            folded_name = name.casefold()
+            name_counts[folded_name] = name_counts.get(folded_name, 0) + 1
+
+        labels: dict[str, str] = {}
+        used_labels: set[str] = set()
+
+        # A scanner's friendly name is normally enough. When names collide, add
+        # its area; if that still collides or no area is assigned, add its address.
+        for address in addresses:
+            scanner = self.coordinator.devices[address]
+            name = names[address]
+            label = name
+            if name_counts[name.casefold()] > 1 and scanner.area_name:
+                label = f"{name} — {scanner.area_name}"
+            if label.casefold() in used_labels:
+                label = f"{label} [{address[-5:]}]"
+            if label.casefold() in used_labels:
+                label = f"{label} [{address}]"
+            suffix = 2
+            while label.casefold() in used_labels:
+                label = f"{name} [{address}] #{suffix}"
+                suffix += 1
+
+            labels[address] = label
+            used_labels.add(label.casefold())
+
+        return labels
 
     def _get_bermuda_device_from_registry(self, registry_id: str) -> BermudaDevice | None:
         """
