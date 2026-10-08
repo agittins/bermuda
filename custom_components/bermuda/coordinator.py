@@ -908,10 +908,24 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # Prune_list is now ready to action. It contains no keepers, and is already
         # expanded if necessary to meet quota, as much as we can.
 
-        # Prune the source devices
-        for device_address in prune_list:
+        # Prune the source devices.
+        #
+        # Note that prune_list can legitimately contain the same address twice:
+        # it is appended to from three independent places (the metadevice-source
+        # sweep, the main device sweep, and the quota top-up), and those
+        # selections overlap. A stale IRK source older than PRUNE_TIME_KNOWN_IRK
+        # (960s) satisfies *both* the metadevice sweep's `last_seen >
+        # stamp_known_irk` test and the main sweep's `last_seen <
+        # stamp_unknown_irk` (240s) test, so it gets appended by each. Deleting
+        # it a second time used to raise KeyError, which propagated out of
+        # prune_devices and aborted the entire update cycle
+        # ("Unexpected error fetching bermuda data").
+        #
+        # Use pop() rather than del so a repeated address is a no-op, and
+        # de-duplicate for the debug log while preserving order.
+        for device_address in dict.fromkeys(prune_list):
             _LOGGER.debug("Acting on prune list for %s", device_address)
-            del self.devices[device_address]
+            self.devices.pop(device_address, None)
 
         # Clean out the scanners dicts in metadevices and scanners
         # (scanners will have entries if they are also beacons, although
