@@ -27,6 +27,7 @@ from homeassistant.components.private_ble_device import coordinator as pble_coor
 from homeassistant.const import STATE_HOME, STATE_NOT_HOME
 from homeassistant.core import callback
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.util import slugify
 
@@ -308,6 +309,16 @@ class BermudaDevice(dict):
         scanner_devreg_mac_address = None
         scanner_devreg_bt_address = None
 
+        # HA records the exact link for ESPHome proxies (2025.4+): the esphome config
+        # entry stores the scanner address. Prefer it over the MAC-offset search below,
+        # which can land on another integration's device in the same MAC range and
+        # finds nothing for proxies whose MACs don't follow the Espressif layout.
+        # Correcting such a match changes the scanner's unique_id, and with it the
+        # unique_ids of its distance entities.
+        esphome_match = self._async_esphome_device_for_scanner()
+        if esphome_match is not None:
+            scanner_devreg_mac, scanner_devreg_mac_address = esphome_match
+
         # We don't know which address is being reported/used. So create the full
         # range of possible addresses, and see what we find in the device registry,
         # on the *assumption* that there won't be overlap between devices.
@@ -330,7 +341,7 @@ class BermudaDevice(dict):
                     # Bluetooth component's device!
                     scanner_devreg_bt = devreg_device
                     scanner_devreg_bt_address = conn[1].lower()
-                if conn[0] == "mac":
+                if conn[0] == "mac" and esphome_match is None:
                     # ESPHome, Shelly
                     scanner_devreg_mac = devreg_device
                     scanner_devreg_mac_address = conn[1]
@@ -414,6 +425,24 @@ class BermudaDevice(dict):
         self.make_name()
 
         self._update_area_and_floor(_area_id)
+
+    def _async_esphome_device_for_scanner(self) -> tuple[dr.DeviceEntry, str] | None:
+        """
+        Return the ESPHome device, and its MAC, whose config entry reports this scanner's address.
+
+        HA 2025.4+ stores the scanner address as ``bluetooth_mac_address`` on the esphome
+        config entry, whose unique_id is the device MAC; older entries just won't match.
+        """
+        source = self._hascanner.source.lower()
+        for entry in self._coordinator.hass.config_entries.async_entries("esphome"):
+            if str(entry.data.get("bluetooth_mac_address") or "").lower() != source:
+                continue
+            entry_mac = (entry.unique_id or "").lower()
+            for device in dr.async_entries_for_config_entry(self._coordinator.dr, entry.entry_id):
+                for conn in device.connections:
+                    if conn[0] == "mac" and conn[1].lower() == entry_mac:
+                        return device, conn[1]
+        return None
 
     def _update_area_and_floor(self, area_id: str | None):
         """Given an area_id, update the area and floor properties."""
