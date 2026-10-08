@@ -54,6 +54,17 @@ from .const import (
 )
 from .util import mac_math_offset, mac_norm
 
+
+def _mac_connection_address(device) -> str | None:
+    """Return the first `mac` connection on a device registry entry."""
+    if device is None:
+        return None
+    for conn in device.connections:
+        if conn[0] == "mac":
+            return conn[1]
+    return None
+
+
 if TYPE_CHECKING:
     from bleak.backends.scanner import AdvertisementData
 
@@ -298,6 +309,8 @@ class BermudaDevice(dict):
         # scanner_ha: BaseHaScanner from HA's bluetooth backend
         # scanner_devreg_bt: DeviceEntry from HA's device_registry from Bluetooth integration
         # scanner_devreg_mac: DeviceEntry from HA's *other* integrations, like ESPHome, Shelly.
+        # A network integration (UniFi, etc.) can register the same MAC, so the
+        # Bluetooth device's via_device_id is checked before any MAC match.
 
         connlist = set()  # For macthing against device_registry connections
         maclist = set()  # For matching against device_registry identifier
@@ -307,10 +320,11 @@ class BermudaDevice(dict):
         scanner_devreg_mac = None
         scanner_devreg_mac_address = None
         scanner_devreg_bt_address = None
+        mac_matches: list[tuple] = []
 
         # We don't know which address is being reported/used. So create the full
-        # range of possible addresses, and see what we find in the device registry,
-        # on the *assumption* that there won't be overlap between devices.
+        # range of possible addresses, and see what we find in the device registry.
+        # Several devices can share one MAC (the proxy and a network client).
         for offset in range(-3, 3):
             if (altmac := mac_math_offset(self.address, offset)) is not None:
                 connlist.add(("bluetooth", altmac.upper()))
@@ -330,10 +344,15 @@ class BermudaDevice(dict):
                     # Bluetooth component's device!
                     scanner_devreg_bt = devreg_device
                     scanner_devreg_bt_address = conn[1].lower()
-                if conn[0] == "mac":
-                    # ESPHome, Shelly
-                    scanner_devreg_mac = devreg_device
-                    scanner_devreg_mac_address = conn[1]
+                elif conn[0] == "mac":
+                    mac_matches.append((devreg_device, conn[1]))
+
+        # The Bluetooth entry knows which device it was created from
+        # ("connected via"). Use that before the first MAC match so a client
+        # with the same MAC (for example a UniFi device tracker) cannot win.
+        scanner_devreg_mac, scanner_devreg_mac_address = self._select_scanner_mac_device(
+            scanner_devreg_bt, mac_matches, maclist
+        )
 
         if devreg_count not in (1, 2, 3):
             # We expect just the bt, or bt and another like esphome/shelly, or
@@ -414,6 +433,26 @@ class BermudaDevice(dict):
         self.make_name()
 
         self._update_area_and_floor(_area_id)
+
+    def _select_scanner_mac_device(self, scanner_devreg_bt, mac_matches, maclist):
+        """Pick the proxy device, not another registry entry that shares its MAC.
+
+        Check the Bluetooth device's via_device_id first. Only if that does not
+        point at a device in this address window, use the first MAC match.
+        """
+        via_id = scanner_devreg_bt.via_device_id if scanner_devreg_bt is not None else None
+        if via_id:
+            for device, address in mac_matches:
+                if device.id == via_id:
+                    return device, address
+            parent = self._coordinator.dr.async_get(via_id)
+            parent_mac = _mac_connection_address(parent)
+            known = {mac.lower() for mac in maclist}
+            if parent_mac is not None and parent_mac.lower() in known:
+                return parent, parent_mac
+        if mac_matches:
+            return mac_matches[0]
+        return None, None
 
     def _update_area_and_floor(self, area_id: str | None):
         """Given an area_id, update the area and floor properties."""
