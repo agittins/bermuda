@@ -28,6 +28,25 @@ def mac_math_offset(mac, offset=0) -> str | None:
     return None
 
 
+def mac_octet_offset(mac_a, mac_b) -> int | None:
+    """
+    Signed difference of the last octets, a - b, when the first five octets
+    match; None otherwise (different vendor prefix, malformed, or None).
+
+    Used to tell WHICH neighbour a scanner's registry entry is: espressif
+    parts derive BLE = WiFi + 2 and BLE = Ethernet - 1 from one base MAC.
+    """
+    if not mac_a or not mac_b:
+        return None
+    a, b = str(mac_a).lower(), str(mac_b).lower()
+    if len(a) != 17 or len(b) != 17 or a[:-3] != b[:-3]:
+        return None
+    try:
+        return int(a[-2:], 16) - int(b[-2:], 16)
+    except ValueError:
+        return None
+
+
 @lru_cache(1024)
 def mac_norm(mac: str) -> str:
     """
