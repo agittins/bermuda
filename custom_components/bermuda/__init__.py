@@ -15,7 +15,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.entity_registry import async_migrate_entries
 
-from .const import _LOGGER, DOMAIN, PLATFORMS, STARTUP_MESSAGE
+from .const import _LOGGER, CONF_DEVICES, DOMAIN, PLATFORMS, STARTUP_MESSAGE
 from .coordinator import BermudaDataUpdateCoordinator
 from .util import mac_math_offset, mac_norm
 
@@ -105,19 +105,39 @@ async def async_remove_config_entry_device(
     coordinator: BermudaDataUpdateCoordinator = config_entry.runtime_data.coordinator
     address = None
     for domain, ident in device_entry.identifiers:
-        try:
-            if domain == DOMAIN:
-                # the identifier should be the base device address, and
-                # may have "_range" or some other per-sensor suffix.
-                # The address might be a mac address, IRK or iBeacon uuid
-                address = ident.split("_")[0]
-        except KeyError:
-            pass
+        if domain == DOMAIN:
+            # The identifier is the device's unique_id: a MAC address, an IRK,
+            # or an iBeacon's uuid_major_minor - which has underscores of its
+            # own, so it must be matched whole, not split.
+            address = ident
     if address is not None:
-        try:
-            coordinator.devices[mac_norm(address)].create_sensor = False
-        except KeyError:
+        # Older versions added a per-sensor suffix ("_range") to the id. Strip
+        # trailing "_part"s one at a time until something matches, so an
+        # iBeacon's own underscores ("uuid_major_minor_range") survive.
+        device = None
+        candidate = address
+        while device is None:
+            device = coordinator.devices.get(mac_norm(candidate))
+            if "_" not in candidate:
+                break
+            candidate = candidate.rsplit("_", 1)[0]
+        if device is None:
             _LOGGER.warning("Failed to locate device entry for %s", address)
+            return True
+        device.create_sensor = False
+        # calculate_data() turns create_sensor back on every cycle for any
+        # address in CONF_DEVICES, so a removed device has to leave that list
+        # too, or its entities come straight back.
+        tracked = config_entry.options.get(CONF_DEVICES, [])
+        # Compared normalised: a stored address may use "-" or "_" separators.
+        target = mac_norm(device.address)
+        keep = [a for a in tracked if mac_norm(a) != target]
+        if len(keep) != len(tracked):
+            hass.config_entries.async_update_entry(config_entry, options={**config_entry.options, CONF_DEVICES: keep})
+            # The reload that follows is scheduled, not immediate: update the
+            # live options too (every BermudaDevice shares this dict), or a
+            # cycle in between turns create_sensor straight back on.
+            coordinator.options[CONF_DEVICES] = keep
         return True
     # Even if we don't know this address it probably just means it's stale or from
     # a previous version that used weirder names. Allow it.
