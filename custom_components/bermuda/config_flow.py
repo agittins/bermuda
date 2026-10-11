@@ -48,7 +48,7 @@ from .const import (
     DOMAIN_PRIVATE_BLE_DEVICE,
     NAME,
 )
-from .util import mac_redact, rssi_to_metres
+from .util import mac_redact, rssi_to_metres, usable_number
 
 if TYPE_CHECKING:
     from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
@@ -61,6 +61,51 @@ if TYPE_CHECKING:
 # from homeassistant import data_entry_flow
 
 # from homeassistant.helpers.aiohttp_client import async_create_clientsession
+
+
+def _finite(value: float) -> float:
+    """Reject NaN and infinities (vol.Coerce(float) accepts "nan" and "inf")."""
+    if not usable_number(value):
+        msg = "must be a finite number"
+        raise vol.Invalid(msg)
+    return value
+
+
+# Path-loss exponent: rssi_to_metres divides by it, so zero (or NaN) aborted
+# every update cycle. Any positive finite value works; real-world ones sit
+# around 2-4. No upper bound: a value that works today must still save.
+ATTENUATION_SCHEMA = vol.All(vol.Coerce(float), _finite, vol.Range(min=0, min_included=False))
+# RSSI expected at 1 m, in dBm: any finite value.
+REF_POWER_SCHEMA = vol.All(vol.Coerce(float), _finite)
+
+
+def _attenuation_usable(value: float) -> bool:
+    """An attenuation rssi_to_metres uses as it is (it replaces 0 and below)."""
+    return value > 0
+
+
+def _form_default(value, default, usable=lambda _v: True):
+    """
+    Return a stored value as the form's default, so the form saves as shown.
+
+    The form shows exactly what the distance maths uses: the stored value when
+    rssi_to_metres takes it as it is, else the default it falls back to (an
+    attenuation of 0 or below, a NaN, a numeric string, a bool). Saving the
+    form unchanged then keeps every distance as it was.
+    """
+    if not usable_number(value) or not usable(value):
+        return default
+    return float(value)
+
+
+def _attenuation_default(options) -> float:
+    """The stored attenuation as the forms show it (see _form_default)."""
+    return _form_default(options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION), DEFAULT_ATTENUATION, _attenuation_usable)
+
+
+def _ref_power_default(options) -> float:
+    """The stored ref_power as the forms show it (see _form_default)."""
+    return _form_default(options.get(CONF_REF_POWER, DEFAULT_REF_POWER), DEFAULT_REF_POWER)
 
 
 class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
@@ -223,12 +268,12 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             ): vol.Coerce(int),
             vol.Required(
                 CONF_ATTENUATION,
-                default=self.options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
-            ): vol.Coerce(float),
+                default=_attenuation_default(self.options),
+            ): ATTENUATION_SCHEMA,
             vol.Required(
                 CONF_REF_POWER,
-                default=self.options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
-            ): vol.Coerce(float),
+                default=_ref_power_default(self.options),
+            ): REF_POWER_SCHEMA,
         }
 
         return self.async_show_form(step_id="globalopts", data_schema=vol.Schema(data_schema))
@@ -392,16 +437,14 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             ),
             vol.Required(
                 CONF_REF_POWER,
-                default=self._last_ref_power
-                if self._last_ref_power is not None
-                else self.options.get(CONF_REF_POWER, DEFAULT_REF_POWER),
-            ): vol.Coerce(float),
+                default=self._last_ref_power if self._last_ref_power is not None else _ref_power_default(self.options),
+            ): REF_POWER_SCHEMA,
             vol.Required(
                 CONF_ATTENUATION,
                 default=self._last_attenuation
                 if self._last_attenuation is not None
-                else self.options.get(CONF_ATTENUATION, DEFAULT_ATTENUATION),
-            ): vol.Coerce(float),
+                else _attenuation_default(self.options),
+            ): ATTENUATION_SCHEMA,
             vol.Optional(CONF_SAVE_AND_CLOSE, default=False): vol.Coerce(bool),
         }
         if user_input is None:
