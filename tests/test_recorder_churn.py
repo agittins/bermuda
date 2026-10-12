@@ -90,3 +90,13 @@ def test_the_area_sensor_keeps_its_attributes():
     assert (
         attrs["area_id"] == "kitchen" and attrs["floor_id"] == "ground" and attrs["current_mac"] == "aa:bb:cc:dd:ee:ff"
     )
+
+
+def test_a_device_coming_back_is_published_as_it_is(_clock):
+    """Out of range in between: the returning reading must not be measured
+    against the distance from before it went."""
+    entity = _range_sensor(2.0)
+    assert _publish(entity, 2.0, NOW) == 2.0
+    assert _publish(entity, None, NOW + 5) is None
+    _clock["now"] = NOW + 300
+    assert _publish(entity, 1.9, NOW + 300) == 1.9

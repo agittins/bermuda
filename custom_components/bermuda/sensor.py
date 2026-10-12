@@ -358,6 +358,10 @@ class BermudaSensorRange(BermudaSensor):
         """
         distance = self._device.area_distance
         if distance is None:
+            # Out of range (or not yet heard): forget the last value, so the
+            # first reading when it comes back is published as it is rather
+            # than measured against a distance from before it went.
+            self.bermuda_last_state, self.bermuda_last_stamp = None, 0
             return None
         value = round(distance, 1)
         nowstamp = monotonic_time_coarse()
