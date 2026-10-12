@@ -135,19 +135,32 @@ def test_a_move_just_inside_the_deadband_is_still_held(_clock):
 
 def test_the_deadband_is_checked_once_per_interval(_clock):
     """Readings scatter more than the deadband: with every reading checked,
-    one in each interval got through. One comparison per interval, and a
-    comparison that holds starts the next interval."""
+    one in each interval got through. One comparison per interval, on the
+    interval's median, and a comparison that holds starts the next one."""
     entity = _range_sensor(3.0)
     assert _publish(entity, 3.0, NOW) == 3.0
-    for second in range(1, 10):  # inside the interval: held, noisy or not
+    for second in range(1, 11):  # every reading outside the deadband, either way
         _clock["now"] = NOW + second
-        assert _publish(entity, 3.0 + (0.5 if second % 2 else -0.4), NOW + second) == 3.0
+        assert _publish(entity, 3.4 if second % 2 else 2.6, NOW + second) == 3.0
     _clock["now"] = NOW + 11
-    assert _publish(entity, 3.1, NOW + 11) == 3.0  # the check: inside the deadband
+    assert _publish(entity, 3.0, NOW + 11) == 3.0  # the check: the median is 3.0
     _clock["now"] = NOW + 12
     assert _publish(entity, 3.6, NOW + 12) == 3.0  # the next check is an interval away
-    _clock["now"] = NOW + 22
-    assert _publish(entity, 3.6, NOW + 22) == 3.6
+    for second in range(13, 23):
+        _clock["now"] = NOW + second
+        assert _publish(entity, 3.6, NOW + second) == (3.6 if second == 22 else 3.0)
+
+
+def test_a_stray_reading_at_the_check_does_not_hold_back_a_move(_clock):
+    """A sustained move with one in-band reading at each check is published
+    at the first check, not held for as long as the strays keep landing."""
+    entity = _range_sensor(3.0)
+    assert _publish(entity, 3.0, NOW) == 3.0
+    for second in range(1, 11):
+        _clock["now"] = NOW + second
+        _publish(entity, 3.6, NOW + second)
+    _clock["now"] = NOW + 11
+    assert _publish(entity, 3.1, NOW + 11) == 3.6
 
 
 def test_a_large_drop_is_shown_at_once(_clock):

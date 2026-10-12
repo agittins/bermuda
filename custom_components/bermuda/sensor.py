@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from statistics import median
 from typing import TYPE_CHECKING, Any
 
 from bluetooth_data_tools import monotonic_time_coarse
@@ -320,9 +321,11 @@ class BermudaSensorRssi(BermudaSensor):
 # A device's distance is republished only when it moves by at least this
 # much from the value last published: DISTANCE_DEADBAND_M, or
 # DISTANCE_DEADBAND_FRACTION of the distance when that is larger (BLE noise
-# grows with distance). It is checked once per update interval, not on every
-# update: a single reading is noisier than the deadband, so with ten
-# readings to choose from nearly every interval had one outside it.
+# grows with distance). It is checked once per update interval, against the
+# median of the interval's readings: a single reading is noisier than the
+# deadband, so with every reading checked nearly every interval had one
+# outside it, and with only the last one checked a stray reading could hold
+# back a real move.
 DISTANCE_DEADBAND_M = 0.2
 DISTANCE_DEADBAND_FRACTION = 0.1
 # A drop this large (DISTANCE_FAST_FALL_M, or DISTANCE_FAST_FALL_FRACTION of
@@ -334,6 +337,9 @@ DISTANCE_FAST_FALL_FRACTION = 0.25
 # exactly a threshold (2.0 -> 1.8 is 0.19999999999999996) must not read as
 # smaller than it.
 DISTANCE_DEADBAND_TOLERANCE = 1e-6
+# The most readings kept for an interval's median (a 10 s interval at about
+# one update a second needs ten).
+DISTANCE_READINGS_MAX = 64
 
 
 def distance_deadband(last: float) -> float:
@@ -366,10 +372,10 @@ class BermudaSensorRange(BermudaSensor):
         """
         Return the native value of the sensor.
 
-        Once per update interval the distance is compared with the one last
-        published, and published only if it differs by the deadband (see
-        distance_deadband); a comparison that holds it starts the next
-        interval. BLE jitter is wider than the 0.1 m rounding, so without
+        Once per update interval the median of the interval's readings is
+        compared with the distance last published, and published only if it
+        differs by the deadband (see distance_deadband); a comparison that
+        holds it starts the next interval. BLE jitter is wider than the 0.1 m rounding, so without
         this nearly every interval wrote a new recorder row for every tracked
         device. A large drop (see distance_fast_fall) and a ref_power change
         (calibration) show at once.
@@ -380,10 +386,14 @@ class BermudaSensorRange(BermudaSensor):
             # first reading when it comes back is published as it is rather
             # than measured against a distance from before it went.
             self.bermuda_last_state, self.bermuda_last_stamp = None, 0
+            self._distance_readings = []
             return None
         value = round(distance, 1)
         nowstamp = monotonic_time_coarse()
         last = self.bermuda_last_state
+        readings = getattr(self, "_distance_readings", None) or []
+        readings = [*readings[-(DISTANCE_READINGS_MAX - 1) :], value]
+        self._distance_readings = readings
         if (
             self._device.ref_power_changed >= nowstamp - 2  # calibration just changed
             or self.bermuda_last_stamp <= 0  # nothing published yet (the cache starts at 0)
@@ -391,16 +401,19 @@ class BermudaSensorRange(BermudaSensor):
             or last - value >= distance_fast_fall(last) - DISTANCE_DEADBAND_TOLERANCE
         ):
             self.bermuda_last_state, self.bermuda_last_stamp = value, nowstamp
+            self._distance_readings = []
             return value
         if nowstamp - self.bermuda_last_stamp <= self.bermuda_update_interval:
             return last
-        # The one comparison this interval. Held or published, the next
-        # comes an interval from now.
+        # The one comparison this interval, on the interval's median. Held or
+        # published, the next comes an interval from now.
         self.bermuda_last_stamp = nowstamp
-        if abs(value - last) < distance_deadband(last) - DISTANCE_DEADBAND_TOLERANCE:
+        self._distance_readings = []
+        typical = round(median(readings), 1)
+        if abs(typical - last) < distance_deadband(last) - DISTANCE_DEADBAND_TOLERANCE:
             return last
-        self.bermuda_last_state = value
-        return value
+        self.bermuda_last_state = typical
+        return typical
 
     @property
     def device_class(self):
