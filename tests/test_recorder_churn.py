@@ -133,27 +133,19 @@ def test_a_move_just_inside_the_deadband_is_still_held(_clock):
     assert _publish(entity, 6.5, NOW + 60) == 6.0
 
 
-def test_the_deadband_is_checked_once_per_interval(_clock):
-    """Readings scatter more than the deadband: with every reading checked,
-    one in each interval got through. One comparison per interval, on the
-    interval's median, and a comparison that holds starts the next one."""
+def test_readings_scattered_past_the_deadband_are_held(_clock):
+    """Every reading is outside the deadband, one way or the other, but the
+    median of the last interval's readings is not: nothing is published."""
     entity = _range_sensor(3.0)
     assert _publish(entity, 3.0, NOW) == 3.0
-    for second in range(1, 11):  # every reading outside the deadband, either way
+    for second in range(1, 60):
         _clock["now"] = NOW + second
-        assert _publish(entity, 3.4 if second % 2 else 2.6, NOW + second) == 3.0
-    _clock["now"] = NOW + 11
-    assert _publish(entity, 3.0, NOW + 11) == 3.0  # the check: the median is 3.0
-    _clock["now"] = NOW + 12
-    assert _publish(entity, 3.6, NOW + 12) == 3.0  # the next check is an interval away
-    for second in range(13, 23):
-        _clock["now"] = NOW + second
-        assert _publish(entity, 3.6, NOW + second) == (3.6 if second == 22 else 3.0)
+        assert _publish(entity, (2.6, 3.0, 3.4)[second % 3], NOW + second) == 3.0
 
 
 def test_a_stray_reading_at_the_check_does_not_hold_back_a_move(_clock):
-    """A sustained move with one in-band reading at each check is published
-    at the first check, not held for as long as the strays keep landing."""
+    """A sustained move with one in-band reading when the interval comes up
+    is published then, not held for as long as the strays keep landing."""
     entity = _range_sensor(3.0)
     assert _publish(entity, 3.0, NOW) == 3.0
     for second in range(1, 11):
@@ -161,6 +153,32 @@ def test_a_stray_reading_at_the_check_does_not_hold_back_a_move(_clock):
         _publish(entity, 3.6, NOW + second)
     _clock["now"] = NOW + 11
     assert _publish(entity, 3.1, NOW + 11) == 3.6
+
+
+@pytest.mark.parametrize("moved_to", [3.6, 2.4])
+def test_a_move_after_mid_interval_shows_within_an_interval(_clock, moved_to):
+    """A move that starts after the middle of an interval loses that
+    interval's median; it must not then wait out another whole interval."""
+    entity = _range_sensor(3.0)
+    assert _publish(entity, 3.0, NOW) == 3.0
+    published = {}
+    for second in range(1, 30):
+        _clock["now"] = NOW + second
+        published[second] = _publish(entity, 3.0 if second < 7 else moved_to, NOW + second)
+    assert all(published[s] == 3.0 for s in range(1, 7))
+    assert published[17] == moved_to  # within one 10 s interval of the move at 7 s
+    assert published[29] == moved_to
+
+
+def test_at_most_one_new_value_per_interval(_clock):
+    entity = _range_sensor(3.0)
+    assert _publish(entity, 3.0, NOW) == 3.0
+    values = []
+    for second in range(1, 41):
+        _clock["now"] = NOW + second
+        values.append(_publish(entity, 3.0 + 0.1 * second, NOW + second))  # a steady walk away
+    changes = [i for i in range(1, len(values)) if values[i] != values[i - 1]]
+    assert changes and all(b - a > 10 for a, b in zip(changes, changes[1:], strict=False))
 
 
 def test_a_large_drop_is_shown_at_once(_clock):
