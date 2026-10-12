@@ -98,17 +98,31 @@ async def async_setup_entry(
         # go over time. So we need to maintain our matrix of which ones we have already
         # spun-up so we don't duplicate any.
 
-        for scanner in coordinator.get_scanners:
-            if (
-                scanner.is_remote_scanner is None  # usb/HCI scanner's are fine.
-                or (scanner.is_remote_scanner and scanner.address_wifi_mac is None)
-            ):
-                # This scanner doesn't have a wifi mac yet, bail out
-                # until they are all filled out.
-                return
+        # A scanner whose wifi mac hasn't resolved yet is skipped rather than
+        # blocking everyone: this used to `return` here, which meant a SINGLE
+        # such scanner anywhere in the whole system silently froze entity
+        # creation for every device against every OTHER scanner too, forever
+        # (until that one scanner resolved, which some device types - a kiosk
+        # or panel acting as a BLE scanner rather than an ESPHome/Shelly proxy
+        # - never do). Measured in production: two such scanners had frozen
+        # backfill for the entire install, capping every tracked device's
+        # registered scanners at whatever existed the moment those two
+        # appeared - worst for whichever device was tracked most recently.
+        # Safe to skip just the unresolved one: unique_id already falls back
+        # to `.address` when `address_wifi_mac` is None (see
+        # BermudaSensorScannerRange.unique_id below), so nothing here actually
+        # depended on waiting.
+        unresolved_scanners = {
+            scanner.address
+            for scanner in coordinator.get_scanners
+            if scanner.is_remote_scanner is None  # usb/HCI scanner's are fine.
+            or (scanner.is_remote_scanner and scanner.address_wifi_mac is None)
+        }
 
         entities = []
         for scanner in coordinator.scanner_list:
+            if scanner in unresolved_scanners:
+                continue
             for address in created_devices:
                 if address not in created_scanners.get(scanner, []):
                     _LOGGER.debug(
@@ -123,7 +137,8 @@ async def async_setup_entry(
         # _LOGGER.debug("Sensor received new_device signal for %s", address)
         # We set update before add to False because we are being
         # call(back(ed)) from the update, so causing it to call another would be... bad.
-        async_add_entities(entities, False)
+        if entities:
+            async_add_entities(entities, False)
 
     @callback
     def scanners_changed() -> None:

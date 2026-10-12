@@ -3,6 +3,7 @@ Tests for BermudaDevice class in bermuda_device.py.
 """
 
 import pytest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from homeassistant.components.bluetooth import BaseHaScanner, BaseHaRemoteScanner
 from custom_components.bermuda.bermuda_device import BermudaDevice
@@ -63,6 +64,32 @@ def test_async_as_scanner_init(bermuda_scanner, mock_scanner):
     assert bermuda_scanner._hascanner == mock_scanner
     assert bermuda_scanner.is_scanner is True
     assert bermuda_scanner.is_remote_scanner is False
+
+
+def test_scanner_resolves_wifi_mac_before_announcing(bermuda_scanner, mock_coordinator, mock_remote_scanner):
+    """The roster-changed signal must see the scanner's resolved wifi mac.
+
+    scanner_list_add() dispatches SIGNAL_SCANNERS_CHANGED, and the sensor platform
+    skips scanners whose wifi mac is still None. A scanner that registers after
+    startup gets no other signal, so announcing it before resolving left it
+    without per-scanner entities until a reload.
+    """
+    wifi_mac = "11:22:33:44:55:64"
+    mock_coordinator.dr.devices.get_entries.return_value = [
+        SimpleNamespace(
+            id="shelly_device",
+            name="Shelly",
+            name_by_user=None,
+            area_id=None,
+            connections={("mac", wifi_mac)},
+        )
+    ]
+    seen_at_announce = []
+    mock_coordinator.scanner_list_add.side_effect = lambda scanner: seen_at_announce.append(scanner.address_wifi_mac)
+
+    bermuda_scanner.async_as_scanner_init(mock_remote_scanner)
+
+    assert seen_at_announce == [wifi_mac]
 
 
 def test_async_as_scanner_update(bermuda_scanner, mock_scanner):
