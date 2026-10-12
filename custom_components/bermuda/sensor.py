@@ -320,11 +320,18 @@ class BermudaSensorRssi(BermudaSensor):
 # A device's distance is republished only when it moves by at least this
 # much from the value last published: DISTANCE_DEADBAND_M, or
 # DISTANCE_DEADBAND_FRACTION of the distance when that is larger (BLE noise
-# grows with distance). On a 31-device install this halved the Distance rows.
+# grows with distance). It is checked once per update interval, not on every
+# update: a single reading is noisier than the deadband, so with ten
+# readings to choose from nearly every interval had one outside it.
 DISTANCE_DEADBAND_M = 0.2
 DISTANCE_DEADBAND_FRACTION = 0.1
+# A drop this large (DISTANCE_FAST_FALL_M, or DISTANCE_FAST_FALL_FRACTION of
+# the distance when that is larger) is shown at once, so a device coming up
+# to a proxy is not held for the rest of the interval.
+DISTANCE_FAST_FALL_M = 1.0
+DISTANCE_FAST_FALL_FRACTION = 0.25
 # Distances are rounded to 0.1 m but held as binary floats, so a move of
-# exactly the deadband (2.0 -> 1.8 is 0.19999999999999996) must not read as
+# exactly a threshold (2.0 -> 1.8 is 0.19999999999999996) must not read as
 # smaller than it.
 DISTANCE_DEADBAND_TOLERANCE = 1e-6
 
@@ -332,6 +339,11 @@ DISTANCE_DEADBAND_TOLERANCE = 1e-6
 def distance_deadband(last: float) -> float:
     """How far a distance must move from ``last`` before it is published again."""
     return max(DISTANCE_DEADBAND_M, DISTANCE_DEADBAND_FRACTION * abs(last))
+
+
+def distance_fast_fall(last: float) -> float:
+    """How far a distance must drop from ``last`` to be published at once."""
+    return max(DISTANCE_FAST_FALL_M, DISTANCE_FAST_FALL_FRACTION * abs(last))
 
 
 class BermudaSensorRange(BermudaSensor):
@@ -354,11 +366,13 @@ class BermudaSensorRange(BermudaSensor):
         """
         Return the native value of the sensor.
 
-        A new value is only published once it differs from the last one
-        published by the deadband (see distance_deadband): BLE jitter is wider
-        than the 0.1 m rounding, so without it nearly every update cycle wrote
-        a new recorder row for every tracked device. A ref_power change
-        (calibration) always shows at once.
+        Once per update interval the distance is compared with the one last
+        published, and published only if it differs by the deadband (see
+        distance_deadband); a comparison that holds it starts the next
+        interval. BLE jitter is wider than the 0.1 m rounding, so without
+        this nearly every interval wrote a new recorder row for every tracked
+        device. A large drop (see distance_fast_fall) and a ref_power change
+        (calibration) show at once.
         """
         distance = self._device.area_distance
         if distance is None:
@@ -369,19 +383,24 @@ class BermudaSensorRange(BermudaSensor):
             return None
         value = round(distance, 1)
         nowstamp = monotonic_time_coarse()
-        if self._device.ref_power_changed >= nowstamp - 2:
-            # Calibration just changed: the new distance, past the cache and
-            # the deadband alike.
-            self.bermuda_last_state, self.bermuda_last_stamp = value, nowstamp
-            return value
         last = self.bermuda_last_state
         if (
-            self.bermuda_last_stamp > 0  # something has been published (the cache starts at 0)
-            and isinstance(last, int | float)
-            and abs(value - last) < distance_deadband(last) - DISTANCE_DEADBAND_TOLERANCE
+            self._device.ref_power_changed >= nowstamp - 2  # calibration just changed
+            or self.bermuda_last_stamp <= 0  # nothing published yet (the cache starts at 0)
+            or not isinstance(last, int | float)
+            or last - value >= distance_fast_fall(last) - DISTANCE_DEADBAND_TOLERANCE
         ):
+            self.bermuda_last_state, self.bermuda_last_stamp = value, nowstamp
+            return value
+        if nowstamp - self.bermuda_last_stamp <= self.bermuda_update_interval:
             return last
-        return self._cached_ratelimit(value)
+        # The one comparison this interval. Held or published, the next
+        # comes an interval from now.
+        self.bermuda_last_stamp = nowstamp
+        if abs(value - last) < distance_deadband(last) - DISTANCE_DEADBAND_TOLERANCE:
+            return last
+        self.bermuda_last_state = value
+        return value
 
     @property
     def device_class(self):
