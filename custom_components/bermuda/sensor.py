@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from statistics import median
 from typing import TYPE_CHECKING, Any
 
+from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.components.sensor import RestoreSensor, SensorEntity
 from homeassistant.components.sensor.const import SensorDeviceClass, SensorStateClass
 from homeassistant.const import (
@@ -225,7 +227,17 @@ class BermudaSensor(BermudaEntity, SensorEntity):
         # since oft-changing attribs cause more db writes than sensors
         # "last_seen": self.coordinator.dt_mono_to_datetime(self._device.last_seen),
         attribs = {}
-        if self.name in ["Area", "Floor"]:
+        if self.name == "Floor":
+            # Only what the floor itself is. The area attributes (and the
+            # current MAC, already on the Area sensor) change on every area
+            # switch, so carrying them here wrote a recorder row for the
+            # floor sensor each time its state had not changed: about half of
+            # all Floor rows were attribute-only.
+            attribs["floor_id"] = self._device.floor_id
+            attribs["floor_name"] = self._device.floor_name
+            attribs["floor_level"] = self._device.floor_level
+            return attribs
+        if self.name == "Area":
             attribs["area_id"] = self._device.area_id
             attribs["area_name"] = self._device.area_name
             attribs["floor_id"] = self._device.floor_id
@@ -306,6 +318,40 @@ class BermudaSensorRssi(BermudaSensor):
         return SensorStateClass.MEASUREMENT
 
 
+# A device's distance is republished only when it moves by at least this
+# much from the value last published: DISTANCE_DEADBAND_M, or
+# DISTANCE_DEADBAND_FRACTION of the distance when that is larger (BLE noise
+# grows with distance). It is checked against the median of the last update
+# interval's readings, and a new value is published at most once per
+# interval: a single reading is noisier than the deadband, so with every
+# reading checked nearly every interval had one outside it, while a median
+# lets a sustained move through within about an interval of its start.
+DISTANCE_DEADBAND_M = 0.2
+DISTANCE_DEADBAND_FRACTION = 0.1
+# A drop this large (DISTANCE_FAST_FALL_M, or DISTANCE_FAST_FALL_FRACTION of
+# the distance when that is larger) is shown at once, so a device coming up
+# to a proxy is not held for the rest of the interval.
+DISTANCE_FAST_FALL_M = 1.0
+DISTANCE_FAST_FALL_FRACTION = 0.25
+# Distances are rounded to 0.1 m but held as binary floats, so a move of
+# exactly a threshold (2.0 -> 1.8 is 0.19999999999999996) must not read as
+# smaller than it.
+DISTANCE_DEADBAND_TOLERANCE = 1e-6
+# The most readings kept for the median (a 10 s interval at about one update
+# a second needs ten or eleven).
+DISTANCE_READINGS_MAX = 64
+
+
+def distance_deadband(last: float) -> float:
+    """How far a distance must move from ``last`` before it is published again."""
+    return max(DISTANCE_DEADBAND_M, DISTANCE_DEADBAND_FRACTION * abs(last))
+
+
+def distance_fast_fall(last: float) -> float:
+    """How far a distance must drop from ``last`` to be published at once."""
+    return max(DISTANCE_FAST_FALL_M, DISTANCE_FAST_FALL_FRACTION * abs(last))
+
+
 class BermudaSensorRange(BermudaSensor):
     """Extra sensor for range-to-closest-area."""
 
@@ -323,11 +369,49 @@ class BermudaSensorRange(BermudaSensor):
 
     @property
     def native_value(self):
-        """Return the native value of the sensor."""
+        """
+        Return the native value of the sensor.
+
+        The median of the readings over the last update interval is compared
+        with the distance last published, and published when it differs by
+        the deadband (see distance_deadband), at most once per interval. BLE
+        jitter is wider than the 0.1 m rounding, so without this nearly every
+        interval wrote a new recorder row for every tracked device. A large
+        drop (see distance_fast_fall) and a ref_power change (calibration)
+        show at once.
+        """
         distance = self._device.area_distance
-        if distance is not None:
-            return self._cached_ratelimit(round(distance, 1))
-        return None
+        if distance is None:
+            # Out of range (or not yet heard): forget the last value, so the
+            # first reading when it comes back is published as it is rather
+            # than measured against a distance from before it went.
+            self.bermuda_last_state, self.bermuda_last_stamp = None, 0
+            self._distance_readings = []
+            return None
+        value = round(distance, 1)
+        nowstamp = monotonic_time_coarse()
+        last = self.bermuda_last_state
+        window_start = nowstamp - self.bermuda_update_interval
+        readings = [r for r in getattr(self, "_distance_readings", None) or () if r[0] >= window_start]
+        readings = [*readings[-(DISTANCE_READINGS_MAX - 1) :], (nowstamp, value)]
+        self._distance_readings = readings
+        if (
+            self._device.ref_power_changed >= nowstamp - 2  # calibration just changed
+            or self.bermuda_last_stamp <= 0  # nothing published yet (the cache starts at 0)
+            or not isinstance(last, int | float)
+            or last - value >= distance_fast_fall(last) - DISTANCE_DEADBAND_TOLERANCE
+        ):
+            self.bermuda_last_state, self.bermuda_last_stamp = value, nowstamp
+            self._distance_readings = []
+            return value
+        if nowstamp - self.bermuda_last_stamp <= self.bermuda_update_interval:
+            return last
+        typical = round(median(reading for _, reading in readings), 1)
+        if abs(typical - last) < distance_deadband(last) - DISTANCE_DEADBAND_TOLERANCE:
+            return last
+        self.bermuda_last_state, self.bermuda_last_stamp = typical, nowstamp
+        self._distance_readings = []
+        return typical
 
     @property
     def device_class(self):
