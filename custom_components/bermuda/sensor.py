@@ -323,6 +323,10 @@ class BermudaSensorRssi(BermudaSensor):
 # grows with distance). On a 31-device install this halved the Distance rows.
 DISTANCE_DEADBAND_M = 0.2
 DISTANCE_DEADBAND_FRACTION = 0.1
+# Distances are rounded to 0.1 m but held as binary floats, so a move of
+# exactly the deadband (2.0 -> 1.8 is 0.19999999999999996) must not read as
+# smaller than it.
+DISTANCE_DEADBAND_TOLERANCE = 1e-6
 
 
 def distance_deadband(last: float) -> float:
@@ -374,7 +378,7 @@ class BermudaSensorRange(BermudaSensor):
         if (
             self.bermuda_last_stamp > 0  # something has been published (the cache starts at 0)
             and isinstance(last, int | float)
-            and abs(value - last) < distance_deadband(last)
+            and abs(value - last) < distance_deadband(last) - DISTANCE_DEADBAND_TOLERANCE
         ):
             return last
         return self._cached_ratelimit(value)

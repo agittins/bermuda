@@ -100,3 +100,25 @@ def test_a_device_coming_back_is_published_as_it_is(_clock):
     assert _publish(entity, None, NOW + 5) is None
     _clock["now"] = NOW + 300
     assert _publish(entity, 1.9, NOW + 300) == 1.9
+
+
+@pytest.mark.parametrize(
+    ("last", "moved_to"),
+    [(2.0, 1.8), (2.0, 2.2), (6.0, 5.4), (6.0, 6.6)],
+)
+def test_a_move_of_exactly_the_deadband_is_published(_clock, last, moved_to):
+    # 2.0 - 1.8 is 0.19999999999999996 in floats: still a 0.2 m move.
+    entity = _range_sensor(last)
+    assert _publish(entity, last, NOW) == last
+    _clock["now"] = NOW + 60
+    assert _publish(entity, moved_to, NOW + 60) == moved_to
+    _clock["now"] = NOW + 120
+    assert _publish(entity, moved_to, NOW + 120) == moved_to
+
+
+def test_a_move_just_inside_the_deadband_is_still_held(_clock):
+    entity = _range_sensor(6.0)
+    assert _publish(entity, 6.0, NOW) == 6.0
+    _clock["now"] = NOW + 60
+    assert _publish(entity, 5.5, NOW + 60) == 6.0
+    assert _publish(entity, 6.5, NOW + 60) == 6.0
