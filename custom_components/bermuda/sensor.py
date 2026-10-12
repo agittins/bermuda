@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.components.sensor import RestoreSensor, SensorEntity
 from homeassistant.components.sensor.const import SensorDeviceClass, SensorStateClass
 from homeassistant.const import (
@@ -225,7 +226,17 @@ class BermudaSensor(BermudaEntity, SensorEntity):
         # since oft-changing attribs cause more db writes than sensors
         # "last_seen": self.coordinator.dt_mono_to_datetime(self._device.last_seen),
         attribs = {}
-        if self.name in ["Area", "Floor"]:
+        if self.name == "Floor":
+            # Only what the floor itself is. The area attributes (and the
+            # current MAC, already on the Area sensor) change on every area
+            # switch, so carrying them here wrote a recorder row for the
+            # floor sensor each time its state had not changed: about half of
+            # all Floor rows were attribute-only.
+            attribs["floor_id"] = self._device.floor_id
+            attribs["floor_name"] = self._device.floor_name
+            attribs["floor_level"] = self._device.floor_level
+            return attribs
+        if self.name == "Area":
             attribs["area_id"] = self._device.area_id
             attribs["area_name"] = self._device.area_name
             attribs["floor_id"] = self._device.floor_id
@@ -306,6 +317,19 @@ class BermudaSensorRssi(BermudaSensor):
         return SensorStateClass.MEASUREMENT
 
 
+# A device's distance is republished only when it moves by at least this
+# much from the value last published: DISTANCE_DEADBAND_M, or
+# DISTANCE_DEADBAND_FRACTION of the distance when that is larger (BLE noise
+# grows with distance). On a 31-device install this halved the Distance rows.
+DISTANCE_DEADBAND_M = 0.2
+DISTANCE_DEADBAND_FRACTION = 0.1
+
+
+def distance_deadband(last: float) -> float:
+    """How far a distance must move from ``last`` before it is published again."""
+    return max(DISTANCE_DEADBAND_M, DISTANCE_DEADBAND_FRACTION * abs(last))
+
+
 class BermudaSensorRange(BermudaSensor):
     """Extra sensor for range-to-closest-area."""
 
@@ -323,11 +347,33 @@ class BermudaSensorRange(BermudaSensor):
 
     @property
     def native_value(self):
-        """Return the native value of the sensor."""
+        """
+        Return the native value of the sensor.
+
+        A new value is only published once it differs from the last one
+        published by the deadband (see distance_deadband): BLE jitter is wider
+        than the 0.1 m rounding, so without it nearly every update cycle wrote
+        a new recorder row for every tracked device. A ref_power change
+        (calibration) always shows at once.
+        """
         distance = self._device.area_distance
-        if distance is not None:
-            return self._cached_ratelimit(round(distance, 1))
-        return None
+        if distance is None:
+            return None
+        value = round(distance, 1)
+        nowstamp = monotonic_time_coarse()
+        if self._device.ref_power_changed >= nowstamp - 2:
+            # Calibration just changed: the new distance, past the cache and
+            # the deadband alike.
+            self.bermuda_last_state, self.bermuda_last_stamp = value, nowstamp
+            return value
+        last = self.bermuda_last_state
+        if (
+            self.bermuda_last_stamp > 0  # something has been published (the cache starts at 0)
+            and isinstance(last, int | float)
+            and abs(value - last) < distance_deadband(last)
+        ):
+            return last
+        return self._cached_ratelimit(value)
 
     @property
     def device_class(self):
