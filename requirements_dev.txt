@@ -6,4 +6,4 @@ mypy
 types-PyYAML
 
 # Linting/formatting (same pin as pre-commit)
-ruff==0.16.10
+ruff==0.17.0
