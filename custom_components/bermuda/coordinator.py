@@ -54,6 +54,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util.dt import get_age, now
 
 from .bermuda_device import BermudaDevice
+from .bermuda_advert import BermudaAdvert
 from .bermuda_findmy import (
     APPLE_COMPANY_ID,
     DULT_SERVICE_UUID,
@@ -118,7 +119,6 @@ if TYPE_CHECKING:
     from homeassistant.components.bluetooth.manager import HomeAssistantBluetoothManager
 
     from . import BermudaConfigEntry
-    from .bermuda_advert import BermudaAdvert
 
 Cancellable = Callable[[], None]
 FINDMY_CANDIDATE_REFRESH = timedelta(minutes=15)
