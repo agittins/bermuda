@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 import voluptuous as vol
 from bluetooth_data_tools import monotonic_time_coarse
+from findmy import FindMyAccessory
 from homeassistant import config_entries
+from homeassistant.components.file_upload import process_uploaded_file
 from homeassistant.config_entries import OptionsFlowWithConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import (
     DeviceSelector,
     DeviceSelectorConfig,
+    FileSelector,
+    FileSelectorConfig,
     ObjectSelector,
     SelectOptionDict,
     SelectSelector,
@@ -21,12 +26,14 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    ADDR_TYPE_FINDMY_DEVICE,
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     BDADDR_TYPE_RANDOM_RESOLVABLE,
     CONF_ATTENUATION,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
+    CONF_FINDMY_ACCESSORIES,
     CONF_MAX_RADIUS,
     CONF_MAX_VELOCITY,
     CONF_REF_POWER,
@@ -188,10 +195,60 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             menu_options={
                 "globalopts": "Global Options",
                 "selectdevices": "Select Devices",
+                "import_findmy": "Import Find My Key",
                 "calibration1_global": "Calibration 1: Global",
                 "calibration2_scanners": "Calibration 2: Scanner RSSI Offsets",
             },
             description_placeholders=messages,
+        )
+
+    async def async_step_import_findmy(self, user_input=None):
+        """Import an exported rolling-key accessory for local Bluetooth tracking."""
+        if user_input is not None:
+            file_id = user_input.get("file")
+            accessory = await self.hass.async_add_executor_job(
+                _get_findmy_accessory_from_file,
+                self.hass,
+                file_id,
+            )
+            if accessory is None or accessory.identifier is None:
+                return self.async_show_form(
+                    step_id="import_findmy",
+                    data_schema=self._findmy_import_schema(),
+                    errors={"base": "invalid_findmy_key"},
+                )
+
+            accessories = list(self.options.get(CONF_FINDMY_ACCESSORIES, []))
+            if any(item.get("id") == accessory.identifier for item in accessories):
+                return self.async_show_form(
+                    step_id="import_findmy",
+                    data_schema=self._findmy_import_schema(),
+                    errors={"base": "findmy_key_already_configured"},
+                )
+
+            accessory.name = user_input.get("name") or accessory.name or "AirTag"
+            accessories.append(
+                {
+                    "id": accessory.identifier,
+                    "name": accessory.name,
+                    "data": accessory.to_json(),
+                }
+            )
+            self.options[CONF_FINDMY_ACCESSORIES] = accessories
+            return await self._update_options()
+
+        return self.async_show_form(
+            step_id="import_findmy",
+            data_schema=self._findmy_import_schema(),
+        )
+
+    @staticmethod
+    def _findmy_import_schema():
+        return vol.Schema(
+            {
+                vol.Optional("name"): str,
+                vol.Required("file"): FileSelector(FileSelectorConfig(accept=".json,.plist")),
+            }
         )
 
     async def async_step_globalopts(self, user_input=None):
@@ -255,6 +312,8 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
 
             if device.is_scanner:
                 # We don't "track" scanner devices, per se
+                continue
+            if device.address_type == ADDR_TYPE_FINDMY_DEVICE:
                 continue
             if device.address_type == ADDR_TYPE_PRIVATE_BLE_DEVICE:
                 # Private BLE Devices get configured automagically, skip
@@ -583,3 +642,15 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
     async def _update_options(self):
         """Update config entry options."""
         return self.async_create_entry(title=NAME, data=self.options)
+
+
+def _get_findmy_accessory_from_file(hass, file_id: str) -> FindMyAccessory | None:
+    """Load a rolling-key accessory export from an uploaded JSON or plist file."""
+    with process_uploaded_file(hass, file_id) as uploaded_file:
+        accessory = None
+        with contextlib.suppress(ValueError):
+            accessory = FindMyAccessory.from_plist(uploaded_file)
+        if accessory is None:
+            with contextlib.suppress(ValueError):
+                accessory = FindMyAccessory.from_json(uploaded_file)
+    return accessory

@@ -21,12 +21,22 @@
     "error": {
       "some_active": "You have at least some active devices, this is good.",
       "no_scanners": "You need to configure some bluetooth scanners before Bermuda will have anything to work with. \nAny one of esphome bluetooth_proxy, Shelly bluetooth proxy or local bluetooth adaptor should get you started.",
-      "no_devices": "No bluetooth devices are actively being reported from your scanners. \nYou will need to solve this before Bermuda can be of much help."
+      "no_devices": "No bluetooth devices are actively being reported from your scanners. \nYou will need to solve this before Bermuda can be of much help.",
+      "invalid_findmy_key": "The file is not a supported rolling-key accessory export.",
+      "findmy_key_already_configured": "This accessory is already imported."
     },
     "step": {
       "init": {
         "title": "Configure Bermuda",
         "description": "Bermuda can currently see:\n- {device_counter_active} active out of {device_counter_devices} bluetooth devices.\n- {scanner_counter_active} active out of {scanner_counter_scanners} bluetooth scanner devices.\n\n{status}"
+      },
+      "import_findmy": {
+        "title": "Import Find My rolling key",
+        "description": "Import an exported rolling-key accessory file for local Bluetooth tracking. The key is stored in Bermuda's config entry.",
+        "data": {
+          "name": "Device name",
+          "file": "Exported JSON or plist file"
+        }
       },
       "globalopts": {
         "title": "Global settings",

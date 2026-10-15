@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, cast
@@ -49,14 +49,25 @@ from homeassistant.helpers.device_registry import (
     EventDeviceRegistryUpdatedData,
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util.dt import get_age, now
 
 from .bermuda_device import BermudaDevice
+from .bermuda_findmy import (
+    APPLE_COMPANY_ID,
+    DULT_SERVICE_UUID,
+    CandidateKeyLookup,
+    LocalObservation,
+    build_candidate_key_lookup_from_json,
+    match_dult_advertisement,
+    match_local_advertisement,
+)
 from .bermuda_irk import BermudaIrkManager
 from .const import (
     _LOGGER,
     _LOGGER_SPAM_LESS,
+    ADDR_TYPE_FINDMY_DEVICE,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     AREA_MAX_AD_AGE,
     BDADDR_TYPE_NOT_MAC48,
@@ -64,6 +75,7 @@ from .const import (
     CONF_ATTENUATION,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
+    CONF_FINDMY_ACCESSORIES,
     CONF_MAX_RADIUS,
     CONF_MAX_VELOCITY,
     CONF_REF_POWER,
@@ -79,7 +91,9 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     DOMAIN_PRIVATE_BLE_DEVICE,
+    METADEVICE_FINDMY_DEVICE,
     METADEVICE_IBEACON_DEVICE,
+    METADEVICE_TYPE_FINDMY_SOURCE,
     METADEVICE_TYPE_IBEACON_SOURCE,
     METADEVICE_TYPE_PRIVATE_BLE_SOURCE,
     PRUNE_MAX_COUNT,
@@ -107,6 +121,7 @@ if TYPE_CHECKING:
     from .bermuda_advert import BermudaAdvert
 
 Cancellable = Callable[[], None]
+FINDMY_CANDIDATE_REFRESH = timedelta(minutes=15)
 
 # Using "if" instead of "min/max" triggers PLR1730, but when
 # split over two lines, ruff removes it, then complains again.
@@ -257,6 +272,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 if key in (
                     CONF_ATTENUATION,
                     CONF_DEVICES,
+                    CONF_FINDMY_ACCESSORIES,
                     CONF_DEVTRACK_TIMEOUT,
                     CONF_MAX_RADIUS,
                     CONF_MAX_VELOCITY,
@@ -267,6 +283,24 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     self.options[key] = val
 
         self.devices: dict[str, BermudaDevice] = {}
+        self._findmy_accessories: dict[str, Mapping[str, object]] = {}
+        self._findmy_candidate_lookups: dict[str, CandidateKeyLookup] = {}
+        self._findmy_processed_adverts: dict[tuple[str, str], float] = {}
+        self._init_findmy_accessories()
+        if self._findmy_accessories:
+            self.config_entry.async_on_unload(
+                async_track_time_interval(
+                    self.hass,
+                    self.async_refresh_findmy_candidates,
+                    FINDMY_CANDIDATE_REFRESH,
+                )
+            )
+            self.config_entry.async_create_background_task(
+                self.hass,
+                self.async_refresh_findmy_candidates(),
+                "Prepare Find My rolling-key candidates",
+                eager_start=True,
+            )
         # self.updaters: dict[str, BermudaPBDUCoordinator] = {}
 
         # Register the dump_devices service
@@ -626,6 +660,95 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         except KeyError:
             self.devices[mac] = device = BermudaDevice(mac, self)
             return device
+
+    def _init_findmy_accessories(self) -> None:
+        """Create one stable Bermuda meta-device for each imported accessory."""
+        for record in self.options.get(CONF_FINDMY_ACCESSORIES, []):
+            if not isinstance(record, Mapping):
+                continue
+            accessory_id = record.get("id")
+            if not isinstance(accessory_id, str) or not accessory_id:
+                continue
+
+            metadevice = self._get_or_create_device(f"findmy_{accessory_id}")
+            metadevice.address_type = ADDR_TYPE_FINDMY_DEVICE
+            metadevice.metadevice_type.add(METADEVICE_FINDMY_DEVICE)
+            metadevice.create_sensor = True
+            name = record.get("name")
+            if isinstance(name, str) and name:
+                metadevice.name_by_user = name
+                metadevice.make_name()
+            self.metadevices[metadevice.address] = metadevice
+            self._findmy_accessories[metadevice.address] = record
+            self._findmy_candidate_lookups[metadevice.address] = {}
+
+    async def async_refresh_findmy_candidates(self, _now: datetime | None = None) -> None:
+        """Refresh imported rolling keys away from the Home Assistant event loop."""
+        observed_at = now()
+        for address, record in self._findmy_accessories.items():
+            accessory_data = record.get("data")
+            if not isinstance(accessory_data, Mapping):
+                continue
+            try:
+                self._findmy_candidate_lookups[address] = await self.hass.async_add_executor_job(
+                    build_candidate_key_lookup_from_json,
+                    accessory_data,
+                    observed_at,
+                )
+            except (TypeError, ValueError):
+                _LOGGER.warning("Unable to build Find My key candidates for %s", address)
+
+        self._findmy_processed_adverts.clear()
+        self._match_findmy_advertisements()
+
+    def _match_findmy_advertisements(self) -> None:
+        """Attach verified rolling-address sources to their stable meta-devices."""
+        if not self._findmy_candidate_lookups:
+            return
+
+        for source_device in self.devices.values():
+            if source_device.address in self.metadevices:
+                continue
+            for advert in source_device.adverts.values():
+                if not isinstance(advert, BermudaAdvert):
+                    continue
+                apple_data = advert.manufacturer_data[0].get(APPLE_COMPANY_ID) if advert.manufacturer_data else None
+                dult_data = advert.service_data[0].get(DULT_SERVICE_UUID) if advert.service_data else None
+                if apple_data is None and dult_data is None:
+                    continue
+
+                source_key = (source_device.address, advert.scanner_address)
+                if self._findmy_processed_adverts.get(source_key) == advert.stamp:
+                    continue
+                self._findmy_processed_adverts[source_key] = advert.stamp
+
+                detected_at = self.dt_mono_to_datetime(advert.stamp) if advert.stamp else now()
+                for metadevice_address, candidates in self._findmy_candidate_lookups.items():
+                    observation: LocalObservation | None = None
+                    if apple_data is not None:
+                        observation = match_local_advertisement(
+                            source_device.address,
+                            apple_data,
+                            detected_at,
+                            advert.rssi,
+                            candidates,
+                        )
+                    if observation is None and dult_data is not None:
+                        observation = match_dult_advertisement(
+                            source_device.address,
+                            dult_data,
+                            detected_at,
+                            advert.rssi,
+                            candidates,
+                        )
+                    if observation is None:
+                        continue
+
+                    metadevice = self.devices[metadevice_address]
+                    source_device.metadevice_type.add(METADEVICE_TYPE_FINDMY_SOURCE)
+                    if source_device.address not in metadevice.metadevice_sources:
+                        metadevice.metadevice_sources.insert(0, source_device.address)
+                    break
 
     async def _async_update_data(self):
         """Implementation of DataUpdateCoordinator update_data function."""
@@ -1102,6 +1225,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # FIXME: Can we delete this? pble's should create at realtime as they
         # are detected now.
         self.discover_private_ble_metadevices()
+        self._match_findmy_advertisements()
 
         # iBeacon devices should already have their metadevices created, so nothing more to
         # set up for them.

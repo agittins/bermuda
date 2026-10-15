@@ -15,9 +15,9 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.entity_registry import async_migrate_entries
 
-from .const import _LOGGER, DOMAIN, PLATFORMS, STARTUP_MESSAGE
+from .const import CONF_FINDMY_ACCESSORIES, _LOGGER, DOMAIN, PLATFORMS, STARTUP_MESSAGE
 from .coordinator import BermudaDataUpdateCoordinator
-from .util import mac_math_offset, mac_norm
+from .util import mac_math_offset
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -105,17 +105,31 @@ async def async_remove_config_entry_device(
     coordinator: BermudaDataUpdateCoordinator = config_entry.runtime_data.coordinator
     address = None
     for domain, ident in device_entry.identifiers:
-        try:
-            if domain == DOMAIN:
-                # the identifier should be the base device address, and
-                # may have "_range" or some other per-sensor suffix.
-                # The address might be a mac address, IRK or iBeacon uuid
-                address = ident.split("_")[0]
-        except KeyError:
-            pass
+        if domain == DOMAIN:
+            address = next(
+                (
+                    device_address
+                    for device_address in coordinator.devices
+                    if ident == device_address or ident.startswith(f"{device_address}_")
+                ),
+                None,
+            )
+            if address is not None:
+                break
     if address is not None:
+        if address in coordinator._findmy_accessories:
+            accessories = [
+                record
+                for record in config_entry.options.get(CONF_FINDMY_ACCESSORIES, [])
+                if not isinstance(record, dict) or f"findmy_{record.get('id', '')}".lower() != address
+            ]
+            hass.config_entries.async_update_entry(
+                config_entry,
+                options={**config_entry.options, CONF_FINDMY_ACCESSORIES: accessories},
+            )
+            return True
         try:
-            coordinator.devices[mac_norm(address)].create_sensor = False
+            coordinator.devices[address].create_sensor = False
         except KeyError:
             _LOGGER.warning("Failed to locate device entry for %s", address)
         return True
