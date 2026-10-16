@@ -5,8 +5,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from bleak.backends.scanner import AdvertisementData
+from homeassistant.helpers import area_registry as ar
 
 from custom_components.bermuda import sensor as sensor_module
+from custom_components.bermuda.bermuda_advert import BermudaAdvert
+from custom_components.bermuda.bermuda_device import BermudaDevice
+from custom_components.bermuda.coordinator import BermudaDataUpdateCoordinator
 from custom_components.bermuda.sensor import (
     BermudaSensor,
     BermudaSensorRange,
@@ -18,7 +23,7 @@ NOW = 10_000.0
 
 
 def _range_sensor(distance):
-    device = SimpleNamespace(area_distance=distance, ref_power_changed=0.0)
+    device = SimpleNamespace(area_distance=distance, area_advert=None, ref_power_changed=0.0)
     entity = SimpleNamespace(
         _device=device,
         bermuda_update_interval=10,
@@ -47,6 +52,74 @@ def _clock(monkeypatch):
 def test_the_first_reading_is_published_even_when_small(_clock):
     entity = _range_sensor(0.1)
     assert _publish(entity, 0.1, NOW) == 0.1
+
+
+@pytest.mark.parametrize("same_area", [False, True])
+@pytest.mark.parametrize("offline", [False, True])
+async def test_selected_scanner_change_publishes_distance_immediately(hass, monkeypatch, _clock, same_area, offline):
+    """Real selected adverts must keep Distance, Area and Nearest Scanner coherent."""
+    coordinator = SimpleNamespace(hass=hass, options={}, devices={})
+    registry = ar.async_get(hass)
+    kitchen = registry.async_create("Kitchen")
+    bedroom = kitchen if same_area else registry.async_create("Bedroom")
+    device = BermudaDevice("aa:bb:cc:dd:ee:ff", coordinator)
+    scanners = [BermudaDevice(address, coordinator) for address in ("11:22:33:44:55:66", "22:33:44:55:66:77")]
+    adverts = []
+    data = AdvertisementData("Tracked", {}, {}, [], None, -70, ())
+    for scanner, area, distance in zip(scanners, (kitchen, bedroom), (3.0, 2.2), strict=True):
+        scanner._update_area_and_floor(area.id)
+        scanner.last_seen = NOW
+        coordinator.devices[scanner.address] = scanner
+        advert = BermudaAdvert(device, data, {}, scanner)
+        advert.rssi_distance = distance
+        advert.stamp = NOW
+        adverts.append(advert)
+    device.adverts = {index: advert for index, advert in enumerate(adverts)}
+    device.apply_scanner_selection(adverts[0])
+    entity = _range_sensor(None)
+    entity._device = device
+    entity.coordinator = coordinator
+
+    def assert_states(distance, area, scanner):
+        assert BermudaSensorRange.native_value.fget(entity) == pytest.approx(distance)
+        assert BermudaSensor.native_value.fget(entity) == area.name
+        assert sensor_module.BermudaSensorScanner.native_value.fget(entity) == scanner.name
+
+    assert_states(3.0, kitchen, scanners[0])
+    # Build an old-scanner window that would corrupt the new scanner's median.
+    for second in range(1, 6):
+        _clock["now"] = NOW + second
+        device.area_distance = 3.1
+        assert_states(3.0, kitchen, scanners[0])
+    assert entity._distance_readings
+    _clock["now"] = NOW + 6
+    if offline:
+        scanners[0].last_seen = NOW - 300
+        adverts[0].rssi_distance = None  # expired receiver, as after advert.calculate_data
+        adverts[0].stamp = NOW - 300
+        # The only live receiver is farther away: this must also publish at once.
+        adverts[1].rssi_distance = 5.0
+    monkeypatch.setattr("custom_components.bermuda.coordinator.monotonic_time_coarse", lambda: _clock["now"])
+    coordinator.AreaTests = BermudaDataUpdateCoordinator.AreaTests
+    BermudaDataUpdateCoordinator._refresh_area_by_min_distance(coordinator, device)
+    assert device.area_advert is adverts[1]
+    new_distance = adverts[1].rssi_distance
+    assert_states(new_distance, bedroom, scanners[1])
+    assert entity._distance_readings == []
+
+    # A fresh advert object from the same receiver must retain the deadband.
+    replacement = BermudaAdvert(device, data, {}, scanners[1])
+    replacement.rssi_distance = new_distance + 0.1
+    device.apply_scanner_selection(replacement)
+    _clock["now"] = NOW + 7
+    assert_states(new_distance, bedroom, scanners[1])
+    _clock["now"] = NOW + 17
+    assert_states(new_distance, bedroom, scanners[1])
+
+    # Returning to an earlier receiver also starts fresh, even inside the deadband.
+    adverts[0].rssi_distance = new_distance + 0.1
+    device.apply_scanner_selection(adverts[0])
+    assert_states(new_distance + 0.1, kitchen, scanners[0])
 
 
 def test_jitter_inside_the_deadband_is_held_even_after_the_cache_interval(_clock):

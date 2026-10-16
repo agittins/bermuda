@@ -378,15 +378,19 @@ class BermudaSensorRange(BermudaSensor):
         jitter is wider than the 0.1 m rounding, so without this nearly every
         interval wrote a new recorder row for every tracked device. A large
         drop (see distance_fast_fall) and a ref_power change (calibration)
-        show at once.
+        show at once. A new nearest scanner starts a fresh window and is
+        published immediately, so Distance stays consistent with Area.
         """
         distance = self._device.area_distance
-        if distance is None:
-            # Out of range (or not yet heard): forget the last value, so the
-            # first reading when it comes back is published as it is rather
-            # than measured against a distance from before it went.
+        advert = self._device.area_advert
+        scanner_address = advert.scanner_address if advert is not None else None
+        if distance is None or scanner_address != getattr(self, "_distance_scanner_address", None):
+            # Out of range or a different receiver: the first reading must
+            # not be measured against the previous receiver's distance.
             self.bermuda_last_state, self.bermuda_last_stamp = None, 0
             self._distance_readings = []
+            self._distance_scanner_address = scanner_address
+        if distance is None:
             return None
         value = round(distance, 1)
         nowstamp = monotonic_time_coarse()
