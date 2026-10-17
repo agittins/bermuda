@@ -80,8 +80,18 @@ METADEVICE_IBEACON_DEVICE: Final = "beacon device"  # The meta-device created to
 METADEVICE_TYPE_PRIVATE_BLE_SOURCE: Final = "private_ble_src"  # current (random) MAC of a private ble device
 METADEVICE_PRIVATE_BLE_DEVICE: Final = "private_ble_device"  # meta-device create to track private ble device
 
-METADEVICE_SOURCETYPES: Final = {METADEVICE_TYPE_IBEACON_SOURCE, METADEVICE_TYPE_PRIVATE_BLE_SOURCE}
-METADEVICE_DEVICETYPES: Final = {METADEVICE_IBEACON_DEVICE, METADEVICE_PRIVATE_BLE_DEVICE}
+METADEVICE_FINDMY_DEVICE: Final = "findmy_device"
+METADEVICE_TYPE_FINDMY_SOURCE: Final = "findmy_source"
+METADEVICE_SOURCETYPES: Final = {
+    METADEVICE_TYPE_IBEACON_SOURCE,
+    METADEVICE_TYPE_PRIVATE_BLE_SOURCE,
+    METADEVICE_TYPE_FINDMY_SOURCE,
+}
+METADEVICE_DEVICETYPES: Final = {
+    METADEVICE_IBEACON_DEVICE,
+    METADEVICE_PRIVATE_BLE_DEVICE,
+    METADEVICE_FINDMY_DEVICE,
+}
 
 # Bluetooth Device Address Type - classify MAC addresses
 BDADDR_TYPE_UNKNOWN: Final = "bd_addr_type_unknown"  # uninitialised
@@ -93,6 +103,7 @@ BDADDR_TYPE_NOT_MAC48: Final = "bd_addr_not_mac48"
 # Non-bluetooth address types - for our metadevice entries
 ADDR_TYPE_IBEACON: Final = "addr_type_ibeacon"
 ADDR_TYPE_PRIVATE_BLE_DEVICE: Final = "addr_type_private_ble_device"
+ADDR_TYPE_FINDMY_DEVICE: Final = "addr_type_findmy_device"
 
 
 class IrkTypes(Enum):
@@ -157,6 +168,9 @@ DOCS[CONFDATA_SCANNERS] = "Persisted set of known scanners (proxies)"
 
 CONF_DEVICES = "configured_devices"
 DOCS[CONF_DEVICES] = "Identifies which bluetooth devices we wish to expose"
+
+CONF_FINDMY_ACCESSORIES = "findmy_accessories"
+DOCS[CONF_FINDMY_ACCESSORIES] = "Imported Find My rolling-key accessories"
 
 CONF_SCANNERS = "configured_scanners"
 

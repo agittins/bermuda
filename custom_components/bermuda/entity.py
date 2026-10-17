@@ -11,6 +11,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    ADDR_TYPE_FINDMY_DEVICE,
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     ATTRIBUTION,
@@ -150,6 +151,9 @@ class BermudaEntity(CoordinatorEntity):
             # if dr_device is not None:
             #    existing_device_id = dr_device.id
             domain_name = DOMAIN_PRIVATE_BLE_DEVICE
+        elif self._device.address_type == ADDR_TYPE_FINDMY_DEVICE:
+            connections = set()
+            model = "Find My accessory"
         else:
             connections = {(dr.CONNECTION_BLUETOOTH, self._device.address.upper())}
             # No need to set model, since MAC address will be shown via connection.
