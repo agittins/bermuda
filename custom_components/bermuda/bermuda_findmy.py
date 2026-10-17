@@ -6,6 +6,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, cast
 
 from findmy import (
     FindMyAccessory,
@@ -14,6 +15,9 @@ from findmy import (
     OfflineFindingDevice,
     SeparatedOfflineFindingDevice,
 )
+
+if TYPE_CHECKING:
+    from findmy.accessory import FindMyAccessoryMapping
 
 APPLE_COMPANY_ID = 0x004C
 DULT_SERVICE_UUID = "0000fcb2-0000-1000-8000-00805f9b34fb"
@@ -50,6 +54,23 @@ class LocalObservation:
     can_align: bool
 
 
+def update_alignment_from_observation(
+    accessory: FindMyAccessory,
+    observation: LocalObservation,
+) -> bool:
+    """Update a rolling accessory's alignment from a verified primary key."""
+    if not observation.can_align:
+        return False
+
+    previous = accessory.to_json()
+    accessory.update_alignment(observation.detected_at, observation.key_index)
+    updated = accessory.to_json()
+    return (
+        previous["alignment_date"] != updated["alignment_date"]
+        or previous["alignment_index"] != updated["alignment_index"]
+    )
+
+
 def _lookup_prefix(key_prefix: bytes) -> bytes:
     """Mask the top two key bits, which a MAC address cannot carry."""
     return bytes([key_prefix[0] & 0x3F]) + key_prefix[1:6]
@@ -81,7 +102,10 @@ def build_candidate_key_lookup_from_json(
     observed_at: datetime,
 ) -> dict[bytes, tuple[CandidateKey, ...]]:
     """Build candidates from a snapshot without mutating the live key generator."""
-    return build_candidate_key_lookup(FindMyAccessory.from_json(accessory_data), observed_at)
+    return build_candidate_key_lookup(
+        FindMyAccessory.from_json(cast("FindMyAccessoryMapping", accessory_data)),
+        observed_at,
+    )
 
 
 def extract_offline_finding_payload(apple_data: bytes) -> bytes | None:

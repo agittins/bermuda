@@ -12,6 +12,7 @@ import aiofiles
 import voluptuous as vol
 import yaml
 from bluetooth_data_tools import monotonic_time_coarse
+from findmy import FindMyAccessory
 from habluetooth import BaseHaScanner
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth.api import _get_manager
@@ -50,11 +51,12 @@ from homeassistant.helpers.device_registry import (
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util.dt import get_age, now
 
-from .bermuda_device import BermudaDevice
 from .bermuda_advert import BermudaAdvert
+from .bermuda_device import BermudaDevice
 from .bermuda_findmy import (
     APPLE_COMPANY_ID,
     DULT_SERVICE_UUID,
@@ -63,6 +65,7 @@ from .bermuda_findmy import (
     build_candidate_key_lookup_from_json,
     match_dult_advertisement,
     match_local_advertisement,
+    update_alignment_from_observation,
 )
 from .bermuda_irk import BermudaIrkManager
 from .const import (
@@ -112,6 +115,7 @@ from .const import (
 from .util import mac_explode_formats, mac_norm
 
 if TYPE_CHECKING:
+    from findmy.accessory import FindMyAccessoryMapping
     from habluetooth import BluetoothServiceInfoBleak
     from homeassistant.components.bluetooth import (
         BluetoothChange,
@@ -122,6 +126,9 @@ if TYPE_CHECKING:
 
 Cancellable = Callable[[], None]
 FINDMY_CANDIDATE_REFRESH = timedelta(minutes=15)
+FINDMY_ALIGNMENT_UPDATE_INTERVAL = 60
+FINDMY_ALIGNMENT_SAVE_INTERVAL = 60 * 60
+FINDMY_ALIGNMENT_SAVE_DELAY = 30
 
 # Using "if" instead of "min/max" triggers PLR1730, but when
 # split over two lines, ruff removes it, then complains again.
@@ -283,9 +290,19 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     self.options[key] = val
 
         self.devices: dict[str, BermudaDevice] = {}
-        self._findmy_accessories: dict[str, Mapping[str, object]] = {}
+        self._findmy_accessories: dict[str, FindMyAccessory] = {}
+        self._findmy_accessory_ids: dict[str, str] = {}
         self._findmy_candidate_lookups: dict[str, CandidateKeyLookup] = {}
         self._findmy_processed_adverts: dict[tuple[str, str], float] = {}
+        self._findmy_alignment_store: Store[dict[str, dict[str, str | int]]] = Store(
+            hass,
+            1,
+            f"{DOMAIN}_findmy_alignment",
+        )
+        self._findmy_alignment_loaded = False
+        self._findmy_last_alignment_update: dict[str, float] = {}
+        self._findmy_last_alignment_save: dict[str, float] = {}
+        self._findmy_alignment_refresh_pending = False
         self._init_findmy_accessories()
         if self._findmy_accessories:
             self.config_entry.async_on_unload(
@@ -667,7 +684,18 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             if not isinstance(record, Mapping):
                 continue
             accessory_id = record.get("id")
-            if not isinstance(accessory_id, str) or not accessory_id:
+            accessory_data = record.get("data")
+            if (
+                not isinstance(accessory_id, str)
+                or not accessory_id
+                or not isinstance(accessory_data, Mapping)
+            ):
+                continue
+
+            try:
+                accessory = FindMyAccessory.from_json(cast("FindMyAccessoryMapping", accessory_data))
+            except (AssertionError, KeyError, TypeError, ValueError):
+                _LOGGER.warning("Unable to load imported Find My accessory %s", accessory_id)
                 continue
 
             metadevice = self._get_or_create_device(f"findmy_{accessory_id}")
@@ -676,36 +704,91 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             metadevice.create_sensor = True
             name = record.get("name")
             if isinstance(name, str) and name:
+                accessory.name = name
                 metadevice.name_by_user = name
                 metadevice.make_name()
             self.metadevices[metadevice.address] = metadevice
-            self._findmy_accessories[metadevice.address] = record
+            self._findmy_accessories[metadevice.address] = accessory
+            self._findmy_accessory_ids[metadevice.address] = accessory_id
             self._findmy_candidate_lookups[metadevice.address] = {}
+
+    async def _async_load_findmy_alignment(self) -> None:
+        """Restore the last locally observed primary-key alignment for each accessory."""
+        if self._findmy_alignment_loaded:
+            return
+        self._findmy_alignment_loaded = True
+
+        alignments = await self._findmy_alignment_store.async_load()
+        if not isinstance(alignments, Mapping):
+            return
+
+        for address, accessory in self._findmy_accessories.items():
+            saved = alignments.get(self._findmy_accessory_ids[address])
+            if not isinstance(saved, Mapping):
+                continue
+            alignment_date = saved.get("alignment_date")
+            alignment_index = saved.get("alignment_index")
+            if not isinstance(alignment_date, str) or type(alignment_index) is not int:
+                continue
+            try:
+                restored_date = datetime.fromisoformat(alignment_date)
+            except ValueError:
+                _LOGGER.warning("Invalid saved Find My alignment for %s", address)
+                continue
+            accessory.update_alignment(restored_date, alignment_index)
+
+    def _findmy_alignment_store_data(self) -> dict[str, dict[str, str | int]]:
+        """Serialize alignment metadata only; accessory private keys stay in entry options."""
+        alignments = {}
+        for address, accessory in self._findmy_accessories.items():
+            data = accessory.to_json()
+            alignment_date = data.get("alignment_date")
+            alignment_index = data.get("alignment_index")
+            if isinstance(alignment_date, str) and type(alignment_index) is int:
+                alignments[self._findmy_accessory_ids[address]] = {
+                    "alignment_date": alignment_date,
+                    "alignment_index": alignment_index,
+                }
+        return alignments
 
     async def async_refresh_findmy_candidates(self, _now: datetime | None = None) -> None:
         """Refresh imported rolling keys away from the Home Assistant event loop."""
+        await self._async_load_findmy_alignment()
         observed_at = now()
-        for address, record in self._findmy_accessories.items():
-            accessory_data = record.get("data")
-            if not isinstance(accessory_data, Mapping):
-                continue
-            try:
-                self._findmy_candidate_lookups[address] = await self.hass.async_add_executor_job(
-                    build_candidate_key_lookup_from_json,
-                    accessory_data,
-                    observed_at,
-                )
-            except (TypeError, ValueError):
-                _LOGGER.warning("Unable to build Find My key candidates for %s", address)
+        for address, accessory in self._findmy_accessories.items():
+            self._findmy_candidate_lookups[address] = await self.hass.async_add_executor_job(
+                build_candidate_key_lookup_from_json,
+                accessory.to_json(),
+                observed_at,
+            )
 
         self._findmy_processed_adverts.clear()
         self._match_findmy_advertisements()
+
+    def _schedule_findmy_candidate_refresh(self) -> None:
+        """Refresh candidates once after one or more accessories realign."""
+        if self._findmy_alignment_refresh_pending:
+            return
+        self._findmy_alignment_refresh_pending = True
+        self.config_entry.async_create_background_task(
+            self.hass,
+            self._async_refresh_findmy_candidates_after_alignment(),
+            "Refresh Find My rolling-key candidates after alignment",
+            eager_start=True,
+        )
+
+    async def _async_refresh_findmy_candidates_after_alignment(self) -> None:
+        try:
+            await self.async_refresh_findmy_candidates()
+        finally:
+            self._findmy_alignment_refresh_pending = False
 
     def _match_findmy_advertisements(self) -> None:
         """Attach verified rolling-address sources to their stable meta-devices."""
         if not self._findmy_candidate_lookups:
             return
 
+        alignment_index_changed = False
         for source_device in self.devices.values():
             if source_device.address in self.metadevices:
                 continue
@@ -717,12 +800,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 if apple_data is None and dult_data is None:
                     continue
 
-                source_key = (source_device.address, advert.scanner_address)
+                source_key: tuple[str, str] = (source_device.address, str(advert.scanner_address))
                 if self._findmy_processed_adverts.get(source_key) == advert.stamp:
                     continue
                 self._findmy_processed_adverts[source_key] = advert.stamp
 
                 detected_at = self.dt_mono_to_datetime(advert.stamp) if advert.stamp else now()
+                rssi = int(advert.rssi) if advert.rssi is not None else None
                 for metadevice_address, candidates in self._findmy_candidate_lookups.items():
                     observation: LocalObservation | None = None
                     if apple_data is not None:
@@ -730,7 +814,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                             source_device.address,
                             apple_data,
                             detected_at,
-                            advert.rssi,
+                            rssi,
                             candidates,
                         )
                     if observation is None and dult_data is not None:
@@ -738,17 +822,42 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                             source_device.address,
                             dult_data,
                             detected_at,
-                            advert.rssi,
+                            rssi,
                             candidates,
                         )
                     if observation is None:
                         continue
+
+                    if observation.can_align:
+                        accessory = self._findmy_accessories[metadevice_address]
+                        nowstamp = monotonic_time_coarse()
+                        current_index = accessory.to_json()["alignment_index"]
+                        index_changed = observation.key_index != current_index
+                        alignment_index_changed = alignment_index_changed or index_changed
+                        if index_changed or (
+                            nowstamp - self._findmy_last_alignment_update.get(metadevice_address, 0)
+                            >= FINDMY_ALIGNMENT_UPDATE_INTERVAL
+                        ):
+                            alignment_changed = update_alignment_from_observation(accessory, observation)
+                            self._findmy_last_alignment_update[metadevice_address] = nowstamp
+                            if alignment_changed and (
+                                nowstamp - self._findmy_last_alignment_save.get(metadevice_address, 0)
+                                >= FINDMY_ALIGNMENT_SAVE_INTERVAL
+                            ):
+                                self._findmy_alignment_store.async_delay_save(
+                                    self._findmy_alignment_store_data,
+                                    delay=FINDMY_ALIGNMENT_SAVE_DELAY,
+                                )
+                                self._findmy_last_alignment_save[metadevice_address] = nowstamp
 
                     metadevice = self.devices[metadevice_address]
                     source_device.metadevice_type.add(METADEVICE_TYPE_FINDMY_SOURCE)
                     if source_device.address not in metadevice.metadevice_sources:
                         metadevice.metadevice_sources.insert(0, source_device.address)
                     break
+
+        if alignment_index_changed:
+            self._schedule_findmy_candidate_refresh()
 
     async def _async_update_data(self):
         """Implementation of DataUpdateCoordinator update_data function."""
