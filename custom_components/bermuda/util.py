@@ -39,12 +39,17 @@ def mac_octet_offset(mac_a, mac_b) -> int | None:
     if not mac_a or not mac_b:
         return None
     a, b = str(mac_a).lower(), str(mac_b).lower()
-    if len(a) != 17 or len(b) != 17 or a[:-3] != b[:-3]:
+    if len(a) != 17 or len(b) != 17:
         return None
     try:
-        return int(a[-2:], 16) - int(b[-2:], 16)
+        if a[:-3] == b[:-3]:
+            return int(a[-2:], 16) - int(b[-2:], 16)
+        # The last octet wrapped (a base MAC ending FE or FF): the neighbour
+        # carries into the fifth octet, so compare the whole address.
+        diff = int(a.replace(":", ""), 16) - int(b.replace(":", ""), 16)
     except ValueError:
         return None
+    return diff if abs(diff) <= 2 else None
 
 
 @lru_cache(1024)

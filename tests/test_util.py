@@ -17,6 +17,15 @@ def test_mac_math_offset():
     assert util.mac_math_offset(None, 4) == None
 
 
+def test_mac_octet_offset_follows_a_carry_into_the_fifth_octet():
+    assert util.mac_octet_offset("aa:bb:cc:dd:ee:12", "aa:bb:cc:dd:ee:10") == 2
+    # A base MAC ending FE: BLE = WiFi + 2 lands in the next octet.
+    assert util.mac_octet_offset("aa:bb:cc:dd:ef:00", "aa:bb:cc:dd:ee:fe") == 2
+    assert util.mac_octet_offset("aa:bb:cc:dd:ee:ff", "aa:bb:cc:dd:ef:00") == -1
+    assert util.mac_octet_offset("aa:bb:cc:dd:ef:10", "aa:bb:cc:dd:ee:10") is None
+    assert util.mac_octet_offset(None, "aa:bb:cc:dd:ee:10") is None
+
+
 def test_mac_norm():
     assert util.mac_norm("AA:bb:CC:88:Ff:00") == "aa:bb:cc:88:ff:00"
     assert util.mac_norm("Not_exactly-a-MAC:address") == "not_exactly-a-mac:address"
