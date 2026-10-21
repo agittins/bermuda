@@ -65,8 +65,18 @@ def bermuda_advert(mock_parent_device, mock_advertisement_data, mock_scanner_dev
         options=options,
         scanner_device=mock_scanner_device,
     )
-    ba.name = "foo name"
     return ba
+
+
+def test_advert_reads_scanner_name_and_area_through(bermuda_advert, mock_scanner_device):
+    """A scanner moved or renamed shows on its live adverts at once, not at the next rebuild."""
+    assert bermuda_advert.name == "Mock Scanner"
+    assert (bermuda_advert.area_id, bermuda_advert.area_name) == ("server_room", "server room")
+    mock_scanner_device.name = "Renamed Scanner"
+    mock_scanner_device.area_id = "garage"
+    mock_scanner_device.area_name = "Garage"
+    assert bermuda_advert.name == "Renamed Scanner"
+    assert (bermuda_advert.area_id, bermuda_advert.area_name) == ("garage", "Garage")
 
 
 def test_bermuda_advert_initialization(bermuda_advert):
