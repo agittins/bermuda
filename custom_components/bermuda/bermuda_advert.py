@@ -108,14 +108,28 @@ class BermudaAdvert(dict):
         self.update_advertisement(advertisementdata, self.scanner_device)
 
     def apply_new_scanner(self, scanner_device: BermudaDevice):
-        self.name: str = scanner_device.name  # or scandata.scanner.name
         self.scanner_device = scanner_device  # links to the source device
         if self.scanner_address != scanner_device.address:
             _LOGGER.error("Advert %s received new scanner with wrong address %s", self.__repr__(), scanner_device)
-        self.area_id: str | None = scanner_device.area_id
-        self.area_name: str | None = scanner_device.area_name
         # Only remote scanners log timestamps, local usb adaptors do not.
         self.scanner_sends_stamps = scanner_device.is_remote_scanner
+
+    # The scanner's name and area are read through to the scanner device rather
+    # than copied: a copy went stale when the scanner was renamed or moved to
+    # another area, until the advert was pruned or its scanner object replaced,
+    # and every reader (the Area sensor, the device tracker, metadevices
+    # sharing this advert) reported the old area meanwhile.
+    @property
+    def name(self) -> str:
+        return self.scanner_device.name
+
+    @property
+    def area_id(self) -> str | None:
+        return self.scanner_device.area_id
+
+    @property
+    def area_name(self) -> str | None:
+        return self.scanner_device.area_name
 
     def update_advertisement(self, advertisementdata: AdvertisementData, scanner_device: BermudaDevice):
         """
