@@ -46,6 +46,7 @@ PLATFORMS = [
 
 # Should probably retreive this from the component, but it's in "DOMAIN" *shrug*
 DOMAIN_PRIVATE_BLE_DEVICE = "private_ble_device"
+DOMAIN_FINDMY = "findmy"
 
 # Signal names we are using:
 SIGNAL_DEVICE_NEW = f"{DOMAIN}-device-new"
@@ -79,9 +80,19 @@ METADEVICE_TYPE_IBEACON_SOURCE: Final = "beacon source"  # The source-device sen
 METADEVICE_IBEACON_DEVICE: Final = "beacon device"  # The meta-device created to track the beacon
 METADEVICE_TYPE_PRIVATE_BLE_SOURCE: Final = "private_ble_src"  # current (random) MAC of a private ble device
 METADEVICE_PRIVATE_BLE_DEVICE: Final = "private_ble_device"  # meta-device create to track private ble device
+METADEVICE_TYPE_FINDMY_SOURCE: Final = "findmy_src"  # current rolling MAC of a Find My accessory
+METADEVICE_FINDMY_DEVICE: Final = "findmy_device"  # meta-device used to track a Find My accessory
 
-METADEVICE_SOURCETYPES: Final = {METADEVICE_TYPE_IBEACON_SOURCE, METADEVICE_TYPE_PRIVATE_BLE_SOURCE}
-METADEVICE_DEVICETYPES: Final = {METADEVICE_IBEACON_DEVICE, METADEVICE_PRIVATE_BLE_DEVICE}
+METADEVICE_SOURCETYPES: Final = {
+    METADEVICE_TYPE_IBEACON_SOURCE,
+    METADEVICE_TYPE_PRIVATE_BLE_SOURCE,
+    METADEVICE_TYPE_FINDMY_SOURCE,
+}
+METADEVICE_DEVICETYPES: Final = {
+    METADEVICE_IBEACON_DEVICE,
+    METADEVICE_PRIVATE_BLE_DEVICE,
+    METADEVICE_FINDMY_DEVICE,
+}
 
 # Bluetooth Device Address Type - classify MAC addresses
 BDADDR_TYPE_UNKNOWN: Final = "bd_addr_type_unknown"  # uninitialised
@@ -93,6 +104,7 @@ BDADDR_TYPE_NOT_MAC48: Final = "bd_addr_not_mac48"
 # Non-bluetooth address types - for our metadevice entries
 ADDR_TYPE_IBEACON: Final = "addr_type_ibeacon"
 ADDR_TYPE_PRIVATE_BLE_DEVICE: Final = "addr_type_private_ble_device"
+ADDR_TYPE_FINDMY_DEVICE: Final = "addr_type_findmy_device"
 
 
 class IrkTypes(Enum):

@@ -50,13 +50,14 @@ from homeassistant.helpers.device_registry import (
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.util.dt import get_age, now
+from homeassistant.util.dt import get_age, now, parse_datetime
 
 from .bermuda_device import BermudaDevice
 from .bermuda_irk import BermudaIrkManager
 from .const import (
     _LOGGER,
     _LOGGER_SPAM_LESS,
+    ADDR_TYPE_FINDMY_DEVICE,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     AREA_MAX_AD_AGE,
     BDADDR_TYPE_NOT_MAC48,
@@ -78,8 +79,11 @@ from .const import (
     DEFAULT_SMOOTHING_SAMPLES,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    DOMAIN_FINDMY,
     DOMAIN_PRIVATE_BLE_DEVICE,
+    METADEVICE_FINDMY_DEVICE,
     METADEVICE_IBEACON_DEVICE,
+    METADEVICE_TYPE_FINDMY_SOURCE,
     METADEVICE_TYPE_IBEACON_SOURCE,
     METADEVICE_TYPE_PRIVATE_BLE_SOURCE,
     PRUNE_MAX_COUNT,
@@ -107,6 +111,7 @@ if TYPE_CHECKING:
     from .bermuda_advert import BermudaAdvert
 
 Cancellable = Callable[[], None]
+FINDMY_SOURCE_MAX_AGE = timedelta(minutes=5)
 
 # Using "if" instead of "min/max" triggers PLR1730, but when
 # split over two lines, ruff removes it, then complains again.
@@ -228,6 +233,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # First time go through the private ble devices to see if there's
         # any there for us to track.
         self._do_private_device_init = True
+
+        # First time go through the FindMy integration to see if there's
+        # any rolling-address accessories for us to track.
+        self._do_findmy_device_init = True
 
         # Listen for changes to the device registry and handle them.
         # Primarily for changes to scanners and Private BLE Devices.
@@ -460,6 +469,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                         _device.make_name()
                                 except KeyError:
                                     pass
+                            elif ident_type == DOMAIN_FINDMY:
+                                _LOGGER.debug("Trigger updating of FindMy Devices")
+                                self._do_findmy_device_init = True
                         # might be a scanner, so let's refresh those
                         _LOGGER.debug("Trigger updating of Scanner Listings")
                         self._scanner_init_pending = True
@@ -485,6 +497,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # rescan PBLE devices. But right now we don't, so scan 'em anyway.
                 _LOGGER.debug("Opportunistic trigger of update for Private BLE Devices")
                 self._do_private_device_init = True
+                # Same reasoning applies to FindMy rolling-address devices: we
+                # don't currently stash their device_id, so scan opportunistically.
+                _LOGGER.debug("Opportunistic trigger of update for FindMy Devices")
+                self._do_findmy_device_init = True
         # The co-ordinator will only get updates if we have created entities already.
         # Since this might not always be the case (say, private_ble_device loads after
         # we do), then we trigger an update here with the expectation that we got a
@@ -1032,6 +1048,81 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                                 pb_entity.entity_id,
                             )
 
+    def discover_findmy_metadevices(self) -> None:
+        """
+        Create stable metadevices for locally matched rolling Find My tags.
+
+        Mirrors discover_private_ble_metadevices: only performs the (relatively
+        expensive) full discovery pass when the device registry has told us
+        something FindMy-related changed, via self._do_findmy_device_init.
+        """
+        if not self._do_findmy_device_init:
+            return
+        self._do_findmy_device_init = False
+        _LOGGER.debug("Refreshing Find My device list")
+
+        findmy_entries = self.hass.config_entries.async_entries(DOMAIN_FINDMY, include_disabled=False)
+        current_time = now()
+
+        for findmy_entry in findmy_entries:
+            if findmy_entry.data.get("type") != "device_rolling":
+                continue
+
+            findmy_entities = self.er.entities.get_entries_for_config_entry_id(findmy_entry.entry_id)
+            for findmy_entity in findmy_entities:
+                if findmy_entity.domain != Platform.DEVICE_TRACKER or findmy_entity.unique_id is None:
+                    continue
+
+                findmy_state = self.hass.states.get(findmy_entity.entity_id)
+                metadevice_address = f"{DOMAIN_FINDMY}_{findmy_entity.unique_id}"
+                metadevice = self._get_or_create_device(metadevice_address)
+                metadevice.address_type = ADDR_TYPE_FINDMY_DEVICE
+                metadevice.metadevice_type.add(METADEVICE_FINDMY_DEVICE)
+                metadevice.findmy_identifier = findmy_entity.unique_id
+                metadevice.create_sensor = True
+
+                if findmy_entity.device_id is not None:
+                    findmy_device = self.dr.async_get(findmy_entity.device_id)
+                else:
+                    findmy_device = None
+
+                if findmy_device is not None:
+                    metadevice.name_by_user = findmy_device.name_by_user
+                    metadevice.name_devreg = findmy_device.name
+                elif findmy_state is not None:
+                    metadevice.name_devreg = findmy_state.name
+                metadevice.make_name()
+
+                self.metadevices[metadevice.address] = metadevice
+
+                if findmy_state is None:
+                    continue
+
+                source_address = findmy_state.attributes.get("mac_address")
+                detected_at = findmy_state.attributes.get("local_detected_at")
+                if isinstance(detected_at, str):
+                    detected_at = parse_datetime(detected_at)
+
+                if (
+                    not isinstance(source_address, str)
+                    or not isinstance(detected_at, datetime)
+                    or detected_at.tzinfo is None
+                    or current_time - detected_at > FINDMY_SOURCE_MAX_AGE
+                    or detected_at - current_time > timedelta(minutes=1)
+                ):
+                    continue
+
+                source_address = mac_norm(source_address)
+                if len(source_address) != 17 or source_address.count(":") != 5:
+                    continue
+
+                if source_device := self._get_device(source_address):
+                    source_device.metadevice_type.add(METADEVICE_TYPE_FINDMY_SOURCE)
+
+                if source_address in metadevice.metadevice_sources:
+                    metadevice.metadevice_sources.remove(source_address)
+                metadevice.metadevice_sources.insert(0, source_address)
+
     def register_ibeacon_source(self, source_device: BermudaDevice):
         """
         Create or update the meta-device for tracking an iBeacon.
@@ -1102,6 +1193,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # FIXME: Can we delete this? pble's should create at realtime as they
         # are detected now.
         self.discover_private_ble_metadevices()
+        # Same lazy-init pattern, gated on self._do_findmy_device_init.
+        self.discover_findmy_metadevices()
 
         # iBeacon devices should already have their metadevices created, so nothing more to
         # set up for them.
