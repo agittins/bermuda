@@ -69,7 +69,7 @@ class BermudaEntity(CoordinatorEntity):
         nowstamp = monotonic_time_coarse()
         if (
             (self.bermuda_last_stamp < nowstamp - self.bermuda_update_interval)  # Cache is stale
-            or (self._device.ref_power_changed > nowstamp + 2)  # ref power changed in last 2sec
+            or (self._device.ref_power_changed > nowstamp - 2)  # ref power changed in last 2sec
             or (self.bermuda_last_state is None)  # Nothing compares to you.
             or (statevalue is None)  # or you.
             or (fast_falling and statevalue < self.bermuda_last_state)  # (like Distance)
