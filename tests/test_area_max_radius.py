@@ -66,12 +66,14 @@ def test_scanner_with_tighter_max_radius_cannot_win_beyond_it():
     """
     far = _advert("far proxy", "area_far", distance=2.0, scanner_max_radius=1.0)
     near = _advert("near proxy", "area_near", distance=3.0)
+
     device, selected = _device({"near": near, "far": far})
-
     BermudaDataUpdateCoordinator._refresh_area_by_min_distance(_coordinator(), device)
-
     assert selected == [near]
 
+    device, selected = _device({"far": far, "near": near})
+    BermudaDataUpdateCoordinator._refresh_area_by_min_distance(_coordinator(), device)
+    assert selected == [near]
 
 def test_scanner_within_its_max_radius_still_wins():
     """The cap must only exclude readings beyond it, not the scanner itself.
@@ -101,3 +103,12 @@ def test_zero_max_radius_falls_back_to_the_global_limit():
     BermudaDataUpdateCoordinator._refresh_area_by_min_distance(_coordinator(global_max_radius=4.0), device)
 
     assert selected == [None]
+
+
+def test_zero_max_radius_can_win_within_global_limit():
+    far = _advert("far proxy", "area_far", distance=6.0, scanner_max_radius=0)
+    near = _advert("near proxy", "area_near", distance=12.0)
+    device, selected = _device({"near": near, "far": far})
+    BermudaDataUpdateCoordinator._refresh_area_by_min_distance(_coordinator(global_max_radius=10.0), device)
+    assert selected == [far]
+
