@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
 from homeassistant import config_entries
 from homeassistant import data_entry_flow
 from homeassistant.core import HomeAssistant
@@ -12,6 +15,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bermuda.const import DOMAIN
 from custom_components.bermuda.const import NAME
+from custom_components.bermuda.const import CONF_DEVICES, CONF_RSSI_OFFSETS, CONF_SAVE_AND_CLOSE, CONF_SCANNER_INFO
+from custom_components.bermuda.config_flow import BermudaOptionsFlowHandler
 
 # from .const import MOCK_OPTIONS
 from .const import MOCK_CONFIG
@@ -91,3 +96,40 @@ async def test_options_flow(hass: HomeAssistant, setup_bermuda_entry: MockConfig
 
     # Verify that the options were updated
     assert setup_bermuda_entry.options == MOCK_OPTIONS_GLOBALS
+
+
+async def test_calibration2_duplicate_scanner_names_keep_offsets_independent(hass: HomeAssistant):
+    """Duplicate friendly names get distinct labels and save by scanner address."""
+    addresses = ["aa:bb:cc:dd:ee:01", "aa:bb:cc:dd:ee:02", "aa:bb:cc:dd:ee:03"]
+    scanners = {
+        addresses[0]: SimpleNamespace(name="Hallway", area_name="Entry"),
+        addresses[1]: SimpleNamespace(name="Hallway", area_name="Office"),
+        addresses[2]: SimpleNamespace(name="Hallway", area_name="Entry"),
+    }
+    coordinator = SimpleNamespace(scanner_list=addresses, devices=scanners)
+    handler = object.__new__(BermudaOptionsFlowHandler)
+    handler.coordinator = coordinator
+    handler._options = {}
+    handler._update_options = AsyncMock(return_value={"saved": True})
+
+    labels = handler._scanner_display_labels()
+    assert len(set(label.casefold() for label in labels.values())) == len(addresses)
+    assert labels[addresses[0]] == "Hallway — Entry"
+    assert labels[addresses[1]] == "Hallway — Office"
+    assert addresses[2][-5:] in labels[addresses[2]]
+
+    with patch.object(BermudaOptionsFlowHandler, "_update_options", new=AsyncMock(return_value={"saved": True})):
+        result = await handler.async_step_calibration2_scanners(
+            user_input={
+                CONF_DEVICES: "device-registry-id",
+                CONF_SCANNER_INFO: {
+                    labels[addresses[0]]: 1,
+                    labels[addresses[1]]: 2,
+                    labels[addresses[2]]: 3,
+                },
+                CONF_SAVE_AND_CLOSE: True,
+            }
+        )
+
+    assert result == {"saved": True}
+    assert handler.options[CONF_RSSI_OFFSETS] == dict(zip(addresses, [1, 2, 3], strict=True))
