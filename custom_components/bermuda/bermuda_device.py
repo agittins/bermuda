@@ -129,6 +129,7 @@ class BermudaDevice(dict):
         self.beacon_major: str | None = None
         self.beacon_minor: str | None = None
         self.beacon_power: float | None = None
+        self.findmy_identifier: str | None = None
 
         self.entry_id: str | None = None  # used for scanner devices
         self.create_sensor: bool = False  # Create/update a sensor for this device

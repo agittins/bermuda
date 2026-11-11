@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
+from homeassistant.const import Platform
+
+from custom_components.bermuda.const import (
+    ADDR_TYPE_FINDMY_DEVICE,
+    METADEVICE_FINDMY_DEVICE,
+    METADEVICE_TYPE_FINDMY_SOURCE,
+)
 from custom_components.bermuda.coordinator import BermudaDataUpdateCoordinator
+from custom_components.bermuda.entity import BermudaEntity
 
 
 def test_handle_devreg_malformed_identifier():
@@ -48,3 +57,82 @@ def test_handle_devreg_malformed_identifier():
 
     # Reached the end of the identifier branch without raising.
     assert coordinator._scanner_init_pending is True
+
+
+def test_discover_findmy_metadevice_uses_only_fresh_local_addresses():
+    """A rolling FindMy tracker becomes one stable device with fresh MAC sources."""
+    findmy_entry = SimpleNamespace(data={"type": "device_rolling"}, entry_id="findmy-entry")
+    findmy_entity = SimpleNamespace(
+        domain=Platform.DEVICE_TRACKER,
+        unique_id="AIRTAG-ID",
+        entity_id="device_tracker.findmy_bike",
+        device_id="findmy-device",
+    )
+    findmy_state = SimpleNamespace(
+        attributes={
+            "mac_address": "C1:22:33:44:55:66",
+            "local_detected_at": datetime.now(UTC).isoformat(),
+        },
+        name="Bike",
+    )
+    findmy_device = SimpleNamespace(name_by_user=None, name="Bike")
+    metadevice = SimpleNamespace(
+        address="findmy_airtag-id",
+        address_type=None,
+        metadevice_type=set(),
+        findmy_identifier=None,
+        create_sensor=False,
+        name_by_user=None,
+        name_devreg=None,
+        metadevice_sources=[],
+        make_name=lambda: None,
+    )
+    source_device = SimpleNamespace(metadevice_type=set())
+
+    coordinator = SimpleNamespace(
+        hass=SimpleNamespace(
+            config_entries=SimpleNamespace(async_entries=lambda *args, **kwargs: [findmy_entry]),
+            states=SimpleNamespace(get=lambda entity_id: findmy_state),
+        ),
+        er=SimpleNamespace(entities=SimpleNamespace(get_entries_for_config_entry_id=lambda entry_id: [findmy_entity])),
+        dr=SimpleNamespace(async_get=lambda device_id: findmy_device),
+        metadevices={},
+        _get_or_create_device=lambda address: metadevice,
+        _get_device=lambda address: source_device,
+    )
+
+    BermudaDataUpdateCoordinator.discover_findmy_metadevices(coordinator)
+
+    assert metadevice.address_type == ADDR_TYPE_FINDMY_DEVICE
+    assert METADEVICE_FINDMY_DEVICE in metadevice.metadevice_type
+    assert METADEVICE_TYPE_FINDMY_SOURCE in source_device.metadevice_type
+    assert metadevice.findmy_identifier == "AIRTAG-ID"
+    assert metadevice.create_sensor is True
+    assert metadevice.metadevice_sources == ["c1:22:33:44:55:66"]
+    assert coordinator.metadevices == {"findmy_airtag-id": metadevice}
+
+    findmy_state.attributes = {
+        "mac_address": "D1:22:33:44:55:66",
+        "local_detected_at": datetime.now(UTC) - timedelta(minutes=6),
+    }
+    BermudaDataUpdateCoordinator.discover_findmy_metadevices(coordinator)
+
+    assert metadevice.metadevice_sources == ["c1:22:33:44:55:66"]
+
+
+def test_findmy_metadevice_links_to_findmy_device_registry_identifier():
+    """Bermuda entities congeal with the originating FindMy device."""
+    entity = object.__new__(BermudaEntity)
+    entity._device = SimpleNamespace(
+        is_scanner=False,
+        address_type=ADDR_TYPE_FINDMY_DEVICE,
+        findmy_identifier="AIRTAG-ID",
+        unique_id="findmy_airtag-id",
+        address="findmy_airtag-id",
+        name="Bike",
+    )
+
+    device_info = entity.device_info
+
+    assert device_info["identifiers"] == {("findmy", "AIRTAG-ID")}
+    assert device_info["connections"] == set()
