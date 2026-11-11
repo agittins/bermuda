@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 # ruff: noqa: PLR1730
 
 
-class BermudaAdvert(dict):
+class BermudaAdvert:
     """
     Represents details from a scanner relevant to a specific device.
 
