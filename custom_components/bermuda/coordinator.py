@@ -1665,7 +1665,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                         self.redactions[altmac] = f"{address[:2]}::CFG_MAC_{i}::{address[-2:]}"
                 else:
                     # Don't know what it is, but not a mac.
-                    self.redactions[address] = f"CFG_OTHER_{1}_{address}"
+                    self.redactions[address] = f"CFG_OTHER_{i}_{address}"
         _LOGGER.debug("Redact confdevs: %ss, %d items", monotonic_time_coarse() - _stamp, len(self.redactions))
         # EVERYTHING ELSE
         for non_lower_address, device in self.devices.items():
@@ -1715,11 +1715,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 # Full string match, a quick short-circuit
                 data = self.redactions[datalower]
             else:
-                # Search for any of the redaction strings in the data.
+                # Search for any of the redaction strings in the data. Each
+                # replacement works on the result of the last, so a string
+                # holding two addresses has both redacted (replacing into the
+                # original lowered string lost every match but the last).
+                data = datalower
                 for find, fix in list(self.redactions.items()):
-                    if find in datalower:
-                        data = datalower.replace(find, fix)
-                        # don't break out because there might be multiple fixes required.
+                    if find in data:
+                        data = data.replace(find, fix)
             # redactions done, now replace any remaining MAC addresses
             # We are only looking for xx:xx:xx... format.
             return self._redact_generic_re.sub(self._redact_generic_sub, data)
