@@ -13,3 +13,4 @@ config/configuration.yaml
 config/known_devices.yaml
 
 node_modules/.cache*
+custom_components/bermuda/bermuda.zip
