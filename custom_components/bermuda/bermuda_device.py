@@ -239,14 +239,18 @@ class BermudaDevice(dict):
         self._is_remote_scanner = False
         self._coordinator.scanner_list_del(self)
 
-    def async_as_scanner_init(self, ha_scanner: BaseHaScanner):
+    def async_as_scanner_init(self, ha_scanner: BaseHaScanner, *, force: bool = False):
         """
         Configure this device as a scanner device.
 
-        Use to set up a device as a scanner.
+        Use to set up a device as a scanner. With force, a scanner that is
+        already set up re-reads its device registry entries (area, name).
         """
         if self._hascanner is ha_scanner:
-            # Actual object has not changed, we're good.
+            # Actual object has not changed, but what the user has set on its
+            # device registry entries may have.
+            if force:
+                self.async_as_scanner_resolve_device_entries()
             return
 
         # If we don't already have a self._hascanner, then this must be our
