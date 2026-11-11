@@ -23,6 +23,7 @@ VERSION = "0.0.0"
 
 ATTRIBUTION = "Data provided by http://jsonplaceholder.typicode.com/"
 ISSUE_URL = "https://github.com/agittins/bermuda/issues"
+PROJECT_URL = "https://github.com/agittins/bermuda"
 
 # Icons
 ICON = "mdi:format-quote-close"

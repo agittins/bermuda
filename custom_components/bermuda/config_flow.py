@@ -47,6 +47,7 @@ from .const import (
     DOMAIN,
     DOMAIN_PRIVATE_BLE_DEVICE,
     NAME,
+    PROJECT_URL,
 )
 from .util import mac_redact, rssi_to_metres
 
@@ -103,7 +104,7 @@ class BermudaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             # create the integration!
             return self.async_create_entry(title=NAME, data={"source": "user"}, description=NAME)
 
-        return self.async_show_form(step_id="user", description_placeholders={"name": NAME})
+        return self.async_show_form(step_id="user", description_placeholders={"name": NAME, "url": PROJECT_URL})
 
     @staticmethod
     @callback
