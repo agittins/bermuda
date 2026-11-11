@@ -67,7 +67,8 @@ async def async_setup_entry(
 
     @callback
     def create_scanner_entities() -> None:
-        """Create one 'max detection radius' control per scanner.
+        """
+        Create one 'max detection radius' control per scanner.
 
         Scanners are not tracked devices and never flow through device_new, so
         we hook the scanner roster instead (mirroring sensor.py). Wait until each
@@ -164,7 +165,8 @@ class BermudaNumber(BermudaEntity, RestoreNumber):
 
 
 class BermudaScannerMaxRadius(BermudaEntity, RestoreNumber):
-    """Per-scanner maximum detection radius, in metres. 0 = use the global default.
+    """
+    Per-scanner maximum detection radius, in metres. 0 = use the global default.
 
     The per-scanner analogue of ESPresense's per-node ``max_distance``: while a
     device is farther than this many metres from the scanner, the scanner cannot
