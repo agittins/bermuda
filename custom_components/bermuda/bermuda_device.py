@@ -795,6 +795,11 @@ class BermudaDevice(dict):
                         # UniversallyUniqueIDentifier is not even unique
                         # locally, so we need to make one :-)
 
+                        if len(man_data) < 22:
+                            # Too short to hold the uuid, major and minor: there is no
+                            # id to make, and registering it would create a bogus
+                            # "None_None_None" beacon metadevice.
+                            continue
                         self.beacon_unique_id = f"{self.beacon_uuid}_{self.beacon_major}_{self.beacon_minor}"
                         # Note: it's possible that a device sends multiple
                         # beacons. We are only going to process the latest
