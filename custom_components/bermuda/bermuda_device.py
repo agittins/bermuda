@@ -91,6 +91,10 @@ class BermudaDevice(dict):
         self._coordinator: BermudaDataUpdateCoordinator = coordinator
         self.ref_power: float = 0  # If non-zero, use in place of global ref_power.
         self.ref_power_changed: float = 0  # Stamp for last change to ref_power, for cache zapping.
+        # Per-scanner maximum detection radius in metres (0 = use global max_area_radius).
+        # Only meaningful on scanner devices; the per-scanner analogue of ESPresense's
+        # per-node max_distance so an over-reading proxy can't claim distant devices.
+        self.max_radius: float = 0
         self.options = self._coordinator.options
         self.unique_id: str | None = _address  # mac address formatted.
         self.address_type = BDADDR_TYPE_UNKNOWN
@@ -620,6 +624,18 @@ class BermudaDevice(dict):
             # Update the stamp so that the BermudaEntity can clear the cache and show the
             # new measurement(s) immediately.
             self.ref_power_changed = monotonic_time_coarse()
+
+    def set_max_radius(self, new_max_radius: float):
+        """
+        Set a per-scanner maximum detection radius (metres) for this scanner.
+
+        Zero means "use the global max_area_radius". While a device is farther
+        than this from the scanner, the scanner will not win that device's Area.
+        No interim recompute is needed: unlike ref_power it does not change any
+        distances, only whether this scanner is eligible to win, which is
+        evaluated live during area resolution each update cycle.
+        """
+        self.max_radius = new_max_radius or 0
 
     def apply_scanner_selection(self, bermuda_advert: BermudaAdvert | None):
         """
