@@ -205,17 +205,23 @@ class BermudaDevice(dict):
                     self.address_type = BDADDR_TYPE_NOT_MAC48
             elif len(self.address) == 17:
                 top_bits = int(self.address[0:1], 16) >> 2
-                # The two MSBs of the first octet dictate the random type...
-                if top_bits & 0b00:  # First char will be in [0 1 2 3]
+                # The two MSBs of the first octet dictate the random type. These
+                # are EQUALITY tests: this used to use `&`, under which
+                # `top_bits & 0b00` is never true (non-resolvable addresses stayed
+                # UNKNOWN), `top_bits & 0b01` matched 0b11 as well (every random
+                # STATIC address was labelled resolvable and fed to the IRK
+                # resolver, which can never resolve it), and the 0b11 branch was
+                # unreachable, so BDADDR_TYPE_RANDOM_STATIC was never assigned.
+                if top_bits == 0b00:  # First char will be in [0 1 2 3]
                     self.address_type = BDADDR_TYPE_RANDOM_UNRESOLVABLE
-                elif top_bits & 0b01:  # Addresses where the first char will be 4,5,6 or 7
+                elif top_bits == 0b01:  # Addresses where the first char will be 4,5,6 or 7
                     _LOGGER.debug("Identified Resolvable Private (potential IRK source) Address on %s", self.address)
                     self.address_type = BDADDR_TYPE_RANDOM_RESOLVABLE
                     self._coordinator.irk_manager.check_mac(self.address)
-                elif top_bits & 0b10:
+                elif top_bits == 0b10:
                     self.address_type = "reserved"
                     _LOGGER.debug("Hey, got one of those reserved MACs, %s", self.address)
-                elif top_bits & 0b11:
+                else:  # 0b11, first char in [c d e f]
                     self.address_type = BDADDR_TYPE_RANDOM_STATIC
 
             else:
