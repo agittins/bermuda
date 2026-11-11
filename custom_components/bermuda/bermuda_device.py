@@ -114,7 +114,7 @@ class BermudaDevice(dict):
         self.floor_id: str | None = None
         self.floor_name: str | None = None
         self.floor_icon: str = ICON_DEFAULT_FLOOR
-        self.floor_level: str | None = None
+        self.floor_level: int | None = None
 
         self.zone: str = STATE_NOT_HOME  # STATE_HOME or STATE_NOT_HOME
         self.manufacturer: str | None = None
@@ -441,7 +441,7 @@ class BermudaDevice(dict):
                 if self.floor is not None:
                     self.floor_name = self.floor.name
                     self.floor_icon = self.floor.icon or ICON_DEFAULT_FLOOR
-                    self.floor_level = self.floor_level
+                    self.floor_level = self.floor.level
                 else:
                     # floor_id was invalid
                     _LOGGER_SPAM_LESS.warning(
@@ -459,6 +459,7 @@ class BermudaDevice(dict):
                 self.floor = None
                 self.floor_name = None
                 self.floor_icon = ICON_DEFAULT_FLOOR
+                self.floor_level = None
         else:
             _LOGGER_SPAM_LESS.warning(
                 f"no_area_on_update{self.name}",
@@ -466,13 +467,17 @@ class BermudaDevice(dict):
                 self.__repr__(),
                 area_id,
             )
+            # An area that no longer exists: clear area_id too, or the device
+            # keeps reporting (and sensors keep publishing) a deleted area.
             self.area = None
+            self.area_id = None
             self.area_name = f"Invalid Area for {self.name}"
             self.area_icon = ICON_DEFAULT_AREA
             self.floor = None
             self.floor_id = None
             self.floor_name = None
             self.floor_icon = ICON_DEFAULT_FLOOR
+            self.floor_level = None
 
     def async_as_scanner_update(self, ha_scanner: BaseHaScanner):
         """
