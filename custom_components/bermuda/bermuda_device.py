@@ -261,10 +261,14 @@ class BermudaDevice(dict):
             self._is_remote_scanner = True
         else:
             self._is_remote_scanner = False
-        self._coordinator.scanner_list_add(self)
 
         # Find the relevant device entries in HA for this scanner and apply the names, addresses etc
+        # This must happen before scanner_list_add(), which tells the sensor platform the roster
+        # changed. The platform skips scanners whose wifi mac hasn't resolved yet, and a scanner
+        # that arrives after startup gets no other signal, so it would otherwise go without its
+        # per-scanner entities until the integration is reloaded.
         self.async_as_scanner_resolve_device_entries()
+        self._coordinator.scanner_list_add(self)
 
         # Call the per-update processor as well, but only
         # if this is our first ha_scanner.
