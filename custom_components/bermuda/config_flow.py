@@ -501,7 +501,8 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         saved_rssi_offsets = self.options.get(CONF_RSSI_OFFSETS, {})
         rssi_offset_dict = {}
 
-        for scanner in self.coordinator.scanner_list:
+        # Sorted by name so the list is stable and a given scanner is easy to find.
+        for scanner in self._scanner_addresses_by_name():
             scanner_name = self.coordinator.devices[scanner].name
             rssi_offset_dict[scanner_name] = saved_rssi_offsets.get(scanner, 0)
         data_schema = {
@@ -527,7 +528,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         if device is not None and isinstance(self._last_scanner_info, dict):
             results = {}
             # Gather new estimates for distances using rssi hist and the new offset.
-            for scanner in self.coordinator.scanner_list:
+            for scanner in self._scanner_addresses_by_name():
                 scanner_name = self.coordinator.devices[scanner].name
                 cur_offset = self._last_scanner_info.get(scanner_name, 0)
                 if (scanneradvert := device.get_scanner(scanner)) is not None:
@@ -541,7 +542,11 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                     ]
             # Format the results for display (HA has full markdown support!)
             results_str = "| Scanner | 0 | 1 | 2 | 3 | 4 |\n|---|---:|---:|---:|---:|---:|"
-            for scanner_name, distances in results.items():
+            # Nearest scanner (by most recent distance) first. Ties and scanners
+            # without any history keep their by-name order.
+            for scanner_name, distances in sorted(
+                results.items(), key=lambda item: item[1][0] if item[1] else DISTANCE_INFINITE
+            ):
                 results_str += f"\n|{scanner_name}|"
                 for i in range(5):
                     # We round to 2 places (1cm) and pad to fit nn.nn
@@ -555,6 +560,13 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             step_id="calibration2_scanners",
             data_schema=vol.Schema(data_schema),
             description_placeholders={"suffix": results_str},
+        )
+
+    def _scanner_addresses_by_name(self) -> list[str]:
+        """Return the scanner addresses, sorted (case-insensitively) by scanner name."""
+        return sorted(
+            self.coordinator.scanner_list,
+            key=lambda address: str(self.coordinator.devices[address].name).casefold(),
         )
 
     def _get_bermuda_device_from_registry(self, registry_id: str) -> BermudaDevice | None:
