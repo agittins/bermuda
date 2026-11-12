@@ -119,6 +119,63 @@ def test_to_dict(bermuda_device):
     assert device_dict["address"] == "aa:bb:cc:dd:ee:ff"
 
 
+def _registry_device(device_id, name, connections, via_device_id=None):
+    """Minimal device-registry stand-in."""
+    device = MagicMock()
+    device.id = device_id
+    device.name = name
+    device.name_by_user = None
+    device.connections = connections
+    device.via_device_id = via_device_id
+    device.area_id = None
+    return device
+
+
+def test_scanner_name_prefers_via_device_over_shared_mac(mock_coordinator, mock_scanner):
+    """UniFi and Shelly share a MAC; the Bluetooth via_device_id selects Shelly.
+
+    The UniFi entry is last, which used to win because the loop kept the last
+    MAC match.
+    """
+    wifi = "54:43:b2:3d:ac:18"
+    ble = "54:43:B2:3D:AC:1A"
+    shelly = _registry_device("shelly-id", "Rollo EG Wohnzimmer Fenster", {("mac", wifi)})
+    unifi = _registry_device("unifi-id", "shellyplus2pm-5443b23dac18", {("mac", wifi)})
+    bluetooth = _registry_device(
+        "bt-id",
+        f"Rollo EG Wohnzimmer Fenster ({ble})",
+        {("bluetooth", ble)},
+        via_device_id="shelly-id",
+    )
+    mock_coordinator.dr.devices.get_entries.return_value = [bluetooth, shelly, unifi]
+    mock_coordinator.dr.async_get.return_value = shelly
+
+    scanner = BermudaDevice(address=ble, coordinator=mock_coordinator)
+    scanner._hascanner = mock_scanner
+    mock_scanner.source = ble
+    scanner.async_as_scanner_resolve_device_entries()
+
+    assert scanner.name == "Rollo EG Wohnzimmer Fenster"
+    assert scanner.address_wifi_mac == wifi
+
+
+def test_scanner_name_falls_back_to_first_mac_without_via(mock_coordinator, mock_scanner):
+    """Without via_device_id, the first MAC match is used, not the last."""
+    wifi = "54:43:b2:3d:ac:18"
+    ble = "54:43:B2:3D:AC:1A"
+    shelly = _registry_device("shelly-id", "Rollo EG Wohnzimmer Fenster", {("mac", wifi)})
+    unifi = _registry_device("unifi-id", "shellyplus2pm-5443b23dac18", {("mac", wifi)})
+    bluetooth = _registry_device("bt-id", "scanner", {("bluetooth", ble)}, via_device_id=None)
+    mock_coordinator.dr.devices.get_entries.return_value = [unifi, shelly, bluetooth]
+    mock_coordinator.dr.async_get.return_value = None
+
+    scanner = BermudaDevice(address=ble, coordinator=mock_coordinator)
+    scanner._hascanner = mock_scanner
+    scanner.async_as_scanner_resolve_device_entries()
+
+    assert scanner.name == "shellyplus2pm-5443b23dac18"
+
+
 def test_repr(bermuda_device):
     """Test __repr__ method."""
     repr_str = repr(bermuda_device)
