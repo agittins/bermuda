@@ -889,10 +889,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                     "Prune quota short by %d. Pruning %d extra devices (down to age %0.2f seconds)",
                     prune_quota_shortfall,
                     cutoff_index,
-                    nowstamp - sorted_addresses[prune_quota_shortfall - 1][0],
+                    nowstamp - sorted_addresses[cutoff_index - 1][0],
                 )
                 # pylint: disable-next=unused-variable
-                for _stamp, address in sorted_addresses[: prune_quota_shortfall - 1]:
+                for _stamp, address in sorted_addresses[:cutoff_index]:
                     prune_list.append(address)
             else:
                 _LOGGER.warning(
