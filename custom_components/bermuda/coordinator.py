@@ -6,9 +6,9 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-import aiofiles
 import voluptuous as vol
 import yaml
 from bluetooth_data_tools import monotonic_time_coarse
@@ -113,6 +113,15 @@ Cancellable = Callable[[], None]
 # so we're just disabling it for the whole file.
 # https://github.com/astral-sh/ruff/issues/4244
 # ruff: noqa: PLR1730
+
+
+def _load_manufacturer_yaml(file_path: str, key: str) -> list[dict]:
+    """Parse one of the bundled Bluetooth SIG yaml files. Blocking, so run it in the executor."""
+    # libyaml's CSafeLoader (present in Home Assistant's PyYAML) is about 8x faster
+    # than the pure-Python SafeLoader that yaml.safe_load() uses.
+    loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+    with Path(file_path).open(encoding="utf-8") as f:
+        return yaml.load(f, Loader=loader)[key]  # noqa: S506 - only SafeLoader or CSafeLoader
 
 
 class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
@@ -383,16 +392,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             file_path = self.hass.config.path(
                 f"custom_components/{DOMAIN}/manufacturer_identification/member_uuids.yaml"
             )
-            async with aiofiles.open(file_path) as f:
-                mi_yaml = yaml.safe_load(await f.read())["uuids"]
+            mi_yaml = await self.hass.async_add_executor_job(_load_manufacturer_yaml, file_path, "uuids")
             self.member_uuids: dict[int, str] = {member["uuid"]: member["name"] for member in mi_yaml}
 
             # https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/company_identifiers/company_identifiers.yaml
             file_path = self.hass.config.path(
                 f"custom_components/{DOMAIN}/manufacturer_identification/company_identifiers.yaml"
             )
-            async with aiofiles.open(file_path) as f:
-                ci_yaml = yaml.safe_load(await f.read())["company_identifiers"]
+            ci_yaml = await self.hass.async_add_executor_job(_load_manufacturer_yaml, file_path, "company_identifiers")
             self.company_uuids: dict[int, str] = {member["value"]: member["name"] for member in ci_yaml}
         finally:
             # Ensure that an issue reading these files (which are optional, really) doesn't stop the whole show.
