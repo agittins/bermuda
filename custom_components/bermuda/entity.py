@@ -11,6 +11,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    ADDR_TYPE_EXTERNAL,
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     ATTRIBUTION,
@@ -130,6 +131,9 @@ class BermudaEntity(CoordinatorEntity):
                 # Ensures we can also match the Bluetooth integration entities.
                 (dr.CONNECTION_BLUETOOTH, (self._device.address_ble_mac or self._device.address).upper()),
             }
+        elif self._device.address_type == ADDR_TYPE_EXTERNAL:
+            # The identity is logical and must never be advertised as a Bluetooth MAC.
+            connections = set()
         elif self._device.address_type == ADDR_TYPE_IBEACON:
             # ibeacon doesn't (yet) actually set a "connection", but
             # this "matches" what it stores for identifier.

@@ -94,6 +94,7 @@ from .const import (
     SIGNAL_SCANNERS_CHANGED,
     UPDATE_INTERVAL,
 )
+from .external_identity import _DATA_KEY
 from .util import mac_explode_formats, mac_norm
 
 if TYPE_CHECKING:
@@ -663,6 +664,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             result_gather_adverts = self._async_gather_advert_data()
 
             self.update_metadevices()
+
+            if manager := self.hass.data.get(_DATA_KEY):
+                manager.update()
 
             # Calculate per-device data
             #

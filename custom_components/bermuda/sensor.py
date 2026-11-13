@@ -17,6 +17,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import (
     _LOGGER,
+    ADDR_TYPE_EXTERNAL,
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     SIGNAL_DEVICE_NEW,
@@ -210,6 +211,7 @@ class BermudaSensor(BermudaEntity, SensorEntity):
         current_mac = self._device.address
         # But metadevices have source_devices
         if self._device.address_type in [
+            ADDR_TYPE_EXTERNAL,
             ADDR_TYPE_IBEACON,
             ADDR_TYPE_PRIVATE_BLE_DEVICE,
         ]:
@@ -470,6 +472,8 @@ class BermudaSensorAreaLastSeen(BermudaSensor, RestoreSensor):
     async def async_added_to_hass(self) -> None:
         """Restore last saved value before adding to HASS."""
         await super().async_added_to_hass()
+        if self._device.address_type == ADDR_TYPE_EXTERNAL:
+            return
         if (sensor_data := await self.async_get_last_sensor_data()) is not None:
             self._attr_native_value = str(sensor_data.native_value)
             self._device.area_last_seen = str(sensor_data.native_value)
