@@ -203,6 +203,12 @@ class BermudaDevice(dict):
                         self._coordinator.irk_manager.register_irk_callback(self.async_handle_pble_callback, _irk_bytes)
                     )
                     self._coordinator.irk_manager.add_irk(_irk_bytes)
+                    # Core only calls back when it next sees an advert for this IRK, and
+                    # HA drops adverts whose payload has not changed, so a device that is
+                    # already being heard can wait minutes after a restart. Seed from the
+                    # sighting HA already holds.
+                    if _current := pble_coordinator.async_last_service_info(self._coordinator.hass, _irk_bytes):
+                        self.async_handle_pble_callback(_current, BluetoothChange.ADVERTISEMENT)
                 else:
                     # We have no idea, currently.
                     # Mark it as such so we don't spend time testing it again.
