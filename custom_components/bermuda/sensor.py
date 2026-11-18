@@ -17,6 +17,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import (
     _LOGGER,
+    ADDR_TYPE_FINDMY_DEVICE,
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     SIGNAL_DEVICE_NEW,
@@ -210,6 +211,7 @@ class BermudaSensor(BermudaEntity, SensorEntity):
         current_mac = self._device.address
         # But metadevices have source_devices
         if self._device.address_type in [
+            ADDR_TYPE_FINDMY_DEVICE,
             ADDR_TYPE_IBEACON,
             ADDR_TYPE_PRIVATE_BLE_DEVICE,
         ]:
