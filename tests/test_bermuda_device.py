@@ -65,6 +65,27 @@ def test_async_as_scanner_init(bermuda_scanner, mock_scanner):
     assert bermuda_scanner.is_remote_scanner is False
 
 
+def test_async_as_scanner_init_force_rereads_registry_entries(bermuda_scanner, mock_coordinator, mock_scanner):
+    """A forced init on a known scanner re-reads its registry entries.
+
+    Changing a proxy's area in Home Assistant does not replace its scanner
+    object, so an init that only reacts to a new object never saw the change
+    (agittins/bermuda#856).
+    """
+    with patch.object(bermuda_scanner, "async_as_scanner_resolve_device_entries") as resolve:
+        bermuda_scanner.async_as_scanner_init(mock_scanner)
+        assert resolve.call_count == 1  # first set-up
+
+        bermuda_scanner.async_as_scanner_init(mock_scanner)
+        assert resolve.call_count == 1  # same object, not forced: nothing to do
+
+        bermuda_scanner.async_as_scanner_init(mock_scanner, force=True)
+        assert resolve.call_count == 2  # forced: read the registry again
+
+    # Re-reading must not announce the scanner as new again.
+    assert mock_coordinator.scanner_list_add.call_count == 1
+
+
 def test_async_as_scanner_update(bermuda_scanner, mock_scanner):
     """Test async_as_scanner_update method."""
     bermuda_scanner.async_as_scanner_update(mock_scanner)
