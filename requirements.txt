@@ -1,4 +1,3 @@
-aiofiles
 aiousbwatcher
 colorlog==6.12.0
 homeassistant>=2026.10.4
