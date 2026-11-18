@@ -799,6 +799,24 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         prune_list: list[str] = []  # list of addresses to be pruned
         prunable_stamps: dict[str, float] = {}  # dict of potential prunees if we need to be more aggressive.
 
+        # An iBeacon nobody tracks and nobody has heard for a day goes, along
+        # with its metadevice. Without this, the source-keeper loop below
+        # always keeps each beacon's newest source, so every distinct beacon
+        # ever heard (a shop, a neighbour, a passing car) stayed in devices and
+        # metadevices for good. Once the metadevice is gone its source is an
+        # ordinary stale MAC and the sweep below prunes it.
+        stale_beacons = [
+            address
+            for address, metadevice in self.metadevices.items()
+            if METADEVICE_IBEACON_DEVICE in metadevice.metadevice_type
+            and not metadevice.create_sensor
+            and (metadevice.last_seen or 0) < nowstamp - PRUNE_TIME_DEFAULT
+        ]
+        for address in stale_beacons:
+            _LOGGER.debug("Pruning stale untracked iBeacon %s", address)
+            del self.metadevices[address]
+            self.devices.pop(address, None)
+
         metadevice_source_keepers = set()
         for metadevice in self.metadevices.values():
             if len(metadevice.metadevice_sources) > 0:
@@ -831,7 +849,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # should totally be pruned if it's no longer around.
             if (
                 device_address not in metadevice_source_keepers
-                and device not in self.metadevices
+                and device_address not in self.metadevices
                 and device_address not in self.scanner_list
                 and (not device.create_sensor)  # Not if we track the device
                 and (not device.is_scanner)  # redundant, but whatevs.
