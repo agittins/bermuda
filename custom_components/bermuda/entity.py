@@ -11,12 +11,14 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    ADDR_TYPE_FINDMY_DEVICE,
     ADDR_TYPE_IBEACON,
     ADDR_TYPE_PRIVATE_BLE_DEVICE,
     ATTRIBUTION,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    DOMAIN_FINDMY,
     DOMAIN_PRIVATE_BLE_DEVICE,
 )
 
@@ -119,6 +121,7 @@ class BermudaEntity(CoordinatorEntity):
         # seem to be stored uppercased.
         # existing_device_id = None
         domain_name = DOMAIN
+        device_identifier = self._device.unique_id
         model = None
 
         if self._device.is_scanner:
@@ -150,13 +153,17 @@ class BermudaEntity(CoordinatorEntity):
             # if dr_device is not None:
             #    existing_device_id = dr_device.id
             domain_name = DOMAIN_PRIVATE_BLE_DEVICE
+        elif self._device.address_type == ADDR_TYPE_FINDMY_DEVICE:
+            connections = set()
+            domain_name = DOMAIN_FINDMY
+            device_identifier = self._device.findmy_identifier or self._device.unique_id
         else:
             connections = {(dr.CONNECTION_BLUETOOTH, self._device.address.upper())}
             # No need to set model, since MAC address will be shown via connection.
             # model = f"Bermuda: {self._device.address.lower()}"
 
         device_info = {
-            "identifiers": {(domain_name, self._device.unique_id)},
+            "identifiers": {(domain_name, device_identifier)},
             "connections": connections,
             "name": self._device.name,
         }
