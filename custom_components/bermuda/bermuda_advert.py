@@ -136,6 +136,12 @@ class BermudaAdvert(dict):
             )
             self.apply_new_scanner(scanner_device)
 
+        # A real BLE RSSI is always negative. >= 0 (or NaN/inf) is a "not available" sentinel
+        # (127 from Android, 0 from some stacks); it would turn into ~0 m, so drop it.
+        if not -200 < advertisementdata.rssi < 0:
+            _LOGGER.debug("Ignoring invalid rssi %s from %s", advertisementdata.rssi, scanner_device.name)
+            return
+
         scanner = self.scanner_device
         new_stamp: float | None = None
 
