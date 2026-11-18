@@ -132,7 +132,7 @@ def test_repr(bermuda_advert):
     assert repr_str == "aa:bb:cc:dd:ee:ff__Mock Scanner"
 
 
-@pytest.mark.parametrize("bad_rssi", [127, 0, float("nan"), float("inf")])
+@pytest.mark.parametrize("bad_rssi", [127, 0, float("nan"), float("inf"), float("-inf")])
 def test_update_advertisement_ignores_non_negative_rssi(
     bermuda_advert, mock_advertisement_data, mock_scanner_device, bad_rssi
 ):
@@ -141,7 +141,7 @@ def test_update_advertisement_ignores_non_negative_rssi(
     mock_advertisement_data.rssi = bad_rssi
     bermuda_advert.update_advertisement(mock_advertisement_data, mock_scanner_device)
     assert bermuda_advert.rssi == -70
-    assert bad_rssi not in bermuda_advert.hist_rssi or bad_rssi != bad_rssi
+    assert len(bermuda_advert.hist_rssi) == 0 or bermuda_advert.hist_rssi[0] == -70
     assert bermuda_advert.stamp == 123.45
 
 
@@ -152,3 +152,19 @@ def test_update_advertisement_keeps_negative_rssi(bermuda_advert, mock_advertise
     bermuda_advert.update_advertisement(mock_advertisement_data, mock_scanner_device)
     assert bermuda_advert.rssi == -60
     assert bermuda_advert.hist_rssi[0] == -60
+
+
+def test_first_advert_with_invalid_rssi_is_ignored_safely(
+    mock_parent_device, mock_advertisement_data, mock_scanner_device
+):
+    """A bad first reading leaves no rssi, and a later ref_power change must not crash."""
+    mock_advertisement_data.rssi = 127
+    ba = BermudaAdvert(
+        parent_device=mock_parent_device,
+        advertisementdata=mock_advertisement_data,
+        options={"CONF_REF_POWER": -59, "CONF_ATTENUATION": 2.0},
+        scanner_device=mock_scanner_device,
+    )
+    assert ba.rssi is None
+    assert ba.hist_rssi == []
+    assert ba.set_ref_power(-65) is None
