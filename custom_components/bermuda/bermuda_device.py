@@ -709,6 +709,11 @@ class BermudaDevice:
                 # in issue #355 someone had an empty dict instead of a scanner object.
                 # it may be due to a race condition during startup, but we check now
                 # just in case. Was not able to reproduce.
+                if advert.device_address != self.address:
+                    # A metadevice holds its source devices' advert objects. Each source
+                    # device is in coordinator.devices and calculates them this cycle, and
+                    # a second call would add a second history entry per cycle.
+                    continue
                 advert.calculate_data()
             else:
                 _LOGGER_SPAM_LESS.error(
