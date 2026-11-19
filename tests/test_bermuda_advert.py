@@ -2,6 +2,7 @@
 Tests for BermudaAdvert class in bermuda_advert.py.
 """
 
+import logging
 import pytest
 from unittest.mock import MagicMock, patch
 from custom_components.bermuda.bermuda_advert import BermudaAdvert
@@ -132,26 +133,29 @@ def test_repr(bermuda_advert):
     assert repr_str == "aa:bb:cc:dd:ee:ff__Mock Scanner"
 
 
-@pytest.mark.parametrize("bad_rssi", [127, 0, float("nan"), float("inf"), float("-inf")])
-def test_update_advertisement_ignores_non_negative_rssi(
-    bermuda_advert, mock_advertisement_data, mock_scanner_device, bad_rssi
+@pytest.mark.parametrize("bad_rssi", [127, 126, 21, -128, float("nan"), float("inf"), float("-inf")])
+def test_update_advertisement_ignores_invalid_rssi(
+    bermuda_advert, mock_advertisement_data, mock_scanner_device, bad_rssi, caplog
 ):
-    """RSSI >= 0 is a "not available" sentinel (eg Android's 127) and must not enter history."""
+    """RSSI outside -127..+20 (127 is "not available", eg Android) must not enter history, and is debug-logged."""
     mock_scanner_device.async_as_scanner_get_stamp.return_value = 200.0
     mock_advertisement_data.rssi = bad_rssi
-    bermuda_advert.update_advertisement(mock_advertisement_data, mock_scanner_device)
+    with caplog.at_level(logging.DEBUG, logger="custom_components.bermuda"):
+        bermuda_advert.update_advertisement(mock_advertisement_data, mock_scanner_device)
     assert bermuda_advert.rssi == -70
     assert len(bermuda_advert.hist_rssi) == 0 or bermuda_advert.hist_rssi[0] == -70
     assert bermuda_advert.stamp == 123.45
+    assert "Ignoring invalid rssi" in caplog.text
 
 
-def test_update_advertisement_keeps_negative_rssi(bermuda_advert, mock_advertisement_data, mock_scanner_device):
-    """A normal negative RSSI is still accepted."""
+@pytest.mark.parametrize("good_rssi", [-127, -60, 0, 20])
+def test_update_advertisement_keeps_valid_rssi(bermuda_advert, mock_advertisement_data, mock_scanner_device, good_rssi):
+    """Every RSSI in the BLE range -127..+20 is accepted, including 0 and positive values."""
     mock_scanner_device.async_as_scanner_get_stamp.return_value = 200.0
-    mock_advertisement_data.rssi = -60
+    mock_advertisement_data.rssi = good_rssi
     bermuda_advert.update_advertisement(mock_advertisement_data, mock_scanner_device)
-    assert bermuda_advert.rssi == -60
-    assert bermuda_advert.hist_rssi[0] == -60
+    assert bermuda_advert.rssi == good_rssi
+    assert bermuda_advert.hist_rssi[0] == good_rssi
 
 
 def test_first_advert_with_invalid_rssi_is_ignored_safely(

@@ -89,12 +89,6 @@ for any person/user.
 
 See [The FAQ](https://github.com/agittins/bermuda/wiki/FAQ) in the Wiki!
 
-### A device reads 0.0 m from one proxy while it is really several metres away
-
-Bermuda ignores any advertisement with an RSSI of 0 dBm or higher. A real BLE RSSI is always negative (a phone touching a proxy reads about -20 to -40 dBm), so 0 or above is a "not available" sentinel, such as Android's 127. If a proxy relays it, the distance formula gives roughly `10^((-55 - 127)/30)`, about 1e-6 m with typical calibration, shown as 0.0 m.
-
-Real case: an Android tablet running a kiosk app acted as a Bluetooth proxy. Android reports RSSI 127 for "RSSI not available", and the app only dropped it when its optional minimum-RSSI floor was set (default: empty), so +127 dBm reached Home Assistant. In one hour that proxy read a phone about 10 m away at 0.0 m in 29 of 607 cycles, mixed in with normal 3-9 m readings, which pinned the phone to that proxy's area. ESPHome proxies never send 127. If you see this, also fix the proxy that sends it.
-
 ## Hacking tips
 
 Wanna improve this? Awesome! Bear in mind this is my first ever HA
