@@ -69,7 +69,12 @@ async def test_scanner_entities_created_when_resolved(hass: HomeAssistant):
     scanner = _fake_scanner("11:22:33:44:55:66", address_wifi_mac="11:22:33:44:55:60")
     devices = {
         DEVICE_ADDRESS: SimpleNamespace(name="Test Device", unique_id=DEVICE_ADDRESS),
-        scanner.address: SimpleNamespace(name="Test Scanner", unique_id=scanner.address, address_wifi_mac=scanner.address_wifi_mac, address=scanner.address),
+        scanner.address: SimpleNamespace(
+            name="Test Scanner",
+            unique_id=scanner.address,
+            address_wifi_mac=scanner.address_wifi_mac,
+            address=scanner.address,
+        ),
     }
     coordinator = _fake_coordinator(hass, devices, [scanner])
 
@@ -92,10 +97,16 @@ async def test_one_unresolved_scanner_does_not_block_the_others(hass: HomeAssist
     devices = {
         DEVICE_ADDRESS: SimpleNamespace(name="Test Device", unique_id=DEVICE_ADDRESS),
         ready_scanner.address: SimpleNamespace(
-            name="Ready Scanner", unique_id=ready_scanner.address, address_wifi_mac=ready_scanner.address_wifi_mac, address=ready_scanner.address
+            name="Ready Scanner",
+            unique_id=ready_scanner.address,
+            address_wifi_mac=ready_scanner.address_wifi_mac,
+            address=ready_scanner.address,
         ),
         unresolved_scanner.address: SimpleNamespace(
-            name="Unresolved Scanner", unique_id=unresolved_scanner.address, address_wifi_mac=None, address=unresolved_scanner.address
+            name="Unresolved Scanner",
+            unique_id=unresolved_scanner.address,
+            address_wifi_mac=None,
+            address=unresolved_scanner.address,
         ),
     }
     coordinator = _fake_coordinator(hass, devices, [ready_scanner, unresolved_scanner])
