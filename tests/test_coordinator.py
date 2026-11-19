@@ -131,6 +131,8 @@ def test_prune_devices_tolerates_duplicate_prune_entries(monkeypatch):
     # Pruned exactly once, the run completed, and the current source survived.
     assert stale_irk not in coordinator.devices
     assert fresh_irk in coordinator.devices
+
+
 def test_update_metadevices_copies_source_attributes():
     """update_metadevices must copy name/manufacturer/beacon fields from a
     source device onto its metadevice.
