@@ -17,6 +17,7 @@ from homeassistant.helpers.entity_registry import async_migrate_entries
 
 from .const import _LOGGER, DOMAIN, PLATFORMS, STARTUP_MESSAGE
 from .coordinator import BermudaDataUpdateCoordinator
+from .external_identity import _DATA_KEY, ExternalIdentityManager
 from .util import mac_math_offset, mac_norm
 
 if TYPE_CHECKING:
@@ -58,6 +59,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: BermudaConfigEntry) -> b
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    manager = ExternalIdentityManager(coordinator)
+    hass.data[_DATA_KEY] = manager
+
+    @callback
+    def remove_external_identity_api() -> None:
+        manager.close()
+        if hass.data.get(_DATA_KEY) is manager:
+            hass.data.pop(_DATA_KEY)
+
+    entry.async_on_unload(remove_external_identity_api)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     return True

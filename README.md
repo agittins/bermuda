@@ -164,6 +164,10 @@ You can manually install Bermuda by doing the following:
 
 ## Contributions are welcome!
 
+Local integrations resolving rotating addresses can use the proposed
+[external identity API](docs/external-identities.md) while Bermuda retains
+positioning and scanner-observation ownership.
+
 If you want to contribute to this please read the [Contribution guidelines](CONTRIBUTING.md)
 
 ## Credits

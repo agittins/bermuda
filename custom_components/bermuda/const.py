@@ -92,6 +92,7 @@ BDADDR_TYPE_RANDOM_UNRESOLVABLE: Final = "bd_addr_random_unresolvable"
 BDADDR_TYPE_RANDOM_STATIC: Final = "bd_addr_random_static"
 BDADDR_TYPE_NOT_MAC48: Final = "bd_addr_not_mac48"
 # Non-bluetooth address types - for our metadevice entries
+ADDR_TYPE_EXTERNAL: Final = "addr_type_external"
 ADDR_TYPE_IBEACON: Final = "addr_type_ibeacon"
 ADDR_TYPE_PRIVATE_BLE_DEVICE: Final = "addr_type_private_ble_device"
 
