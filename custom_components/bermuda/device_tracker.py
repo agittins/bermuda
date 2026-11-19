@@ -30,7 +30,8 @@ async def async_setup_entry(
 
     @callback
     def device_new(address: str) -> None:
-        """Create entities for newly-found device.
+        """
+        Create entities for newly-found device.
 
         Called from the data co-ordinator when it finds a new device that needs
         to have sensors created. Not called directly, but via the dispatch

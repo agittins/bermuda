@@ -60,7 +60,7 @@ if TYPE_CHECKING:
     from .coordinator import BermudaDataUpdateCoordinator
 
 
-class BermudaDevice(dict):
+class BermudaDevice:
     """
     This class is to represent a single bluetooth "device" tracked by Bermuda.
 
@@ -91,6 +91,10 @@ class BermudaDevice(dict):
         self._coordinator: BermudaDataUpdateCoordinator = coordinator
         self.ref_power: float = 0  # If non-zero, use in place of global ref_power.
         self.ref_power_changed: float = 0  # Stamp for last change to ref_power, for cache zapping.
+        # Per-scanner maximum detection radius in metres (0 = use global max_area_radius).
+        # Only meaningful on scanner devices; the per-scanner analogue of ESPresense's
+        # per-node max_distance so an over-reading proxy can't claim distant devices.
+        self.max_radius: float = 0
         self.options = self._coordinator.options
         self.unique_id: str | None = _address  # mac address formatted.
         self.address_type = BDADDR_TYPE_UNKNOWN
@@ -199,6 +203,12 @@ class BermudaDevice(dict):
                         self._coordinator.irk_manager.register_irk_callback(self.async_handle_pble_callback, _irk_bytes)
                     )
                     self._coordinator.irk_manager.add_irk(_irk_bytes)
+                    # Core only calls back when it next sees an advert for this IRK, and
+                    # HA drops adverts whose payload has not changed, so a device that is
+                    # already being heard can wait minutes after a restart. Seed from the
+                    # sighting HA already holds.
+                    if _current := pble_coordinator.async_last_service_info(self._coordinator.hass, _irk_bytes):
+                        self.async_handle_pble_callback(_current, BluetoothChange.ADVERTISEMENT)
                 else:
                     # We have no idea, currently.
                     # Mark it as such so we don't spend time testing it again.
@@ -261,10 +271,14 @@ class BermudaDevice(dict):
             self._is_remote_scanner = True
         else:
             self._is_remote_scanner = False
-        self._coordinator.scanner_list_add(self)
 
         # Find the relevant device entries in HA for this scanner and apply the names, addresses etc
+        # This must happen before scanner_list_add(), which tells the sensor platform the roster
+        # changed. The platform skips scanners whose wifi mac hasn't resolved yet, and a scanner
+        # that arrives after startup gets no other signal, so it would otherwise go without its
+        # per-scanner entities until the integration is reloaded.
         self.async_as_scanner_resolve_device_entries()
+        self._coordinator.scanner_list_add(self)
 
         # Call the per-update processor as well, but only
         # if this is our first ha_scanner.
@@ -621,6 +635,18 @@ class BermudaDevice(dict):
             # new measurement(s) immediately.
             self.ref_power_changed = monotonic_time_coarse()
 
+    def set_max_radius(self, new_max_radius: float):
+        """
+        Set a per-scanner maximum detection radius (metres) for this scanner.
+
+        Zero means "use the global max_area_radius". While a device is farther
+        than this from the scanner, the scanner will not win that device's Area.
+        No interim recompute is needed: unlike ref_power it does not change any
+        distances, only whether this scanner is eligible to win, which is
+        evaluated live during area resolution each update cycle.
+        """
+        self.max_radius = new_max_radius or 0
+
     def apply_scanner_selection(self, bermuda_advert: BermudaAdvert | None):
         """
         Given a BermudaAdvert entry, apply the distance and area attributes
@@ -829,6 +855,12 @@ class BermudaDevice(dict):
                 for advert in self.adverts.values():
                     advertout[f"{advert.device_address}__{advert.scanner_address}"] = advert.to_dict()
                 out[var] = advertout
+                continue
+            if val is self.area_advert:
+                # A BermudaAdvert, which is not JSON-serialisable. It is already
+                # dumped in full under `adverts` above, so emit just its
+                # identifying repr here to show which one won the area.
+                out[var] = val.__repr__()
                 continue
             out[var] = val
         return out
