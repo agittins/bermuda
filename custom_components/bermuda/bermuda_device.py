@@ -47,6 +47,8 @@ from .const import (
     CONF_DEVTRACK_TIMEOUT,
     DEFAULT_DEVTRACK_TIMEOUT,
     DOMAIN,
+    ESPHOME_CONF_BLUETOOTH_MAC_ADDRESS,
+    ESPHOME_DOMAIN,
     ICON_DEFAULT_AREA,
     ICON_DEFAULT_FLOOR,
     METADEVICE_IBEACON_DEVICE,
@@ -448,8 +450,8 @@ class BermudaDevice:
         config entry, whose unique_id is the device MAC; older entries just won't match.
         """
         source = self._hascanner.source.lower()
-        for entry in self._coordinator.hass.config_entries.async_entries("esphome"):
-            if str(entry.data.get("bluetooth_mac_address") or "").lower() != source:
+        for entry in self._coordinator.hass.config_entries.async_entries(ESPHOME_DOMAIN):
+            if str(entry.data.get(ESPHOME_CONF_BLUETOOTH_MAC_ADDRESS) or "").lower() != source:
                 continue
             entry_mac = (entry.unique_id or "").lower()
             for device in dr.async_entries_for_config_entry(self._coordinator.dr, entry.entry_id):
