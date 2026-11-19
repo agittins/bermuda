@@ -212,20 +212,24 @@ def _init_scanner(address, coordinator):
     return device
 
 
-def _esphome_proxy(hass, name, entry_id, ble_mac, mac, unique_id):
-    """An esphome entry that reports ble_mac as its scanner address, with its registry devices."""
-    entry = MockConfigEntry(
-        domain="esphome", data={"bluetooth_mac_address": ble_mac}, entry_id=entry_id, unique_id=unique_id
-    )
+def _proxy(hass, name, entry_id, ble_mac, mac, link=True):
+    """A proxy's source device and bluetooth device; link adds HA's bluetooth scanner entry naming the source device."""
+    entry = MockConfigEntry(domain="esphome", entry_id=entry_id, unique_id=mac)
     entry.add_to_hass(hass)
     registry = dr.async_get(hass)
-    registry.async_get_or_create(config_entry_id=entry.entry_id, connections={("mac", mac)}, name=name)
+    device = registry.async_get_or_create(config_entry_id=entry.entry_id, connections={("mac", mac)}, name=name)
     registry.async_get_or_create(config_entry_id=entry.entry_id, connections={("bluetooth", ble_mac)}, name="bt")
+    if link:
+        MockConfigEntry(
+            domain="bluetooth",
+            unique_id=ble_mac,
+            data={"source": ble_mac, "source_domain": "esphome", "source_device_id": device.id},
+        ).add_to_hass(hass)
 
 
-async def test_scanner_resolves_through_esphome_entry(hass, registry_coordinator):
-    """A proxy whose MACs don't follow the Espressif layout is linked through its esphome entry."""
-    _esphome_proxy(hass, "Desk Tablet", "kiosk", "02:11:22:33:44:55", "02:66:77:88:99:aa", "02:66:77:88:99:aa")
+async def test_scanner_resolves_through_bluetooth_scanner_entry(hass, registry_coordinator):
+    """A proxy whose MACs don't follow the Espressif layout is linked through HA's scanner entry."""
+    _proxy(hass, "Desk Tablet", "kiosk", "02:11:22:33:44:55", "02:66:77:88:99:aa")
 
     scanner = _init_scanner("02:11:22:33:44:55", registry_coordinator)
 
@@ -235,11 +239,9 @@ async def test_scanner_resolves_through_esphome_entry(hass, registry_coordinator
     assert scanner.name == "Desk Tablet"
 
 
-async def test_esphome_link_wins_over_other_device_in_mac_range(hass, registry_coordinator):
+async def test_scanner_entry_wins_over_other_device_in_mac_range(hass, registry_coordinator):
     """Another integration's entry in the MAC range no longer supplies the scanner's identity or name."""
-    _esphome_proxy(
-        hass, "Breakfast Bluetooth Proxy", "esp", "02:AA:BB:CC:DD:12", "02:aa:bb:cc:dd:10", "02:aa:bb:cc:dd:10"
-    )
+    _proxy(hass, "Breakfast Bluetooth Proxy", "esp", "02:AA:BB:CC:DD:12", "02:aa:bb:cc:dd:10")
     unifi = MockConfigEntry(domain="unifi", entry_id="unifi")
     unifi.add_to_hass(hass)
     dr.async_get(hass).async_get_or_create(
@@ -252,13 +254,26 @@ async def test_esphome_link_wins_over_other_device_in_mac_range(hass, registry_c
     assert scanner.name == "Breakfast Bluetooth Proxy"
 
 
-async def test_scanner_without_matching_entry_resolves_by_mac_offset(hass, registry_coordinator):
-    """Without a matching entry the Espressif-layout search still runs and keeps the WiFi-MAC unique_id."""
-    _esphome_proxy(hass, "Kitchen Proxy", "esp", "AA:AA:AA:AA:AA:AA", "02:aa:bb:cc:dd:20", "02:aa:bb:cc:dd:20")
+async def test_scanner_without_scanner_entry_resolves_by_mac_offset(hass, registry_coordinator):
+    """Without a scanner entry the Espressif-layout search still runs and keeps the WiFi-MAC unique_id."""
+    _proxy(hass, "Kitchen Proxy", "esp", "02:AA:BB:CC:DD:22", "02:aa:bb:cc:dd:20", link=False)
 
     scanner = _init_scanner("02:AA:BB:CC:DD:22", registry_coordinator)
 
     assert scanner.unique_id == scanner.address_wifi_mac == "02:aa:bb:cc:dd:20"
+
+
+async def test_bluetooth_connection_with_scanner_address_wins(hass, registry_coordinator):
+    """Another bluetooth device in the offset range does not supply the scanner's BLE address."""
+    registry = dr.async_get(hass)
+    entry = MockConfigEntry(domain="bluetooth", entry_id="bt")
+    entry.add_to_hass(hass)
+    for address in ("02:AA:BB:CC:DD:31", "02:AA:BB:CC:DD:32", "02:AA:BB:CC:DD:33"):
+        registry.async_get_or_create(config_entry_id=entry.entry_id, connections={("bluetooth", address)})
+
+    scanner = _init_scanner("02:AA:BB:CC:DD:32", registry_coordinator)
+
+    assert scanner.address_ble_mac == "02:aa:bb:cc:dd:32"
 
 
 def test_irk_device_is_seeded_from_the_sighting_core_already_holds(mock_coordinator):

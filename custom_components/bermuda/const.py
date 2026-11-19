@@ -48,9 +48,9 @@ PLATFORMS = [
 # Should probably retreive this from the component, but it's in "DOMAIN" *shrug*
 DOMAIN_PRIVATE_BLE_DEVICE = "private_ble_device"
 
-# consts used by esphome integreation
-ESPHOME_CONF_BLUETOOTH_MAC_ADDRESS: Final = "bluetooth_mac_address"
-ESPHOME_DOMAIN: Final = "esphome"
+# consts used by the bluetooth integration's per-scanner config entries
+BLUETOOTH_CONF_SOURCE_DEVICE_ID: Final = "source_device_id"
+BLUETOOTH_DOMAIN: Final = "bluetooth"
 
 # Signal names we are using:
 SIGNAL_DEVICE_NEW = f"{DOMAIN}-device-new"
