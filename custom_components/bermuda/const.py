@@ -48,6 +48,10 @@ PLATFORMS = [
 # Should probably retreive this from the component, but it's in "DOMAIN" *shrug*
 DOMAIN_PRIVATE_BLE_DEVICE = "private_ble_device"
 
+# consts used by the bluetooth integration's per-scanner config entries
+BLUETOOTH_CONF_SOURCE_DEVICE_ID: Final = "source_device_id"
+BLUETOOTH_DOMAIN: Final = "bluetooth"
+
 # Signal names we are using:
 SIGNAL_DEVICE_NEW = f"{DOMAIN}-device-new"
 SIGNAL_SCANNERS_CHANGED = f"{DOMAIN}-scanners-changed"

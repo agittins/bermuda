@@ -7,6 +7,8 @@ import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from homeassistant.components.bluetooth import BaseHaScanner, BaseHaRemoteScanner
+from homeassistant.helpers import device_registry as dr
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 from homeassistant.helpers.json import JSONEncoder
 from custom_components.bermuda.bermuda_device import BermudaDevice
 from custom_components.bermuda.const import ICON_DEFAULT_AREA, ICON_DEFAULT_FLOOR
@@ -180,6 +182,98 @@ def test_repr(bermuda_device):
     """Test __repr__ method."""
     repr_str = repr(bermuda_device)
     assert repr_str == f"{bermuda_device.name} [{bermuda_device.address}]"
+
+
+# ---------------------------------------------------------------------------
+# Scanner resolution against the real registries
+# ---------------------------------------------------------------------------
+
+UNIFI_MAC = "02:aa:bb:cc:dd:13"  # another integration's entry inside the proxy's MAC window
+
+
+@pytest.fixture
+def registry_coordinator(hass):
+    """Coordinator mock backed by the real device registry."""
+    coordinator = MagicMock()
+    coordinator.hass = hass
+    coordinator.dr = dr.async_get(hass)
+    coordinator.options = {}
+    coordinator.hass_version_min_2025_4 = True
+    return coordinator
+
+
+def _init_scanner(address, coordinator):
+    scanner = MagicMock(spec=BaseHaRemoteScanner)
+    scanner.source = address
+    scanner.name = f"scanner {address}"
+    scanner.time_since_last_detection.return_value = 5.0
+    device = BermudaDevice(address=address, coordinator=coordinator)
+    device.async_as_scanner_init(scanner)
+    return device
+
+
+def _proxy(hass, name, entry_id, ble_mac, mac, link=True):
+    """A proxy's source device and bluetooth device; link adds HA's bluetooth scanner entry naming the source device."""
+    entry = MockConfigEntry(domain="esphome", entry_id=entry_id, unique_id=mac)
+    entry.add_to_hass(hass)
+    registry = dr.async_get(hass)
+    device = registry.async_get_or_create(config_entry_id=entry.entry_id, connections={("mac", mac)}, name=name)
+    registry.async_get_or_create(config_entry_id=entry.entry_id, connections={("bluetooth", ble_mac)}, name="bt")
+    if link:
+        MockConfigEntry(
+            domain="bluetooth",
+            unique_id=ble_mac,
+            data={"source": ble_mac, "source_domain": "esphome", "source_device_id": device.id},
+        ).add_to_hass(hass)
+
+
+async def test_scanner_resolves_through_bluetooth_scanner_entry(hass, registry_coordinator):
+    """A proxy whose MACs don't follow the Espressif layout is linked through HA's scanner entry."""
+    _proxy(hass, "Desk Tablet", "kiosk", "02:11:22:33:44:55", "02:66:77:88:99:aa")
+
+    scanner = _init_scanner("02:11:22:33:44:55", registry_coordinator)
+
+    assert scanner.address_wifi_mac == "02:66:77:88:99:aa"
+    assert scanner.unique_id == "02:66:77:88:99:aa"
+    assert scanner.address_ble_mac == "02:11:22:33:44:55"
+    assert scanner.name == "Desk Tablet"
+
+
+async def test_scanner_entry_wins_over_other_device_in_mac_range(hass, registry_coordinator):
+    """Another integration's entry in the MAC range no longer supplies the scanner's identity or name."""
+    _proxy(hass, "Breakfast Bluetooth Proxy", "esp", "02:AA:BB:CC:DD:12", "02:aa:bb:cc:dd:10")
+    unifi = MockConfigEntry(domain="unifi", entry_id="unifi")
+    unifi.add_to_hass(hass)
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=unifi.entry_id, connections={("mac", UNIFI_MAC)}, name="proxy"
+    )
+
+    scanner = _init_scanner("02:AA:BB:CC:DD:12", registry_coordinator)
+
+    assert scanner.unique_id == scanner.address_wifi_mac == "02:aa:bb:cc:dd:10"
+    assert scanner.name == "Breakfast Bluetooth Proxy"
+
+
+async def test_scanner_without_scanner_entry_resolves_by_mac_offset(hass, registry_coordinator):
+    """Without a scanner entry the Espressif-layout search still runs and keeps the WiFi-MAC unique_id."""
+    _proxy(hass, "Kitchen Proxy", "esp", "02:AA:BB:CC:DD:22", "02:aa:bb:cc:dd:20", link=False)
+
+    scanner = _init_scanner("02:AA:BB:CC:DD:22", registry_coordinator)
+
+    assert scanner.unique_id == scanner.address_wifi_mac == "02:aa:bb:cc:dd:20"
+
+
+async def test_bluetooth_connection_with_scanner_address_wins(hass, registry_coordinator):
+    """Another bluetooth device in the offset range does not supply the scanner's BLE address."""
+    registry = dr.async_get(hass)
+    entry = MockConfigEntry(domain="bluetooth", entry_id="bt")
+    entry.add_to_hass(hass)
+    for address in ("02:AA:BB:CC:DD:31", "02:AA:BB:CC:DD:32", "02:AA:BB:CC:DD:33"):
+        registry.async_get_or_create(config_entry_id=entry.entry_id, connections={("bluetooth", address)})
+
+    scanner = _init_scanner("02:AA:BB:CC:DD:32", registry_coordinator)
+
+    assert scanner.address_ble_mac == "02:aa:bb:cc:dd:32"
 
 
 def test_irk_device_is_seeded_from_the_sighting_core_already_holds(mock_coordinator):
