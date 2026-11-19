@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Bermuda BLE Trilateration",
-        "description": "Αν χρειάζεστε βοήθεια για τη διαμόρφωση, ρίξτε μια ματιά στη σελίδα [GitHub](https://github.com/agittins/bermuda)",
+        "description": "Αν χρειάζεστε βοήθεια για τη διαμόρφωση, ρίξτε μια ματιά στη σελίδα [GitHub]({url})",
         "data": {
           "username": "Όνομα Χρήστη",
           "password": "Κωδικός Πρόσβασης"
