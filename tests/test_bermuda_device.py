@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from homeassistant.components.bluetooth import BaseHaScanner, BaseHaRemoteScanner
 from homeassistant.helpers.json import JSONEncoder
+from custom_components.bermuda.bermuda_advert import BermudaAdvert
 from custom_components.bermuda.bermuda_device import BermudaDevice
 from custom_components.bermuda.const import ICON_DEFAULT_AREA, ICON_DEFAULT_FLOOR
 
@@ -199,3 +200,24 @@ def test_irk_device_with_nothing_heard_yet_starts_empty(mock_coordinator):
         pble.async_last_service_info.return_value = None
         device = BermudaDevice(address="0123456789abcdef0123456789abcdef", coordinator=mock_coordinator)
     assert device.metadevice_sources == []
+
+
+def test_metadevice_does_not_recalculate_its_sources_adverts(mock_coordinator, bermuda_scanner):
+    """Each advert is calculated once per update cycle, even when a metadevice shares it.
+
+    update_metadevices() copies a source device's advert *objects* into the metadevice,
+    and both devices are in coordinator.devices. If both calculated the shared advert,
+    it would add two history entries per cycle and halve the smoothing window.
+    """
+    source = BermudaDevice(address="AA:BB:CC:DD:EE:01", coordinator=mock_coordinator)
+    source.process_advertisement(bermuda_scanner, MagicMock())
+    with patch("custom_components.bermuda.bermuda_device.pble_coordinator"):
+        metadevice = BermudaDevice(address="0123456789abcdef0123456789abcdef", coordinator=mock_coordinator)
+    metadevice.adverts.update(source.adverts)  # as update_metadevices() does
+    (shared,) = source.adverts.values()
+
+    with patch.object(BermudaAdvert, "calculate_data", autospec=True) as calculate:
+        source.calculate_data()
+        metadevice.calculate_data()
+
+    assert [call.args[0] for call in calculate.call_args_list] == [shared]
