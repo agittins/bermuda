@@ -77,7 +77,7 @@ def test_scanner_resolves_wifi_mac_before_announcing(bermuda_scanner, mock_coord
     without per-scanner entities until a reload.
     """
     wifi_mac = "11:22:33:44:55:64"
-    mock_coordinator.dr.devices.get_entries.return_value = [
+    mock_coordinator.dr.async_get_devices.return_value = [
         SimpleNamespace(
             id="shelly_device",
             name="Shelly",
@@ -199,3 +199,34 @@ def test_irk_device_with_nothing_heard_yet_starts_empty(mock_coordinator):
         pble.async_last_service_info.return_value = None
         device = BermudaDevice(address="0123456789abcdef0123456789abcdef", coordinator=mock_coordinator)
     assert device.metadevice_sources == []
+
+
+@pytest.mark.parametrize("modern_registry", [True, False])
+def test_scanner_resolves_devices_through_public_lookup(
+    bermuda_scanner, mock_coordinator, mock_scanner, modern_registry
+):
+    """Resolve scanner device entries without the deprecated `devices` mapping."""
+    entry = SimpleNamespace(
+        id="bluetooth_device",
+        connections={("bluetooth", "11:22:33:44:55:66")},
+        identifiers=set(),
+        name="Bluetooth scanner",
+        name_by_user=None,
+        area_id="living_room",
+    )
+    lookup = MagicMock(return_value=[entry])
+    if modern_registry:
+        # No `devices` attribute at all: any legacy access would raise here.
+        registry = SimpleNamespace(async_get_devices=lookup)
+    else:
+        registry = SimpleNamespace(devices=SimpleNamespace(get_entries=lookup))
+    mock_coordinator.dr = registry
+    bermuda_scanner._hascanner = mock_scanner
+
+    with patch.object(bermuda_scanner, "_update_area_and_floor") as update_area:
+        bermuda_scanner.async_as_scanner_resolve_device_entries()
+
+    lookup.assert_called_once()
+    assert bermuda_scanner.entry_id == "bluetooth_device"
+    assert bermuda_scanner.name_devreg == "Bluetooth scanner"
+    update_area.assert_called_once_with("living_room")

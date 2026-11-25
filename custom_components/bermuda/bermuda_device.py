@@ -331,8 +331,16 @@ class BermudaDevice:
                 connlist.add(("mac", altmac))
                 maclist.add(altmac)
 
-        # Requires 2025.3
-        devreg_devices = self._coordinator.dr.devices.get_entries(None, connections=connlist)
+        # `DeviceRegistry.devices` is a deprecated mapping view: using it as a
+        # mapping or calling its lookup methods is reported at setup and stops
+        # working in Home Assistant 2027.9.0. HA 2026.8 added
+        # `async_get_devices()`, the same lookup without the deprecation; keep
+        # the old call for older cores, which hacs.json still supports (2025.3).
+        dev_reg = self._coordinator.dr
+        if hasattr(dev_reg, "async_get_devices"):
+            devreg_devices = dev_reg.async_get_devices(connections=connlist)
+        else:
+            devreg_devices = dev_reg.devices.get_entries(None, connections=connlist)
         devreg_count = 0  # can't len() an iterable.
         devreg_stringlist = ""  # for debug logging
         for devreg_device in devreg_devices:
