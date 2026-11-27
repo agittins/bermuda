@@ -144,7 +144,12 @@ class BermudaIrkManager:
             )
             result = self._update_saved_mac(address, irk)
             if result != irk:
-                _LOGGER.error("Something went wrong saving macirk: %s %s is not irk %s", address, result, irk)
+                _LOGGER.error(
+                    "Something went wrong saving macirk: %s %s... is not irk %s...",
+                    address,
+                    result.hex()[:4],
+                    irk.hex()[:4],
+                )
             self.fire_callbacks(irk, address)
             return result
         if int(address[0], 16) & 0x04:
@@ -159,7 +164,7 @@ class BermudaIrkManager:
             # No existing, save anew.
             expiry = floor(monotonic_time_coarse() + PRUNE_TIME_KNOWN_IRK)
             self._macs[address] = ResolvableMAC(address, expiry, irk)
-            _LOGGER.debug("Saved NEW Macirk pair: %s %s", address, irk.hex())
+            _LOGGER.debug("Saved NEW Macirk pair: %s %s...", address, irk.hex()[:4])
             return irk
 
         if macirk.irk != irk:
@@ -236,10 +241,10 @@ class BermudaIrkManager:
                 if macirk.irk == IrkTypes.NO_KNOWN_IRK_MATCH.value:
                     irkout = IrkTypes.NO_KNOWN_IRK_MATCH.name
                 else:
-                    irkout = macirk.irk.hex()
+                    irkout = f"{macirk.irk.hex()[:4]}..."
                 macs[macirk.mac] = {"irk": irkout, "expires_in": floor(macirk.expires - nowstamp)}
 
         return {
-            "irks": [irk.hex() for irk in self._irks],
+            "irks": [f"{irk.hex()[:4]}..." for irk in self._irks],
             "macs": macs,
         }

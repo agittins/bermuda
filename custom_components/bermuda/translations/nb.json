@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Bermuda BLE Trilateration",
-        "description": "Hvis du trenger hjep til konfigurasjon ta en titt her: https://github.com/agittins/bermuda",
+        "description": "Hvis du trenger hjep til konfigurasjon ta en titt her: {url}",
         "data": {
           "username": "Brukernavn",
           "password": "Passord"
