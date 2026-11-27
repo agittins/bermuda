@@ -11,7 +11,7 @@ on:
     - cron: "0 0 * * *"
 
 env:
-  DEFAULT_PYTHON: 3.13
+  DEFAULT_PYTHON: 3.14
   UV_SYSTEM_PYTHON: 1
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
           enable-cache: true
 
       - name: Set up Python ${{ env.DEFAULT_PYTHON }}
-        uses: actions/setup-python@v7.0.0
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
           cache: "pip"
@@ -91,7 +91,7 @@ jobs:
           enable-cache: true
 
       - name: Setup Python ${{ env.DEFAULT_PYTHON }}
-        uses: "actions/setup-python@v7.0.0"
+        uses: "actions/setup-python@v7.1.0"
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
 
