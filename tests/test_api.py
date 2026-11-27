@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from homeassistant.util import slugify
 
@@ -65,7 +65,8 @@ def test_snapshot_exposes_per_scanner_readings_without_entities():
     coordinator, with no entity in the state machine involved."""
     hass = _make_hass(_make_coordinator())
 
-    snapshot = async_get_advert_snapshot(hass)
+    with patch("custom_components.bermuda.api.monotonic_time_coarse", return_value=1001.0):
+        snapshot = async_get_advert_snapshot(hass)
 
     assert snapshot is not None
     assert snapshot["version"] == SNAPSHOT_VERSION
@@ -80,7 +81,7 @@ def test_snapshot_exposes_per_scanner_readings_without_entities():
     assert scanner["area_name"] == "Master Bedroom"
     # age is derived from the advert stamp, so a scanner that has gone quiet
     # ages out even though its last value never changed.
-    assert scanner["age"] is not None and scanner["age"] > 0
+    assert scanner["age"] == 2.0
 
 
 def test_scanner_slug_tracks_current_name_and_address_is_the_join_key():
@@ -225,3 +226,19 @@ def test_coordinator_supports_listener_subscription():
     # sanity: MagicMock spec would accept anything, so assert on the real class
     assert callable(BermudaDataUpdateCoordinator.async_add_listener)
     _ = MagicMock  # keep import used for parity with other test modules
+
+
+def test_newest_advert_per_scanner_wins_regardless_of_order():
+    """A metadevice has one advert per source address; the freshest must be exposed."""
+    coordinator = _make_coordinator()
+    device = coordinator.devices["aa:bb:cc:dd:ee:ff"]
+    (old_key, old) = next(iter(device.adverts.items()))
+    newer = SimpleNamespace(**{**vars(old), "rssi_distance": 9.9, "stamp": old.stamp + 5})
+    # Newest first, so plain dict iteration order would let the older one win.
+    device.adverts = {("11:11:11:11:11:11", old_key[1]): newer, old_key: old}
+
+    scanner = async_get_advert_snapshot(_make_hass(coordinator))["devices"]["aa:bb:cc:dd:ee:ff"]["scanners"][
+        "f1:74:64:00:00:01"
+    ]
+
+    assert scanner["distance"] == 9.9

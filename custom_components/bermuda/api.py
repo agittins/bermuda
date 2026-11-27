@@ -145,7 +145,9 @@ def async_get_advert_snapshot(
             continue
 
         scanners: dict[str, Any] = {}
-        for advert in device_adverts.values():
+        # A metadevice holds one advert per (source address, scanner); the oldest
+        # first order lets the newest per scanner win, like device.get_scanner().
+        for advert in sorted(device_adverts.values(), key=lambda a: a.stamp or 0):
             scanner_device = coordinator.devices.get(advert.scanner_address) or advert.scanner_device
             # The scanner DEVICE's name is authoritative; advert.name is a copy
             # taken when the advert was created and goes stale if the scanner is
