@@ -2,9 +2,12 @@
 Tests for BermudaDevice class in bermuda_device.py.
 """
 
+import json
 import pytest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from homeassistant.components.bluetooth import BaseHaScanner, BaseHaRemoteScanner
+from homeassistant.helpers.json import JSONEncoder
 from custom_components.bermuda.bermuda_device import BermudaDevice
 from custom_components.bermuda.const import ICON_DEFAULT_AREA, ICON_DEFAULT_FLOOR
 
@@ -65,6 +68,32 @@ def test_async_as_scanner_init(bermuda_scanner, mock_scanner):
     assert bermuda_scanner.is_remote_scanner is False
 
 
+def test_scanner_resolves_wifi_mac_before_announcing(bermuda_scanner, mock_coordinator, mock_remote_scanner):
+    """The roster-changed signal must see the scanner's resolved wifi mac.
+
+    scanner_list_add() dispatches SIGNAL_SCANNERS_CHANGED, and the sensor platform
+    skips scanners whose wifi mac is still None. A scanner that registers after
+    startup gets no other signal, so announcing it before resolving left it
+    without per-scanner entities until a reload.
+    """
+    wifi_mac = "11:22:33:44:55:64"
+    mock_coordinator.dr.devices.get_entries.return_value = [
+        SimpleNamespace(
+            id="shelly_device",
+            name="Shelly",
+            name_by_user=None,
+            area_id=None,
+            connections={("mac", wifi_mac)},
+        )
+    ]
+    seen_at_announce = []
+    mock_coordinator.scanner_list_add.side_effect = lambda scanner: seen_at_announce.append(scanner.address_wifi_mac)
+
+    bermuda_scanner.async_as_scanner_init(mock_remote_scanner)
+
+    assert seen_at_announce == [wifi_mac]
+
+
 def test_async_as_scanner_update(bermuda_scanner, mock_scanner):
     """Test async_as_scanner_update method."""
     bermuda_scanner.async_as_scanner_update(mock_scanner)
@@ -117,6 +146,34 @@ def test_to_dict(bermuda_device):
     device_dict = bermuda_device.to_dict()
     assert isinstance(device_dict, dict)
     assert device_dict["address"] == "aa:bb:cc:dd:ee:ff"
+
+
+def test_to_dict_is_json_serialisable_with_area_advert(bermuda_device, bermuda_scanner):
+    """to_dict() output must be JSON-serialisable, including area_advert.
+
+    Regression test: to_dict() passed the area_advert BermudaAdvert object
+    through unconverted. That happened to survive JSON encoding only because
+    BermudaAdvert subclassed dict (it serialised as a useless empty {}).
+    Once that unused dict base was removed, the dump_devices service call and
+    the config-entry diagnostics download - which both serialise this output -
+    failed outright with "Unable to serialize to JSON. Bad data found at
+    $.service_response.<device>.area_advert".
+    """
+    advertisement_data = MagicMock()
+    bermuda_device.process_advertisement(bermuda_scanner, advertisement_data)
+    advert = next(iter(bermuda_device.adverts.values()))
+    bermuda_device.area_advert = advert
+
+    device_dict = bermuda_device.to_dict()
+
+    # The advert must be reduced to an identifying string, not passed through
+    # as a BermudaAdvert object (which the JSON encoder cannot handle, and
+    # which the old dict-subclass behaviour silently rendered as an empty {}).
+    assert isinstance(device_dict["area_advert"], str)
+    assert device_dict["area_advert"] == repr(advert)
+
+    # That field must survive the encoder HA serialises service responses with.
+    json.dumps(device_dict["area_advert"], cls=JSONEncoder)
 
 
 def test_repr(bermuda_device):
@@ -223,3 +280,20 @@ def test_scanner_registry_match_ignores_a_neighbour_two_above(mock_coordinator, 
         assert scanner.address_ble_mac == "1c:69:7a:44:69:6e"
         assert scanner.unique_id == "1c:69:7a:44:69:6c"
         assert scanner.name_devreg == "ESP32-S3 Bluetooth Proxy 44696c"
+def test_irk_device_is_seeded_from_the_sighting_core_already_holds(mock_coordinator):
+    """After a restart core only calls back on the next delivered advert, which
+    can be minutes away for a phone whose payload has not changed. A new IRK
+    device takes the current address core already knows."""
+    info = MagicMock()
+    info.address = "4A:BB:CC:DD:EE:FF"
+    with patch("custom_components.bermuda.bermuda_device.pble_coordinator") as pble:
+        pble.async_last_service_info.return_value = info
+        device = BermudaDevice(address="0123456789abcdef0123456789abcdef", coordinator=mock_coordinator)
+    assert device.metadevice_sources == ["4a:bb:cc:dd:ee:ff"]
+
+
+def test_irk_device_with_nothing_heard_yet_starts_empty(mock_coordinator):
+    with patch("custom_components.bermuda.bermuda_device.pble_coordinator") as pble:
+        pble.async_last_service_info.return_value = None
+        device = BermudaDevice(address="0123456789abcdef0123456789abcdef", coordinator=mock_coordinator)
+    assert device.metadevice_sources == []
