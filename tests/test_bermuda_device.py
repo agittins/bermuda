@@ -280,6 +280,8 @@ def test_scanner_registry_match_ignores_a_neighbour_two_above(mock_coordinator, 
         assert scanner.address_ble_mac == "1c:69:7a:44:69:6e"
         assert scanner.unique_id == "1c:69:7a:44:69:6c"
         assert scanner.name_devreg == "ESP32-S3 Bluetooth Proxy 44696c"
+
+
 def test_irk_device_is_seeded_from_the_sighting_core_already_holds(mock_coordinator):
     """After a restart core only calls back on the next delivered advert, which
     can be minutes away for a phone whose payload has not changed. A new IRK
