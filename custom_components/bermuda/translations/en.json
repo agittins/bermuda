@@ -95,6 +95,10 @@
     }
   },
   "services": {
+    "reload_code": {
+      "name": "Reload code",
+      "description": "For development. Unloads Bermuda, imports its Python files from disk again and sets it up, so a code change takes effect without restarting Home Assistant. Config flow and manifest changes still need a restart."
+    },
     "dump_devices": {
       "name": "Dump Devices",
       "description": "Returns the internal data structure, optionally limited to the given address(es). Includes the rssi and other info from each scanner",
