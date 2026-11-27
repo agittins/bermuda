@@ -110,7 +110,11 @@ def test_prune_devices_tolerates_duplicate_prune_entries(monkeypatch):
         metadevice_sources=[],
         adverts={},
     )
-    metadevice = SimpleNamespace(metadevice_sources=[fresh_irk, stale_irk], adverts={})
+    metadevice = SimpleNamespace(
+        metadevice_sources=[fresh_irk, stale_irk],
+        adverts={},
+        metadevice_type=set(),
+    )
 
     devices = {fresh_irk: fresh_device, stale_irk: stale_device}
 
