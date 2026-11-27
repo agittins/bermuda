@@ -27,6 +27,7 @@ from homeassistant.components.private_ble_device import coordinator as pble_coor
 from homeassistant.const import STATE_HOME, STATE_NOT_HOME
 from homeassistant.core import callback
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.util import slugify
 
@@ -42,6 +43,8 @@ from .const import (
     BDADDR_TYPE_RANDOM_STATIC,
     BDADDR_TYPE_RANDOM_UNRESOLVABLE,
     BDADDR_TYPE_UNKNOWN,
+    BLUETOOTH_CONF_SOURCE_DEVICE_ID,
+    BLUETOOTH_DOMAIN,
     CONF_DEVICES,
     CONF_DEVTRACK_TIMEOUT,
     DEFAULT_DEVTRACK_TIMEOUT,
@@ -322,6 +325,15 @@ class BermudaDevice:
         scanner_devreg_mac_address = None
         scanner_devreg_bt_address = None
 
+        # HA records which device registered each remote scanner. Prefer that link
+        # over the MAC-offset search below, which can land on another integration's
+        # device in the same MAC range and finds nothing for proxies whose MACs don't
+        # follow the Espressif layout. Correcting such a match changes the scanner's
+        # unique_id, and with it the unique_ids of its distance entities.
+        source_match = self._async_source_device_for_scanner()
+        if source_match is not None:
+            scanner_devreg_mac, scanner_devreg_mac_address = source_match
+
         # We don't know which address is being reported/used. So create the full
         # range of possible addresses, and see what we find in the device registry,
         # on the *assumption* that there won't be overlap between devices.
@@ -335,16 +347,20 @@ class BermudaDevice:
         devreg_devices = self._coordinator.dr.devices.get_entries(None, connections=connlist)
         devreg_count = 0  # can't len() an iterable.
         devreg_stringlist = ""  # for debug logging
+        source = self._hascanner.source.lower()
+        bt_exact = False
         for devreg_device in devreg_devices:
             devreg_count += 1
             # _LOGGER.debug("DevregScanner: %s", devreg_device)
             devreg_stringlist += f"** {devreg_device.name_by_user or devreg_device.name}\n"
             for conn in devreg_device.connections:
-                if conn[0] == "bluetooth":
-                    # Bluetooth component's device!
+                if conn[0] == "bluetooth" and not bt_exact:
+                    # Bluetooth component's device! The scanner's own address beats
+                    # another device's in the offset range.
                     scanner_devreg_bt = devreg_device
                     scanner_devreg_bt_address = conn[1].lower()
-                if conn[0] == "mac":
+                    bt_exact = scanner_devreg_bt_address == source
+                if conn[0] == "mac" and source_match is None:
                     # ESPHome, Shelly
                     scanner_devreg_mac = devreg_device
                     scanner_devreg_mac_address = conn[1]
@@ -428,6 +444,25 @@ class BermudaDevice:
         self.make_name()
 
         self._update_area_and_floor(_area_id)
+
+    def _async_source_device_for_scanner(self) -> tuple[dr.DeviceEntry, str] | None:
+        """
+        Return the device, and its MAC, that registered this scanner.
+
+        HA's bluetooth integration keeps a config entry per remote scanner, keyed by the
+        scanner address, that names the device which registered it.
+        """
+        bt_entry = self._coordinator.hass.config_entries.async_entry_for_domain_unique_id(
+            BLUETOOTH_DOMAIN, self._hascanner.source
+        )
+        if bt_entry is None or not (device_id := bt_entry.data.get(BLUETOOTH_CONF_SOURCE_DEVICE_ID)):
+            return None
+        if (device := self._coordinator.dr.async_get(device_id)) is None:
+            return None
+        for conn in device.connections:
+            if conn[0] == "mac":
+                return device, conn[1]
+        return None
 
     def _update_area_and_floor(self, area_id: str | None):
         """Given an area_id, update the area and floor properties."""
