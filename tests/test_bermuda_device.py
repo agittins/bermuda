@@ -52,6 +52,32 @@ def bermuda_scanner(mock_coordinator):
     return BermudaDevice(address="11:22:33:44:55:66", coordinator=mock_coordinator)
 
 
+def test_update_area_and_floor_reads_the_floor_level(bermuda_device):
+    """floor_level comes from the floor registry entry (it used to be assigned to itself)."""
+    bermuda_device.ar.async_get_area.return_value = SimpleNamespace(name="Loft", icon=None, floor_id="top")
+    bermuda_device.fr.async_get_floor.return_value = SimpleNamespace(name="Top", icon=None, level=2)
+    bermuda_device._update_area_and_floor("loft")
+    assert (bermuda_device.area_id, bermuda_device.area_name) == ("loft", "Loft")
+    assert (bermuda_device.floor_id, bermuda_device.floor_name, bermuda_device.floor_level) == ("top", "Top", 2)
+    # An area without a floor clears the level along with the rest.
+    bermuda_device.ar.async_get_area.return_value = SimpleNamespace(name="Yard", icon=None, floor_id=None)
+    bermuda_device._update_area_and_floor("yard")
+    assert (bermuda_device.floor_id, bermuda_device.floor_name, bermuda_device.floor_level) == (None, None, None)
+
+
+def test_update_area_and_floor_with_a_deleted_area_clears_area_id(bermuda_device):
+    """An area id that no longer resolves must not stay on the device."""
+    bermuda_device.ar.async_get_area.return_value = SimpleNamespace(name="Loft", icon=None, floor_id="top")
+    bermuda_device.fr.async_get_floor.return_value = SimpleNamespace(name="Top", icon=None, level=2)
+    bermuda_device._update_area_and_floor("loft")
+    bermuda_device.ar.async_get_area.return_value = None
+    bermuda_device._update_area_and_floor("loft")
+    assert bermuda_device.area is None
+    assert bermuda_device.area_id is None
+    assert bermuda_device.area_name.startswith("Invalid Area")
+    assert (bermuda_device.floor_id, bermuda_device.floor_name, bermuda_device.floor_level) == (None, None, None)
+
+
 def test_bermuda_device_initialization(bermuda_device):
     """Test BermudaDevice initialization."""
     assert bermuda_device.address == "aa:bb:cc:dd:ee:ff"
