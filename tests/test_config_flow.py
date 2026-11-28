@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import re
+from types import MethodType, SimpleNamespace
+from unittest.mock import patch
+
+from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant import config_entries
 from homeassistant import data_entry_flow
 from homeassistant.core import HomeAssistant
@@ -10,8 +15,17 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.bermuda.config_flow import BermudaOptionsFlowHandler
+from custom_components.bermuda.const import CONF_DEVICES
+from custom_components.bermuda.const import CONF_RSSI_OFFSETS
+from custom_components.bermuda.const import CONF_SAVE_AND_CLOSE
+from custom_components.bermuda.const import CONF_SCANNER_INFO
+from custom_components.bermuda.const import DEFAULT_ATTENUATION
+from custom_components.bermuda.const import DEFAULT_REF_POWER
 from custom_components.bermuda.const import DOMAIN
 from custom_components.bermuda.const import NAME
+from custom_components.bermuda.coordinator import BermudaDataUpdateCoordinator
+from custom_components.bermuda.util import rssi_to_metres
 
 # from .const import MOCK_OPTIONS
 from .const import MOCK_CONFIG
@@ -91,3 +105,166 @@ async def test_options_flow(hass: HomeAssistant, setup_bermuda_entry: MockConfig
 
     # Verify that the options were updated
     assert setup_bermuda_entry.options == MOCK_OPTIONS_GLOBALS
+
+
+def _fake_scanners() -> list[SimpleNamespace]:
+    """
+    Scanners deliberately listed in neither name nor distance order.
+
+    hist_rssi is what each scanner has recorded for the device being calibrated:
+    hist_rssi[0] is the most recent reading, and None means the scanner has not
+    seen the device at all.
+    """
+    now = monotonic_time_coarse()
+    return [
+        SimpleNamespace(address="aa:bb:cc:dd:ee:03", name="Scanner C", last_seen=now, hist_rssi=[-70, -50]),
+        SimpleNamespace(address="aa:bb:cc:dd:ee:01", name="scanner a", last_seen=now, hist_rssi=[-60]),
+        SimpleNamespace(address="aa:bb:cc:dd:ee:04", name="Scanner D", last_seen=now, hist_rssi=[-50, -90]),
+        SimpleNamespace(address="aa:bb:cc:dd:ee:06", name="Scanner F", last_seen=now, hist_rssi=[-60]),
+        SimpleNamespace(address="aa:bb:cc:dd:ee:05", name="Scanner E", last_seen=now, hist_rssi=[]),
+        SimpleNamespace(address="aa:bb:cc:dd:ee:02", name="Scanner B", last_seen=now, hist_rssi=None),
+    ]
+
+
+def _fake_coordinator(scanners: list[SimpleNamespace]) -> SimpleNamespace:
+    """A minimal stand-in coordinator that still uses the real scanner-summary methods."""
+    coordinator = SimpleNamespace(
+        devices={scanner.address: scanner for scanner in scanners},
+        # Lists rather than sets so that the "unsorted" order is deterministic.
+        scanner_list=[scanner.address for scanner in scanners],
+        get_scanners=scanners,
+    )
+    for method in ("get_active_scanner_summary", "count_active_scanners", "count_active_devices"):
+        setattr(coordinator, method, MethodType(getattr(BermudaDataUpdateCoordinator, method), coordinator))
+    return coordinator
+
+
+def test_active_scanner_summary_sorted_by_name():
+    """The scanner summary (used for the status table) is sorted by name, see #758."""
+    coordinator = _fake_coordinator(_fake_scanners())
+    names = [scanner["name"] for scanner in coordinator.get_active_scanner_summary()]
+    assert names == ["scanner a", "Scanner B", "Scanner C", "Scanner D", "Scanner E", "Scanner F"]
+
+
+async def test_options_flow_calibration2_scanner_sorting(hass: HomeAssistant):
+    """
+    Scanners are shown in a predictable order in the options flow, see #758.
+
+    - the scanner status table on the options menu is sorted by name
+    - the rssi offset edit list is sorted by name
+    - the calibration results table is sorted by most recent distance, nearest first
+    """
+    scanners = _fake_scanners()
+    coordinator = _fake_coordinator(scanners)
+    config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_CONFIG, entry_id="test", title=NAME)
+    config_entry.add_to_hass(hass)
+    config_entry.runtime_data = SimpleNamespace(coordinator=coordinator)
+
+    flow = BermudaOptionsFlowHandler(config_entry)
+    flow.hass = hass
+    flow.handler = config_entry.entry_id
+
+    # Options menu: scanner status table sorted by name
+    result = await flow.async_step_init()
+    assert result.get("type") == FlowResultType.MENU
+    status_names = re.findall(r"^\| (.+?)\| \[", result["description_placeholders"]["status"], re.MULTILINE)
+    assert status_names == ["scanner a", "Scanner B", "Scanner C", "Scanner D", "Scanner E", "Scanner F"]
+
+    # Calibration 2: the editable offsets are sorted by name
+    result = await flow.async_step_calibration2_scanners()
+    assert result.get("type") == FlowResultType.FORM
+    scanner_info_default = next(
+        key.default() for key in result["data_schema"].schema if key.schema == CONF_SCANNER_INFO
+    )
+    assert list(scanner_info_default) == ["scanner a", "Scanner B", "Scanner C", "Scanner D", "Scanner E", "Scanner F"]
+
+    # Submit (without saving) to get the results table, sorted by most recent distance.
+    device = SimpleNamespace(
+        get_scanner=lambda address: (
+            None if (hist := coordinator.devices[address].hist_rssi) is None else SimpleNamespace(hist_rssi=hist)
+        )
+    )
+    # Submit with offsets in reverse name order; the form should redisplay them in name order.
+    submitted_scanner_info = dict(reversed(list(scanner_info_default.items())))
+    with patch.object(BermudaOptionsFlowHandler, "_get_bermuda_device_from_registry", return_value=device):
+        result = await flow.async_step_calibration2_scanners(
+            user_input={
+                CONF_DEVICES: "some_device_registry_id",
+                CONF_SCANNER_INFO: submitted_scanner_info,
+                CONF_SAVE_AND_CLOSE: False,
+            }
+        )
+    assert result.get("type") == FlowResultType.FORM
+    scanner_info_default = next(
+        key.default() for key in result["data_schema"].schema if key.schema == CONF_SCANNER_INFO
+    )
+    assert list(scanner_info_default) == ["scanner a", "Scanner B", "Scanner C", "Scanner D", "Scanner E", "Scanner F"]
+
+    results_rows = re.findall(r"^\|([^|]+)\|", result["description_placeholders"]["suffix"], re.MULTILINE)
+    # Header row first, then nearest to furthest. Scanner B has not seen the device so is not shown,
+    # and Scanner E has no history so sorts last. Scanner F has the same latest distance as scanner a,
+    # so the name tie-breaker should put scanner a first.
+    assert results_rows == [
+        " Scanner ",
+        "---",
+        "Scanner D",
+        "scanner a",
+        "Scanner F",
+        "Scanner C",
+        "Scanner E",
+    ]
+
+
+async def test_calibration2_preview_uses_saved_offset_for_omitted_scanner(hass: HomeAssistant):
+    """The distance preview must use the same offsets as the form, see #836 review."""
+    scanners = _fake_scanners()
+    coordinator = _fake_coordinator(scanners)
+    scanner_a = scanners[1]  # "scanner a", with a saved offset that is not submitted
+    saved_offset = -20
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=MOCK_CONFIG,
+        options={CONF_RSSI_OFFSETS: {scanner_a.address: saved_offset}},
+        entry_id="test-preview-offsets",
+        title=NAME,
+    )
+    config_entry.add_to_hass(hass)
+    config_entry.runtime_data = SimpleNamespace(coordinator=coordinator)
+
+    flow = BermudaOptionsFlowHandler(config_entry)
+    flow.hass = hass
+    flow.handler = config_entry.entry_id
+    await flow.async_step_init()
+
+    device = SimpleNamespace(
+        get_scanner=lambda address: (
+            None if (hist := coordinator.devices[address].hist_rssi) is None else SimpleNamespace(hist_rssi=hist)
+        )
+    )
+
+    # Omit scanner a from the submission: the form falls back to its saved offset.
+    with patch.object(BermudaOptionsFlowHandler, "_get_bermuda_device_from_registry", return_value=device):
+        result = await flow.async_step_calibration2_scanners(
+            user_input={
+                CONF_DEVICES: "some_device_registry_id",
+                CONF_SCANNER_INFO: {"Scanner C": 0},
+                CONF_SAVE_AND_CLOSE: False,
+            }
+        )
+
+    assert result.get("type") == FlowResultType.FORM
+    defaults = next(key.default() for key in result["data_schema"].schema if key.schema == CONF_SCANNER_INFO)
+    assert defaults[scanner_a.name] == saved_offset
+
+    expected_distance = rssi_to_metres(
+        scanner_a.hist_rssi[0] + saved_offset,
+        DEFAULT_REF_POWER,
+        DEFAULT_ATTENUATION,
+    )
+    row = next(
+        line
+        for line in result["description_placeholders"]["suffix"].splitlines()
+        if line.startswith(f"|{scanner_a.name}|")
+    )
+    displayed_distance = row.split("|")[2].strip().strip("`").strip()
+    assert displayed_distance == f"{expected_distance:.2f}"
