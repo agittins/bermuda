@@ -13,3 +13,10 @@ dump_devices:
       required: false
       example: "False"
       default: false
+
+reload_code:
+  name: Reload code
+  description: >-
+    For development. Unloads Bermuda, imports its Python files from disk again
+    and sets it up, so a code change takes effect without restarting Home
+    Assistant. Config flow and manifest changes still need a restart.
