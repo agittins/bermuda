@@ -116,6 +116,7 @@ def _fake_scanners() -> list[SimpleNamespace]:
         SimpleNamespace(address="aa:bb:cc:dd:ee:03", name="Scanner C", last_seen=now, hist_rssi=[-70, -50]),
         SimpleNamespace(address="aa:bb:cc:dd:ee:01", name="scanner a", last_seen=now, hist_rssi=[-60]),
         SimpleNamespace(address="aa:bb:cc:dd:ee:04", name="Scanner D", last_seen=now, hist_rssi=[-50, -90]),
+        SimpleNamespace(address="aa:bb:cc:dd:ee:06", name="Scanner F", last_seen=now, hist_rssi=[-60]),
         SimpleNamespace(address="aa:bb:cc:dd:ee:05", name="Scanner E", last_seen=now, hist_rssi=[]),
         SimpleNamespace(address="aa:bb:cc:dd:ee:02", name="Scanner B", last_seen=now, hist_rssi=None),
     ]
@@ -138,7 +139,7 @@ def test_active_scanner_summary_sorted_by_name():
     """The scanner summary (used for the status table) is sorted by name, see #758."""
     coordinator = _fake_coordinator(_fake_scanners())
     names = [scanner["name"] for scanner in coordinator.get_active_scanner_summary()]
-    assert names == ["scanner a", "Scanner B", "Scanner C", "Scanner D", "Scanner E"]
+    assert names == ["scanner a", "Scanner B", "Scanner C", "Scanner D", "Scanner E", "Scanner F"]
 
 
 async def test_options_flow_calibration2_scanner_sorting(hass: HomeAssistant):
@@ -163,7 +164,7 @@ async def test_options_flow_calibration2_scanner_sorting(hass: HomeAssistant):
     result = await flow.async_step_init()
     assert result.get("type") == FlowResultType.MENU
     status_names = re.findall(r"^\| (.+?)\| \[", result["description_placeholders"]["status"], re.MULTILINE)
-    assert status_names == ["scanner a", "Scanner B", "Scanner C", "Scanner D", "Scanner E"]
+    assert status_names == ["scanner a", "Scanner B", "Scanner C", "Scanner D", "Scanner E", "Scanner F"]
 
     # Calibration 2: the editable offsets are sorted by name
     result = await flow.async_step_calibration2_scanners()
@@ -171,7 +172,7 @@ async def test_options_flow_calibration2_scanner_sorting(hass: HomeAssistant):
     scanner_info_default = next(
         key.default() for key in result["data_schema"].schema if key.schema == CONF_SCANNER_INFO
     )
-    assert list(scanner_info_default) == ["scanner a", "Scanner B", "Scanner C", "Scanner D", "Scanner E"]
+    assert list(scanner_info_default) == ["scanner a", "Scanner B", "Scanner C", "Scanner D", "Scanner E", "Scanner F"]
 
     # Submit (without saving) to get the results table, sorted by most recent distance.
     device = SimpleNamespace(
@@ -179,16 +180,32 @@ async def test_options_flow_calibration2_scanner_sorting(hass: HomeAssistant):
             None if (hist := coordinator.devices[address].hist_rssi) is None else SimpleNamespace(hist_rssi=hist)
         )
     )
+    # Submit with offsets in reverse name order; the form should redisplay them in name order.
+    submitted_scanner_info = dict(reversed(list(scanner_info_default.items())))
     with patch.object(BermudaOptionsFlowHandler, "_get_bermuda_device_from_registry", return_value=device):
         result = await flow.async_step_calibration2_scanners(
             user_input={
                 CONF_DEVICES: "some_device_registry_id",
-                CONF_SCANNER_INFO: scanner_info_default,
+                CONF_SCANNER_INFO: submitted_scanner_info,
                 CONF_SAVE_AND_CLOSE: False,
             }
         )
     assert result.get("type") == FlowResultType.FORM
+    scanner_info_default = next(
+        key.default() for key in result["data_schema"].schema if key.schema == CONF_SCANNER_INFO
+    )
+    assert list(scanner_info_default) == ["scanner a", "Scanner B", "Scanner C", "Scanner D", "Scanner E", "Scanner F"]
+
     results_rows = re.findall(r"^\|([^|]+)\|", result["description_placeholders"]["suffix"], re.MULTILINE)
     # Header row first, then nearest to furthest. Scanner B has not seen the device so is not shown,
-    # and Scanner E has no history so sorts last.
-    assert results_rows == [" Scanner ", "---", "Scanner D", "scanner a", "Scanner C", "Scanner E"]
+    # and Scanner E has no history so sorts last. Scanner F has the same latest distance as scanner a,
+    # so the name tie-breaker should put scanner a first.
+    assert results_rows == [
+        " Scanner ",
+        "---",
+        "Scanner D",
+        "scanner a",
+        "Scanner F",
+        "Scanner C",
+        "Scanner E",
+    ]

@@ -506,6 +506,11 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
         for scanner in self._scanner_addresses_by_name():
             scanner_name = self.coordinator.devices[scanner].name
             rssi_offset_dict[scanner_name] = saved_rssi_offsets.get(scanner, 0)
+        scanner_info_default = (
+            rssi_offset_dict
+            if not self._last_scanner_info
+            else {name: self._last_scanner_info.get(name, rssi_offset_dict.get(name, 0)) for name in rssi_offset_dict}
+        )
         data_schema = {
             vol.Required(
                 CONF_DEVICES,
@@ -513,7 +518,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             ): DeviceSelector(DeviceSelectorConfig(integration=DOMAIN)),
             vol.Required(
                 CONF_SCANNER_INFO,
-                default=rssi_offset_dict if not self._last_scanner_info else self._last_scanner_info,
+                default=scanner_info_default,
             ): ObjectSelector(),
             vol.Optional(CONF_SAVE_AND_CLOSE, default=False): vol.Coerce(bool),
         }
@@ -543,10 +548,14 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
                     ]
             # Format the results for display (HA has full markdown support!)
             results_str = "| Scanner | 0 | 1 | 2 | 3 | 4 |\n|---|---:|---:|---:|---:|---:|"
-            # Nearest scanner (by most recent distance) first. Ties and scanners
-            # without any history keep their by-name order.
+
+            # Nearest scanner (by most recent distance) first. Ties keep their
+            # by-name order, and scanners without any history sort last.
+            # (the sort key is a tuple, first value places empty history last,
+            # second value returns distance (the else 0 has no effect due to first check,
+            # but guards against keyError).
             for scanner_name, distances in sorted(
-                results.items(), key=lambda item: item[1][0] if item[1] else DISTANCE_INFINITE
+                results.items(), key=lambda item: (not item[1], item[1][0] if item[1] else 0)
             ):
                 results_str += f"\n|{scanner_name}|"
                 for i in range(5):
