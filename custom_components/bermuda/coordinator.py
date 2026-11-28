@@ -26,6 +26,7 @@ from homeassistant.core import (
     SupportsResponse,
     callback,
 )
+from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import (
     area_registry as ar,
 )
@@ -605,6 +606,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         Returns a list of dicts suitable for seeing which scanners
         are configured in the system and how long it has been since
         each has returned an advertisement.
+
+        Sorted by scanner name, so the list is stable and easy to scan by eye.
         """
         stamp = monotonic_time_coarse()
         return [
@@ -614,7 +617,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 "last_stamp": scannerdev.last_seen,
                 "last_stamp_age": stamp - scannerdev.last_seen,
             }
-            for scannerdev in self.get_scanners
+            for scannerdev in sorted(self.get_scanners, key=lambda scanner: str(scanner.name).casefold())
         ]
 
     def _get_device(self, address: str) -> BermudaDevice | None:
@@ -735,9 +738,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         nowstamp = monotonic_time_coarse()
         _timestamp_cutoff = nowstamp - min(PRUNE_TIME_DEFAULT, PRUNE_TIME_UNKNOWN_IRK)
 
-        # Initialise ha_scanners if we haven't already
-        if self._scanner_init_pending:
-            self._refresh_scanners(force=True)
+        # Pick up scanners that have come or gone, and re-read them all in
+        # full if something has asked for that since the last cycle.
+        self._refresh_scanners()
 
         for ha_scanner in self._hascanners:
             # Create / Get the BermudaDevice for this scanner
@@ -1534,7 +1537,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         timestamps). If it detects that the list of scanners has changed (or is called
         with force=True) then the full list of scanners will be rebuild by calling
         _rebuild_scanners.
+
+        A pending request (startup, or a device registry change that might
+        concern a scanner) is served once, as a forced rebuild, and cleared:
+        it used to stay set for good, which only went unnoticed because
+        force was ignored.
         """
+        if self._scanner_init_pending:
+            self._scanner_init_pending = False
+            force = True
         self._rebuild_scanner_list(force=force)
 
     def _rebuild_scanner_list(self, force=False):
@@ -1544,18 +1555,21 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         Called on every update (via _refresh_scanners) but exits *quickly*
         *unless*:
           - the scanner set has changed or
-          - force=True or
-          - self._force_full_scanner_init=True
+          - force=True
+
+        With force=True and an unchanged set, every scanner re-reads its
+        device registry entries, so an area or name the user has changed is
+        picked up without a reload.
         """
         _new_ha_scanners = set[BaseHaScanner]
         # Using new API in 2025.2
         _new_ha_scanners = set(self._manager.async_current_scanners())
 
-        if _new_ha_scanners is self._hascanners or _new_ha_scanners == self._hascanners:
+        if not force and (_new_ha_scanners is self._hascanners or _new_ha_scanners == self._hascanners):
             # No changes.
             return
 
-        _LOGGER.debug("HA Base Scanner Set has changed, rebuilding.")
+        _LOGGER.debug("Rebuilding scanner list (forced: %s).", force)
         self._hascanners = _new_ha_scanners
 
         self._async_purge_removed_scanners()
@@ -1569,7 +1583,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         for hascanner in self._hascanners:
             scanner_address = mac_norm(hascanner.source)
             bermuda_scanner = self._get_or_create_device(scanner_address)
-            bermuda_scanner.async_as_scanner_init(hascanner)
+            bermuda_scanner.async_as_scanner_init(hascanner, force=force)
 
             if bermuda_scanner.area_id is None:
                 _scanners_without_areas.append(f"{bermuda_scanner.name} [{bermuda_scanner.address}]")
@@ -1638,6 +1652,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def service_dump_devices(self, call: ServiceCall) -> ServiceResponse:  # pylint: disable=unused-argument;
         """Return a dump of beacon advertisements by receiver."""
+        # The dump lists every address this installation has heard, with names,
+        # areas and timings. Home Assistant lets any signed-in user call any
+        # service, so a call that carries a user (from the websocket or REST
+        # API) must come from an administrator. Automations, scripts and the
+        # diagnostics download carry no user and are unaffected.
+        if (user_id := call.context.user_id) is not None:
+            user = await self.hass.auth.async_get_user(user_id)
+            if user is None or not user.is_admin:
+                raise Unauthorized(context=call.context)
         out = {}
         addresses_input = call.data.get("addresses", "")
         redact = call.data.get("redact", False)
