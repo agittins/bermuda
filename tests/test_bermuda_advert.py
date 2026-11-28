@@ -4,9 +4,14 @@ Tests for BermudaAdvert class in bermuda_advert.py.
 
 import pytest
 from unittest.mock import MagicMock, patch
-from custom_components.bermuda.bermuda_advert import BermudaAdvert
+from custom_components.bermuda.bermuda_advert import BermudaAdvert, dumpable_property
 from custom_components.bermuda.bermuda_device import BermudaDevice
 from bleak.backends.scanner import AdvertisementData
+from custom_components.bermuda.const import CONF_ATTENUATION
+from custom_components.bermuda.const import CONF_MAX_VELOCITY
+from custom_components.bermuda.const import CONF_REF_POWER
+from custom_components.bermuda.const import CONF_RSSI_OFFSETS
+from custom_components.bermuda.const import CONF_SMOOTHING_SAMPLES
 
 
 @pytest.fixture
@@ -52,12 +57,15 @@ def mock_advertisement_data():
 @pytest.fixture
 def bermuda_advert(mock_parent_device, mock_advertisement_data, mock_scanner_device):
     """Fixture for creating a BermudaAdvert instance."""
+    # Use the real option constants: literal "CONF_*" strings leave these
+    # settings as None on the advert, which can hide bugs or raise on
+    # comparison with a measured velocity.
     options = {
-        "CONF_RSSI_OFFSETS": {"11:22:33:44:55:66": 5},
-        "CONF_REF_POWER": -59,
-        "CONF_ATTENUATION": 2.0,
-        "CONF_MAX_VELOCITY": 3.0,
-        "CONF_SMOOTHING_SAMPLES": 5,
+        CONF_RSSI_OFFSETS: {"11:22:33:44:55:66": 5},
+        CONF_REF_POWER: -59,
+        CONF_ATTENUATION: 2.0,
+        CONF_MAX_VELOCITY: 3.0,
+        CONF_SMOOTHING_SAMPLES: 5,
     }
     ba = BermudaAdvert(
         parent_device=mock_parent_device,
@@ -65,8 +73,18 @@ def bermuda_advert(mock_parent_device, mock_advertisement_data, mock_scanner_dev
         options=options,
         scanner_device=mock_scanner_device,
     )
-    ba.name = "foo name"
     return ba
+
+
+def test_advert_reads_scanner_name_and_area_through(bermuda_advert, mock_scanner_device):
+    """A scanner moved or renamed shows on its live adverts at once, not at the next rebuild."""
+    assert bermuda_advert.name == "Mock Scanner"
+    assert (bermuda_advert.area_id, bermuda_advert.area_name) == ("server_room", "server room")
+    mock_scanner_device.name = "Renamed Scanner"
+    mock_scanner_device.area_id = "garage"
+    mock_scanner_device.area_name = "Garage"
+    assert bermuda_advert.name == "Renamed Scanner"
+    assert (bermuda_advert.area_id, bermuda_advert.area_name) == ("garage", "Garage")
 
 
 def test_bermuda_advert_initialization(bermuda_advert):
@@ -110,12 +128,19 @@ def test_calculate_data_device_arrived(bermuda_advert):
     assert bermuda_advert.rssi_distance == 5.0
 
 
-def test_calculate_data_device_away(bermuda_advert):
+def test_calculate_data_device_away(bermuda_advert, monkeypatch):
     """Test calculate_data method when device is away."""
-    bermuda_advert.stamp = 0.0
+    # A stamp of 0 is only stale once the host has been up longer than
+    # DISTANCE_TIMEOUT. Pin the clock so this passes on a fresh CI runner too.
+    monkeypatch.setattr("custom_components.bermuda.bermuda_advert.monotonic_time_coarse", lambda: 5_000.0)
+
+    bermuda_advert.rssi_distance = 4.2
+    bermuda_advert.hist_distance_by_interval = [4.2]
+    bermuda_advert.stamp = 50.0
     bermuda_advert.new_stamp = None
     bermuda_advert.calculate_data()
     assert bermuda_advert.rssi_distance is None
+    assert bermuda_advert.hist_distance_by_interval == []
 
 
 def test_to_dict(bermuda_advert):
@@ -124,6 +149,20 @@ def test_to_dict(bermuda_advert):
     assert isinstance(advert_dict, dict)
     assert advert_dict["device_address"] == "aa:bb:cc:dd:ee:ff"
     assert advert_dict["scanner_address"] == "11:22:33:44:55:66"
+    assert advert_dict["name"] == "Mock Scanner"
+    assert advert_dict["area_id"] == "server_room"
+    assert advert_dict["area_name"] == "server room"
+
+
+def test_to_dict_only_discovers_dumpable_properties(bermuda_advert, monkeypatch):
+    """Only properties explicitly marked dumpable change the dump."""
+    monkeypatch.setattr(type(bermuda_advert), "plain_property", property(lambda self: "plain"), raising=False)
+    monkeypatch.setattr(
+        type(bermuda_advert), "extra_dump_field", dumpable_property(lambda self: "extra value"), raising=False
+    )
+    advert_dict = bermuda_advert.to_dict()
+    assert "plain_property" not in advert_dict
+    assert advert_dict["extra_dump_field"] == "extra value"
 
 
 def test_repr(bermuda_advert):

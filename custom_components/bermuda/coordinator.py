@@ -6,9 +6,9 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-import aiofiles
 import voluptuous as vol
 import yaml
 from bluetooth_data_tools import monotonic_time_coarse
@@ -26,6 +26,7 @@ from homeassistant.core import (
     SupportsResponse,
     callback,
 )
+from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import (
     area_registry as ar,
 )
@@ -113,6 +114,15 @@ Cancellable = Callable[[], None]
 # so we're just disabling it for the whole file.
 # https://github.com/astral-sh/ruff/issues/4244
 # ruff: noqa: PLR1730
+
+
+def _load_manufacturer_yaml(file_path: str, key: str) -> list[dict]:
+    """Parse one of the bundled Bluetooth SIG yaml files. Blocking, so run it in the executor."""
+    # libyaml's CSafeLoader (present in Home Assistant's PyYAML) is about 8x faster
+    # than the pure-Python SafeLoader that yaml.safe_load() uses.
+    loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+    with Path(file_path).open(encoding="utf-8") as f:
+        return yaml.load(f, Loader=loader)[key]  # noqa: S506 - only SafeLoader or CSafeLoader
 
 
 class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
@@ -383,16 +393,14 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             file_path = self.hass.config.path(
                 f"custom_components/{DOMAIN}/manufacturer_identification/member_uuids.yaml"
             )
-            async with aiofiles.open(file_path) as f:
-                mi_yaml = yaml.safe_load(await f.read())["uuids"]
+            mi_yaml = await self.hass.async_add_executor_job(_load_manufacturer_yaml, file_path, "uuids")
             self.member_uuids: dict[int, str] = {member["uuid"]: member["name"] for member in mi_yaml}
 
             # https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/company_identifiers/company_identifiers.yaml
             file_path = self.hass.config.path(
                 f"custom_components/{DOMAIN}/manufacturer_identification/company_identifiers.yaml"
             )
-            async with aiofiles.open(file_path) as f:
-                ci_yaml = yaml.safe_load(await f.read())["company_identifiers"]
+            ci_yaml = await self.hass.async_add_executor_job(_load_manufacturer_yaml, file_path, "company_identifiers")
             self.company_uuids: dict[int, str] = {member["value"]: member["name"] for member in ci_yaml}
         finally:
             # Ensure that an issue reading these files (which are optional, really) doesn't stop the whole show.
@@ -598,6 +606,8 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         Returns a list of dicts suitable for seeing which scanners
         are configured in the system and how long it has been since
         each has returned an advertisement.
+
+        Sorted by scanner name, so the list is stable and easy to scan by eye.
         """
         stamp = monotonic_time_coarse()
         return [
@@ -607,7 +617,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 "last_stamp": scannerdev.last_seen,
                 "last_stamp_age": stamp - scannerdev.last_seen,
             }
-            for scannerdev in self.get_scanners
+            for scannerdev in sorted(self.get_scanners, key=lambda scanner: str(scanner.name).casefold())
         ]
 
     def _get_device(self, address: str) -> BermudaDevice | None:
@@ -728,9 +738,9 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         nowstamp = monotonic_time_coarse()
         _timestamp_cutoff = nowstamp - min(PRUNE_TIME_DEFAULT, PRUNE_TIME_UNKNOWN_IRK)
 
-        # Initialise ha_scanners if we haven't already
-        if self._scanner_init_pending:
-            self._refresh_scanners(force=True)
+        # Pick up scanners that have come or gone, and re-read them all in
+        # full if something has asked for that since the last cycle.
+        self._refresh_scanners()
 
         for ha_scanner in self._hascanners:
             # Create / Get the BermudaDevice for this scanner
@@ -799,6 +809,24 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         prune_list: list[str] = []  # list of addresses to be pruned
         prunable_stamps: dict[str, float] = {}  # dict of potential prunees if we need to be more aggressive.
 
+        # An iBeacon nobody tracks and nobody has heard for a day goes, along
+        # with its metadevice. Without this, the source-keeper loop below
+        # always keeps each beacon's newest source, so every distinct beacon
+        # ever heard (a shop, a neighbour, a passing car) stayed in devices and
+        # metadevices for good. Once the metadevice is gone its source is an
+        # ordinary stale MAC and the sweep below prunes it.
+        stale_beacons = [
+            address
+            for address, metadevice in self.metadevices.items()
+            if METADEVICE_IBEACON_DEVICE in metadevice.metadevice_type
+            and not metadevice.create_sensor
+            and (metadevice.last_seen or 0) < nowstamp - PRUNE_TIME_DEFAULT
+        ]
+        for address in stale_beacons:
+            _LOGGER.debug("Pruning stale untracked iBeacon %s", address)
+            del self.metadevices[address]
+            self.devices.pop(address, None)
+
         metadevice_source_keepers = set()
         for metadevice in self.metadevices.values():
             if len(metadevice.metadevice_sources) > 0:
@@ -831,7 +859,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             # should totally be pruned if it's no longer around.
             if (
                 device_address not in metadevice_source_keepers
-                and device not in self.metadevices
+                and device_address not in self.metadevices
                 and device_address not in self.scanner_list
                 and (not device.create_sensor)  # Not if we track the device
                 and (not device.is_scanner)  # redundant, but whatevs.
@@ -908,10 +936,24 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         # Prune_list is now ready to action. It contains no keepers, and is already
         # expanded if necessary to meet quota, as much as we can.
 
-        # Prune the source devices
-        for device_address in prune_list:
+        # Prune the source devices.
+        #
+        # Note that prune_list can legitimately contain the same address twice:
+        # it is appended to from three independent places (the metadevice-source
+        # sweep, the main device sweep, and the quota top-up), and those
+        # selections overlap. A stale IRK source older than PRUNE_TIME_KNOWN_IRK
+        # (960s) satisfies *both* the metadevice sweep's `last_seen >
+        # stamp_known_irk` test and the main sweep's `last_seen <
+        # stamp_unknown_irk` (240s) test, so it gets appended by each. Deleting
+        # it a second time used to raise KeyError, which propagated out of
+        # prune_devices and aborted the entire update cycle
+        # ("Unexpected error fetching bermuda data").
+        #
+        # Use pop() rather than del so a repeated address is a no-op, and
+        # de-duplicate for the debug log while preserving order.
+        for device_address in dict.fromkeys(prune_list):
             _LOGGER.debug("Acting on prune list for %s", device_address)
-            del self.devices[device_address]
+            self.devices.pop(device_address, None)
 
         # Clean out the scanners dicts in metadevices and scanners
         # (scanners will have entries if they are also beacons, although
@@ -1187,15 +1229,20 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # anything that isn't already set to something interesting, overwrite
                 # it with the new device's data.
-                for key, val in source_device.items():
-                    if val is any(
-                        [
-                            source_device.name_bt_local_name,
-                            source_device.name_bt_serviceinfo,
-                            source_device.manufacturer,
-                        ]
-                    ) and metadevice[key] in [None, False]:
-                        metadevice[key] = val
+                #
+                # NOTE: This used to be written as a generic `for key, val in
+                # source_device.items(): ...` loop with `val is any([...])`, on the
+                # assumption that BermudaDevice's dict-subclassing made attribute
+                # access available via .items()/[key]. It doesn't - BermudaDevice
+                # stores everything as plain instance attributes, so .items() was
+                # always empty and this block was silently a no-op. `is any([...])`
+                # was also wrong (any() returns a bool; that's an identity check
+                # against True/False, not a membership test). Iterate the specific
+                # attributes we actually mean to copy instead.
+                for attr in ("name_bt_local_name", "name_bt_serviceinfo", "manufacturer"):
+                    val = getattr(source_device, attr)
+                    if val not in (None, False) and getattr(metadevice, attr) in (None, False):
+                        setattr(metadevice, attr, val)
                         _want_name_update = True
 
                 if _want_name_update:
@@ -1203,17 +1250,10 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # Anything that's VERY interesting, overwrite it regardless of what's already there:
                 # INTERESTING:
-                for key, val in source_device.items():
-                    if val is any(
-                        [
-                            source_device.beacon_major,
-                            source_device.beacon_minor,
-                            source_device.beacon_power,
-                            source_device.beacon_unique_id,
-                            source_device.beacon_uuid,
-                        ]
-                    ):
-                        metadevice[key] = val
+                for attr in ("beacon_major", "beacon_minor", "beacon_power", "beacon_unique_id", "beacon_uuid"):
+                    val = getattr(source_device, attr)
+                    if val not in (None, False):
+                        setattr(metadevice, attr, val)
                         # _want_name_update = True
             # Done iterating sources, remove any to be dropped
             for source in _sources_to_remove:
@@ -1360,9 +1400,13 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
                 continue
 
             # If we are too far away or don't have an area, we cannot win...
+            # A scanner may define its own tighter max_radius (per-scanner override
+            # of the global CONF_MAX_RADIUS; 0 = use global) so that an over-reading
+            # proxy cannot claim a device that is really beyond its useful range.
+            challenger_max_radius = challenger.scanner_device.max_radius or _max_radius
             if (
                 challenger.rssi_distance is None
-                or challenger.rssi_distance > _max_radius
+                or challenger.rssi_distance > challenger_max_radius
                 or challenger.area_id is None
             ):
                 continue
@@ -1373,9 +1417,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
             # If closest scanner lacks critical data, we win.
             if (
-                incumbent is None
-                or incumbent.rssi_distance is None
-                or incumbent.area_id is None
+                incumbent is None or incumbent.rssi_distance is None or incumbent.area_id is None
                 # Extra checks that are redundant but make linting easier later...
                 # or closest_advert.hist_distance_by_interval is None
             ):
@@ -1446,8 +1488,12 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
             pdiff_historical = 0.15  # Percentage difference required to win on historical test
             if len(challenger.hist_distance_by_interval) > min_history:  # we have enough history, let's go..
                 tests.hist_min_max = (
-                    min(incumbent.hist_distance_by_interval[:history_window]),  # The closest that the incumbent has been
-                    max(challenger.hist_distance_by_interval[:history_window]),  # The **furthest** we have been in that time
+                    min(
+                        incumbent.hist_distance_by_interval[:history_window]
+                    ),  # The closest that the incumbent has been
+                    max(
+                        challenger.hist_distance_by_interval[:history_window]
+                    ),  # The **furthest** we have been in that time
                 )
                 if (
                     tests.hist_min_max[1] < tests.hist_min_max[0]
@@ -1491,7 +1537,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         timestamps). If it detects that the list of scanners has changed (or is called
         with force=True) then the full list of scanners will be rebuild by calling
         _rebuild_scanners.
+
+        A pending request (startup, or a device registry change that might
+        concern a scanner) is served once, as a forced rebuild, and cleared:
+        it used to stay set for good, which only went unnoticed because
+        force was ignored.
         """
+        if self._scanner_init_pending:
+            self._scanner_init_pending = False
+            force = True
         self._rebuild_scanner_list(force=force)
 
     def _rebuild_scanner_list(self, force=False):
@@ -1501,18 +1555,21 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         Called on every update (via _refresh_scanners) but exits *quickly*
         *unless*:
           - the scanner set has changed or
-          - force=True or
-          - self._force_full_scanner_init=True
+          - force=True
+
+        With force=True and an unchanged set, every scanner re-reads its
+        device registry entries, so an area or name the user has changed is
+        picked up without a reload.
         """
         _new_ha_scanners = set[BaseHaScanner]
         # Using new API in 2025.2
         _new_ha_scanners = set(self._manager.async_current_scanners())
 
-        if _new_ha_scanners is self._hascanners or _new_ha_scanners == self._hascanners:
+        if not force and (_new_ha_scanners is self._hascanners or _new_ha_scanners == self._hascanners):
             # No changes.
             return
 
-        _LOGGER.debug("HA Base Scanner Set has changed, rebuilding.")
+        _LOGGER.debug("Rebuilding scanner list (forced: %s).", force)
         self._hascanners = _new_ha_scanners
 
         self._async_purge_removed_scanners()
@@ -1526,7 +1583,7 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
         for hascanner in self._hascanners:
             scanner_address = mac_norm(hascanner.source)
             bermuda_scanner = self._get_or_create_device(scanner_address)
-            bermuda_scanner.async_as_scanner_init(hascanner)
+            bermuda_scanner.async_as_scanner_init(hascanner, force=force)
 
             if bermuda_scanner.area_id is None:
                 _scanners_without_areas.append(f"{bermuda_scanner.name} [{bermuda_scanner.address}]")
@@ -1595,6 +1652,15 @@ class BermudaDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def service_dump_devices(self, call: ServiceCall) -> ServiceResponse:  # pylint: disable=unused-argument;
         """Return a dump of beacon advertisements by receiver."""
+        # The dump lists every address this installation has heard, with names,
+        # areas and timings. Home Assistant lets any signed-in user call any
+        # service, so a call that carries a user (from the websocket or REST
+        # API) must come from an administrator. Automations, scripts and the
+        # diagnostics download carry no user and are unaffected.
+        if (user_id := call.context.user_id) is not None:
+            user = await self.hass.auth.async_get_user(user_id)
+            if user is None or not user.is_admin:
+                raise Unauthorized(context=call.context)
         out = {}
         addresses_input = call.data.get("addresses", "")
         redact = call.data.get("redact", False)
