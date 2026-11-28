@@ -3,7 +3,7 @@
         "step": {
             "user": {
                 "title": "Bermuda BLE 삼각측량",
-                "description": "설정에 도움이 필요하시면 [GitHub 페이지](https://github.com/agittins/bermuda)를 참조하세요.",
+                "description": "설정에 도움이 필요하시면 [GitHub 페이지]({url})를 참조하세요.",
                 "data": {
                     "username": "사용자 이름",
                     "password": "비밀번호"
