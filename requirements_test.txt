@@ -1,5 +1,4 @@
 -r requirements.txt
 pytest-homeassistant-custom-component
-#==0.13.50
 pre-commit
-# AJG 2024-04-07: github not completing tests due to this.
+serialx
