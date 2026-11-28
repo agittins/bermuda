@@ -3,10 +3,51 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from custom_components.bermuda.bermuda_device import BermudaDevice
+from custom_components.bermuda.const import BDADDR_TYPE_OTHER
 from custom_components.bermuda.coordinator import BermudaDataUpdateCoordinator
+
+
+@pytest.mark.parametrize("prunable_count, quota", [(2, 1), (0, 1), (3, 4), (3, 3), (3, 2), (3, 5)])
+def test_prune_devices_quota(prunable_count, quota):
+    """Prune the oldest eligible devices up to the quota, preserving tracked devices."""
+    devices = {
+        "tracked": MagicMock(create_sensor=True, metadevice_sources=[], adverts={}),
+        "also_tracked": MagicMock(create_sensor=True, metadevice_sources=[], adverts={}),
+    }
+    # Insert newest first so the test also checks timestamp ordering.
+    for index in reversed(range(prunable_count)):
+        devices[f"device_{index}"] = MagicMock(
+            create_sensor=False,
+            is_scanner=False,
+            address_type=BDADDR_TYPE_OTHER,
+            last_seen=900 + index,
+            metadevice_sources=[],
+            adverts={},
+        )
+    coordinator = SimpleNamespace(
+        devices=devices,
+        metadevices={},
+        scanner_list=[],
+        stamp_last_prune=0,
+        stamp_redactions_expiry=None,
+        irk_manager=MagicMock(),
+    )
+
+    with (
+        patch("custom_components.bermuda.coordinator.monotonic_time_coarse", return_value=1000),
+        patch("custom_components.bermuda.coordinator.PRUNE_MAX_COUNT", quota),
+    ):
+        BermudaDataUpdateCoordinator.prune_devices(coordinator, force_pruning=True)
+
+    prune_count = min(prunable_count, max(0, prunable_count + 2 - quota))
+    assert set(devices) == {"tracked", "also_tracked"} | {
+        f"device_{index}" for index in range(prune_count, prunable_count)
+    }
 
 
 def test_handle_devreg_malformed_identifier():
