@@ -7,6 +7,11 @@ from unittest.mock import MagicMock, patch
 from custom_components.bermuda.bermuda_advert import BermudaAdvert, dumpable_property
 from custom_components.bermuda.bermuda_device import BermudaDevice
 from bleak.backends.scanner import AdvertisementData
+from custom_components.bermuda.const import CONF_ATTENUATION
+from custom_components.bermuda.const import CONF_MAX_VELOCITY
+from custom_components.bermuda.const import CONF_REF_POWER
+from custom_components.bermuda.const import CONF_RSSI_OFFSETS
+from custom_components.bermuda.const import CONF_SMOOTHING_SAMPLES
 
 
 @pytest.fixture
@@ -52,12 +57,15 @@ def mock_advertisement_data():
 @pytest.fixture
 def bermuda_advert(mock_parent_device, mock_advertisement_data, mock_scanner_device):
     """Fixture for creating a BermudaAdvert instance."""
+    # Use the real option constants: literal "CONF_*" strings leave these
+    # settings as None on the advert, which can hide bugs or raise on
+    # comparison with a measured velocity.
     options = {
-        "CONF_RSSI_OFFSETS": {"11:22:33:44:55:66": 5},
-        "CONF_REF_POWER": -59,
-        "CONF_ATTENUATION": 2.0,
-        "CONF_MAX_VELOCITY": 3.0,
-        "CONF_SMOOTHING_SAMPLES": 5,
+        CONF_RSSI_OFFSETS: {"11:22:33:44:55:66": 5},
+        CONF_REF_POWER: -59,
+        CONF_ATTENUATION: 2.0,
+        CONF_MAX_VELOCITY: 3.0,
+        CONF_SMOOTHING_SAMPLES: 5,
     }
     ba = BermudaAdvert(
         parent_device=mock_parent_device,
@@ -120,12 +128,19 @@ def test_calculate_data_device_arrived(bermuda_advert):
     assert bermuda_advert.rssi_distance == 5.0
 
 
-def test_calculate_data_device_away(bermuda_advert):
+def test_calculate_data_device_away(bermuda_advert, monkeypatch):
     """Test calculate_data method when device is away."""
-    bermuda_advert.stamp = 0.0
+    # A stamp of 0 is only stale once the host has been up longer than
+    # DISTANCE_TIMEOUT. Pin the clock so this passes on a fresh CI runner too.
+    monkeypatch.setattr("custom_components.bermuda.bermuda_advert.monotonic_time_coarse", lambda: 5_000.0)
+
+    bermuda_advert.rssi_distance = 4.2
+    bermuda_advert.hist_distance_by_interval = [4.2]
+    bermuda_advert.stamp = 50.0
     bermuda_advert.new_stamp = None
     bermuda_advert.calculate_data()
     assert bermuda_advert.rssi_distance is None
+    assert bermuda_advert.hist_distance_by_interval == []
 
 
 def test_to_dict(bermuda_advert):
