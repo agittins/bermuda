@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Bermuda BLE Trilateration",
-        "description": "If you need help with the configuration have a look at our [GitHub page](https://github.com/agittins/bermuda)",
+        "description": "If you need help with the configuration have a look at our [GitHub page]({url})",
         "data": {
           "username": "Username",
           "password": "Password"
