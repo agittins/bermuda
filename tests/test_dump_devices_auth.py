@@ -19,9 +19,7 @@ async def test_dump_devices_requires_an_admin_when_a_user_is_attached():
     async def async_get_user(user_id):
         return users.get(user_id)
 
-    coordinator = SimpleNamespace(
-        hass=SimpleNamespace(auth=SimpleNamespace(async_get_user=async_get_user)), devices={}
-    )
+    coordinator = SimpleNamespace(hass=SimpleNamespace(auth=SimpleNamespace(async_get_user=async_get_user)), devices={})
     dump = BermudaDataUpdateCoordinator.service_dump_devices
 
     def call(user_id):
