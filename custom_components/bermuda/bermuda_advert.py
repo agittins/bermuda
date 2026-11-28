@@ -45,6 +45,15 @@ if TYPE_CHECKING:
 # ruff: noqa: PLR1730
 
 
+class _DumpableProperty(property):
+    """A property whose current value belongs in dump_devices output."""
+
+
+def dumpable_property(func):
+    """Mark a read-through property for inclusion in BermudaAdvert.to_dict()."""
+    return _DumpableProperty(func)
+
+
 class BermudaAdvert:
     """
     Represents details from a scanner relevant to a specific device.
@@ -119,15 +128,15 @@ class BermudaAdvert:
     # another area, until the advert was pruned or its scanner object replaced,
     # and every reader (the Area sensor, the device tracker, metadevices
     # sharing this advert) reported the old area meanwhile.
-    @property
+    @dumpable_property
     def name(self) -> str:
         return self.scanner_device.name
 
-    @property
+    @dumpable_property
     def area_id(self) -> str | None:
         return self.scanner_device.area_id
 
-    @property
+    @dumpable_property
     def area_name(self) -> str | None:
         return self.scanner_device.area_name
 
@@ -510,7 +519,20 @@ class BermudaAdvert:
         """Convert class to serialisable dict for dump_devices."""
         # using "is" comparisons instead of string matching means
         # linting and typing can catch errors.
+        # Marked read-through properties are class descriptors, not instance
+        # vars, so vars(self) alone would drop them from dump_devices. Only
+        # marked properties are added, so an unrelated property cannot change
+        # the dump. The first definition in the MRO wins, as it does for normal
+        # attribute lookup.
         out = {}
+        seen = set()
+        for klass in type(self).__mro__:
+            for attr in vars(klass):
+                if attr in seen:
+                    continue
+                seen.add(attr)
+                if isinstance(getattr(type(self), attr), _DumpableProperty):
+                    out[attr] = getattr(self, attr)
         for var, val in vars(self).items():
             if val in [self.options]:
                 # skip certain vars that we don't want in the dump output.

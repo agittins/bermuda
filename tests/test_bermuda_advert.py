@@ -4,7 +4,7 @@ Tests for BermudaAdvert class in bermuda_advert.py.
 
 import pytest
 from unittest.mock import MagicMock, patch
-from custom_components.bermuda.bermuda_advert import BermudaAdvert
+from custom_components.bermuda.bermuda_advert import BermudaAdvert, dumpable_property
 from custom_components.bermuda.bermuda_device import BermudaDevice
 from bleak.backends.scanner import AdvertisementData
 
@@ -134,6 +134,20 @@ def test_to_dict(bermuda_advert):
     assert isinstance(advert_dict, dict)
     assert advert_dict["device_address"] == "aa:bb:cc:dd:ee:ff"
     assert advert_dict["scanner_address"] == "11:22:33:44:55:66"
+    assert advert_dict["name"] == "Mock Scanner"
+    assert advert_dict["area_id"] == "server_room"
+    assert advert_dict["area_name"] == "server room"
+
+
+def test_to_dict_only_discovers_dumpable_properties(bermuda_advert, monkeypatch):
+    """Only properties explicitly marked dumpable change the dump."""
+    monkeypatch.setattr(type(bermuda_advert), "plain_property", property(lambda self: "plain"), raising=False)
+    monkeypatch.setattr(
+        type(bermuda_advert), "extra_dump_field", dumpable_property(lambda self: "extra value"), raising=False
+    )
+    advert_dict = bermuda_advert.to_dict()
+    assert "plain_property" not in advert_dict
+    assert advert_dict["extra_dump_field"] == "extra value"
 
 
 def test_repr(bermuda_advert):
