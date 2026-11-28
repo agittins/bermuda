@@ -17,11 +17,15 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bermuda.config_flow import BermudaOptionsFlowHandler
 from custom_components.bermuda.const import CONF_DEVICES
+from custom_components.bermuda.const import CONF_RSSI_OFFSETS
 from custom_components.bermuda.const import CONF_SAVE_AND_CLOSE
 from custom_components.bermuda.const import CONF_SCANNER_INFO
+from custom_components.bermuda.const import DEFAULT_ATTENUATION
+from custom_components.bermuda.const import DEFAULT_REF_POWER
 from custom_components.bermuda.const import DOMAIN
 from custom_components.bermuda.const import NAME
 from custom_components.bermuda.coordinator import BermudaDataUpdateCoordinator
+from custom_components.bermuda.util import rssi_to_metres
 
 # from .const import MOCK_OPTIONS
 from .const import MOCK_CONFIG
@@ -209,3 +213,58 @@ async def test_options_flow_calibration2_scanner_sorting(hass: HomeAssistant):
         "Scanner C",
         "Scanner E",
     ]
+
+
+async def test_calibration2_preview_uses_saved_offset_for_omitted_scanner(hass: HomeAssistant):
+    """The distance preview must use the same offsets as the form, see #836 review."""
+    scanners = _fake_scanners()
+    coordinator = _fake_coordinator(scanners)
+    scanner_a = scanners[1]  # "scanner a", with a saved offset that is not submitted
+    saved_offset = -20
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=MOCK_CONFIG,
+        options={CONF_RSSI_OFFSETS: {scanner_a.address: saved_offset}},
+        entry_id="test-preview-offsets",
+        title=NAME,
+    )
+    config_entry.add_to_hass(hass)
+    config_entry.runtime_data = SimpleNamespace(coordinator=coordinator)
+
+    flow = BermudaOptionsFlowHandler(config_entry)
+    flow.hass = hass
+    flow.handler = config_entry.entry_id
+    await flow.async_step_init()
+
+    device = SimpleNamespace(
+        get_scanner=lambda address: (
+            None if (hist := coordinator.devices[address].hist_rssi) is None else SimpleNamespace(hist_rssi=hist)
+        )
+    )
+
+    # Omit scanner a from the submission: the form falls back to its saved offset.
+    with patch.object(BermudaOptionsFlowHandler, "_get_bermuda_device_from_registry", return_value=device):
+        result = await flow.async_step_calibration2_scanners(
+            user_input={
+                CONF_DEVICES: "some_device_registry_id",
+                CONF_SCANNER_INFO: {"Scanner C": 0},
+                CONF_SAVE_AND_CLOSE: False,
+            }
+        )
+
+    assert result.get("type") == FlowResultType.FORM
+    defaults = next(key.default() for key in result["data_schema"].schema if key.schema == CONF_SCANNER_INFO)
+    assert defaults[scanner_a.name] == saved_offset
+
+    expected_distance = rssi_to_metres(
+        scanner_a.hist_rssi[0] + saved_offset,
+        DEFAULT_REF_POWER,
+        DEFAULT_ATTENUATION,
+    )
+    row = next(
+        line
+        for line in result["description_placeholders"]["suffix"].splitlines()
+        if line.startswith(f"|{scanner_a.name}|")
+    )
+    displayed_distance = row.split("|")[2].strip().strip("`").strip()
+    assert displayed_distance == f"{expected_distance:.2f}"

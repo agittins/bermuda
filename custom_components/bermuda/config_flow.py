@@ -536,7 +536,7 @@ class BermudaOptionsFlowHandler(OptionsFlowWithConfigEntry):
             # Gather new estimates for distances using rssi hist and the new offset.
             for scanner in self._scanner_addresses_by_name():
                 scanner_name = self.coordinator.devices[scanner].name
-                cur_offset = self._last_scanner_info.get(scanner_name, 0)
+                cur_offset = scanner_info_default.get(scanner_name, 0)
                 if (scanneradvert := device.get_scanner(scanner)) is not None:
                     results[scanner_name] = [
                         rssi_to_metres(
